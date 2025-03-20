@@ -1,0 +1,277 @@
+{% extends 'base.html' %}
+{% load static cart_filters %}
+
+{% block title %}Checkout - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2>Checkout</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Addresses -->
+        <div class="col-md-6 mb-4">
+            <h5>Shipping Address</h5>
+            {% if addresses %}
+                {% for address in addresses %}
+                    <div class="mb-3">
+                        <p>
+                            {{ address.full_name }} 
+                            {% if address == default_address %}(Default){% endif %}<br>
+                            {{ address.address_line1 }}{% if address.address_line2 %}, {{ address.address_line2 }}{% endif %}<br>
+                            {{ address.city }}, {{ address.state }} {{ address.postal_code }}, {{ address.country }}
+                        </p>
+                        {% if not address.is_default %}
+                            <form method="post" action="{% url 'user_app:set_default_address' address.id %}?next={% url 'cart_and_orders_app:user_checkout' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-link">Set Default</button>
+                            </form>
+                        {% endif %}
+                        <a href="{% url 'user_app:edit_address' address.id %}?next={% url 'cart_and_orders_app:user_checkout' %}" class="btn btn-sm btn-link">Edit</a>
+                        {% if not address.is_default %}
+                            <a href="{% url 'user_app:delete_address' address.id %}?next={% url 'cart_and_orders_app:user_checkout' %}" class="btn btn-sm btn-link text-danger">Delete</a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                <a href="{% url 'user_app:add_address' %}?next={% url 'cart_and_orders_app:user_checkout' %}" class="btn btn-sm btn-primary">Add Address</a>
+            {% else %}
+                <p>No addresses found. <a href="{% url 'user_app:add_address' %}?next={% url 'cart_and_orders_app:user_checkout' %}" class="btn btn-sm btn-link">Add one</a></p>
+            {% endif %}
+        </div>
+
+        <!-- Order Summary -->
+        <div class="col-md-6">
+            <h5>Order Summary</h5>
+            {% if not cart_items %}
+                <p>Your cart is empty. <a href="{% url 'product_app:user_product_list' %}" class="btn btn-sm btn-link">Shop now</a></p>
+            {% else %}
+                <table class="table table-sm">
+                    <tbody>
+                        {% for item in cart_items %}
+                            <tr>
+                                <td>{{ item.variant.product.product_name }}</td>
+                                <td>{{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"N/A" }}</td>
+                                <td>{{ item.quantity }} × ${{ item.price|default:item.variant.price|floatformat:2 }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <form method="post" action="{% url 'cart_and_orders_app:place_order' %}">
+                    {% csrf_token %}
+                    <div class="mb-2">
+                        <span>Subtotal: ${{ subtotal|floatformat:2 }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <span>Shipping: <span id="shippingCost">${{ shipping_cost|floatformat:2 }}</span></span>
+                    </div>
+                    <div class="mb-2">
+                        <span>Tax (5%): ${{ tax|floatformat:2 }}</span>
+                    </div>
+                    {% if discount > 0 %}
+                        <div class="mb-2">
+                            <span>Discount ({{ coupon_code }}): -${{ discount|floatformat:2 }} 
+                                <a href="#" id="removeCoupon" class="text-danger">[Remove]</a>
+                            </span>
+                        </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <strong>Total: <span id="totalAmount">${{ total|floatformat:2 }}</span></strong>
+                    </div>
+
+                    {% if not discount %}
+                        <div class="mb-3">
+                            <input type="text" name="coupon_code" id="couponCode" class="form-control form-control-sm d-inline" placeholder="Coupon code" style="width: 70%;">
+                            <button type="button" id="applyCoupon" class="btn btn-sm btn-link">Apply</button>
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="shipping_method">Shipping:</label>
+                        <select id="shipping_method" name="shipping_method" class="form-select form-select-sm">
+                            <option value="standard" {% if shipping_cost == 50 %}selected{% endif %}>Standard ($50)</option>
+                            <option value="express" {% if shipping_cost == 100 %}selected{% endif %}>Express ($100)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="payment_method">Payment:</label>
+                        <select id="payment_method" name="payment_method" class="form-select form-select-sm">
+                            <option value="COD">Cash on Delivery</option>
+                            <option value="CARD">Credit/Debit Card</option>
+                            <option value="WALLET">Wallet</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" {% if not default_address or not cart_items %}disabled{% endif %}>
+                        {% if is_buy_now %}Confirm Buy Now{% else %}Place Order{% endif %}
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    h2 {
+        font-weight: 400;
+        font-size: 1.5rem;
+        margin-bottom: 2rem;
+        color: #333;
+    }
+    h5 {
+        font-weight: 400;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    .table {
+        border-collapse: collapse;
+    }
+    .table td {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    .form-control-sm, .form-select-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.9rem;
+    }
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    .btn-primary {
+        background: #333;
+        border: none;
+    }
+    .btn-primary:hover {
+        background: #000;
+    }
+    .btn-primary:disabled {
+        background: #ccc;
+    }
+    .btn-link {
+        padding: 0;
+        color: #333;
+    }
+    .btn-link.text-danger {
+        color: #dc3545;
+    }
+    .alert {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shippingSelect = document.getElementById('shipping_method');
+    const shippingCostSpan = document.getElementById('shippingCost');
+    const totalSpan = document.getElementById('totalAmount');
+    const subtotal = {{ subtotal|default:0|json_script:"subtotal" }};
+    const tax = {{ tax|default:0|json_script:"tax" }};
+    let discount = {{ discount|default:0|json_script:"discount" }};  // Make discount mutable
+
+    function updateTotal() {
+        const shippingCost = shippingSelect.value === 'standard' ? 50 : 100;
+        shippingCostSpan.textContent = `$${shippingCost.toFixed(2)}`;
+        const total = subtotal + shippingCost + tax - discount;
+        totalSpan.textContent = `$${total.toFixed(2)}`;
+    }
+    shippingSelect.addEventListener('change', updateTotal);
+
+    const applyCouponBtn = document.getElementById('applyCoupon');
+    if (applyCouponBtn) {
+        applyCouponBtn.addEventListener('click', function() {
+            const couponCode = document.getElementById('couponCode').value;
+            console.log("Applying coupon:", couponCode);  // Debug
+            fetch("{% url 'offer_and_coupon:apply_coupon' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: `coupon_code=${encodeURIComponent(couponCode)}`
+            })
+            .then(response => {
+                console.log("Response status:", response.status);  // Debug
+                return response.json();
+            })
+            .then(data => {
+                console.log("Response data:", data);  // Debug
+                if (data.success) {
+                    discount = data.discount;  // Update discount
+                    Swal.fire({
+                        title: 'Coupon Applied',
+                        text: `Saved $${data.discount.toFixed(2)}`,
+                        icon: 'success'
+                    }).then(() => {
+                        document.getElementById('totalAmount').textContent = `$${data.new_total.toFixed(2)}`;
+                        const discountDiv = document.createElement('div');
+                        discountDiv.className = 'mb-2';
+                        discountDiv.innerHTML = `<span>Discount (${couponCode}): -$${data.discount.toFixed(2)} <a href="#" id="removeCoupon" class="text-danger">[Remove]</a></span>`;
+                        document.querySelector('.mb-3').before(discountDiv);
+                        document.getElementById('couponCode').disabled = true;
+                        document.getElementById('applyCoupon').disabled = true;
+                        // Bind remove event to new link
+                        const newRemoveCouponLink = document.getElementById('removeCoupon');
+                        newRemoveCouponLink.addEventListener('click', removeCouponHandler);
+                    });
+                } else {
+                    Swal.fire('Error', data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                Swal.fire('Error', 'Something went wrong. Check the console.', 'error');
+            });
+        });
+    }
+
+    function removeCouponHandler(e) {
+        e.preventDefault();
+        fetch("{% url 'offer_and_coupon:remove_coupon' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: ''
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                discount = 0;  // Reset discount
+                Swal.fire('Coupon Removed', `New Total: $${data.new_total.toFixed(2)}`, 'success')
+                    .then(() => {
+                        document.getElementById('totalAmount').textContent = `$${data.new_total.toFixed(2)}`;
+                        const discountDiv = document.querySelector('.mb-2');
+                        if (discountDiv) discountDiv.remove();
+                        document.getElementById('couponCode').disabled = false;
+                        document.getElementById('applyCoupon').disabled = false;
+                    });
+            } else {
+                Swal.fire('Error', data.message, 'error');
+            }
+        })
+        .catch(error => console.error('Fetch error:', error));
+    }
+
+    const removeCouponLink = document.getElementById('removeCoupon');
+    if (removeCouponLink) {
+        removeCouponLink.addEventListener('click', removeCouponHandler);
+    }
+});
+</script>
+{% endblock %}

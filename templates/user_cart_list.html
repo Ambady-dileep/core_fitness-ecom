@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% load static cart_filters %}
+
+{% block title %}Cart - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2>Cart</h2>
+    {% if request.session.applied_coupon %}
+    <div class="alert alert-info mb-3">
+        Coupon "{{ request.session.applied_coupon.code }}" is applied (Discount: ${{ request.session.applied_coupon.discount|floatformat:2 }}). 
+        Changes to your cart may affect its validity.
+    </div>
+    {% endif %}
+
+    {% if cart_items %}
+    <div class="row">
+        <!-- Cart Items -->
+        <div class="col-lg-8">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Variant</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="cart-items">
+                    {% for item in cart_items %}
+                    <tr>
+                        <td>{{ item.variant.product.product_name }}</td>
+                        <td>{{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"N/A" }}</td>
+                        <td>${{ item.price|default:item.variant.price|floatformat:2 }}</td>
+                        <td>
+                            <div class="quantity-control">
+                                <button class="quantity-btn decrement-btn" data-id="{{ item.id }}" data-action="decrement">−</button>
+                                <input type="text" class="quantity-input" value="{{ item.quantity }}" readonly>
+                                <button class="quantity-btn increment-btn" data-id="{{ item.id }}" data-action="increment" 
+                                        {% if item.quantity >= item.variant.stock or item.quantity >= 10 %}disabled{% endif %}>+</button>
+                            </div>
+                        </td>
+                        <td>${{ item.price|default:item.variant.price|multiply:item.quantity|floatformat:2 }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-link text-danger remove-item" data-id="{{ item.id }}">×</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="col-lg-4">
+            <div class="cart-summary">
+                <h5>Summary</h5>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Items ({{ cart_items.count }})</span>
+                    <span>${{ cart_items|aggregate:'(price if price else variant.price) * quantity'|floatformat:2 }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Shipping</span>
+                    <span>TBD</span>
+                </div>
+                <div class="d-flex justify-content-between mt-3">
+                    <strong>Total</strong>
+                    <strong>${{ cart_items|aggregate:'(price if price else variant.price) * quantity'|floatformat:2 }}</strong>
+                </div>
+                <a href="{% url 'cart_and_orders_app:user_checkout' %}" id="checkout-btn" 
+                   class="btn btn-primary w-100 mt-3" {% if has_out_of_stock %}disabled{% endif %}>Checkout</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <div class="mb-3">🛒</div>
+        <h4>Cart is empty</h4>
+        <p class="text-muted">Add some items to get started.</p>
+        <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">Shop Now</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    h2 {
+        font-weight: 400;
+        font-size: 1.5rem;
+        margin-bottom: 2rem;
+        color: #333;
+    }
+    .table {
+        border-collapse: collapse;
+    }
+    .table th, .table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #eee;
+    }
+    .table th {
+        font-weight: 500;
+        font-size: 0.9rem;
+        color: #666;
+    }
+    .quantity-control {
+        display: flex;
+        gap: 0.25rem;
+    }
+    .quantity-btn {
+        width: 1.5rem;
+        height: 1.5rem;
+        border: 1px solid #ddd;
+        background: #fff;
+        color: #333;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+    .quantity-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .quantity-input {
+        width: 2rem;
+        height: 1.5rem;
+        text-align: center;
+        border: 1px solid #ddd;
+        font-size: 0.9rem;
+    }
+    .btn-link {
+        padding: 0;
+        font-size: 1rem;
+    }
+    .cart-summary {
+        padding: 1rem;
+        background: #f9f9f9;
+        border: 1px solid #eee;
+    }
+    .btn-primary {
+        background: #333;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    .btn-primary:hover {
+        background: #000;
+    }
+    .btn-primary:disabled {
+        background: #ccc;
+    }
+    .text-center {
+        color: #666;
+    }
+    .text-center .mb-3 {
+        font-size: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quantity buttons with AJAX
+    document.querySelectorAll('.quantity-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            const action = this.getAttribute('data-action');
+            const input = this.parentElement.querySelector('.quantity-input');
+            const currentQty = parseInt(input.value);
+
+            fetch(`{% url 'cart_and_orders_app:user_update_cart_quantity' 0 %}`.replace('0', id), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: `action=${action}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const newQty = action === 'increment' ? currentQty + 1 : currentQty - 1;
+                    if (newQty <= 0) {
+                        this.closest('tr').remove();
+                    } else {
+                        input.value = newQty;
+                        const price = parseFloat(this.closest('tr').querySelector('td:nth-child(3)').textContent.replace('$', ''));
+                        this.closest('tr').querySelector('td:nth-child(5)').textContent = `$${(price * newQty).toFixed(2)}`;
+                        updateSummary();
+                    }
+                    Swal.fire('Success', data.message || 'Quantity updated.', 'success');
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to update quantity.', 'error');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+
+    // Remove item
+    document.querySelectorAll('.remove-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            Swal.fire({
+                title: 'Remove item?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    window.location.href = `{% url 'cart_and_orders_app:user_remove_from_cart' 0 %}`.replace('0', id);
+                }
+            });
+        });
+    });
+
+    // Update summary dynamically
+    function updateSummary() {
+        const total = Array.from(document.querySelectorAll('#cart-items tr')).reduce((sum, row) => {
+            const price = parseFloat(row.querySelector('td:nth-child(3)').textContent.replace('$', ''));
+            const qty = parseInt(row.querySelector('.quantity-input').value);
+            return sum + (price * qty);
+        }, 0);
+        document.querySelector('.cart-summary .d-flex:nth-child(1) span:last-child').textContent = `$${total.toFixed(2)}`;
+        document.querySelector('.cart-summary .d-flex:nth-child(3) strong:last-child').textContent = `$${total.toFixed(2)}`;
+    }
+});
+</script>
+{% endblock %}

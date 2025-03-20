@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Categories - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Categories</h2>
+    
+    <!-- Search Bar with Clear Button -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <form method="GET" action="" id="searchForm" class="d-flex">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search categories..." value="{{ query }}">
+                    <div class="input-group-append">
+                        {% if query %}
+                        <button type="button" class="btn btn-outline-secondary" id="clearSearch">Clear</button>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Filter Column (Optional) -->
+        <div class="col-md-3">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Filters</h4>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="" id="filterForm">
+                        {% if query %}
+                        <input type="hidden" name="q" value="{{ query }}">
+                        {% endif %}
+                        
+                        <!-- Example Filter: Active Categories -->
+                        <div class="form-group mb-3">
+                            <label for="is_active"><strong>Status</strong></label>
+                            <select name="is_active" id="is_active" class="form-control filter-control">
+                                <option value="">All</option>
+                                <option value="true" {% if is_active == "true" %}selected{% endif %}>Active</option>
+                                <option value="false" {% if is_active == "false" %}selected{% endif %}>Inactive</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100 mt-3">Apply Filters</button>
+                        <button type="button" class="btn btn-outline-secondary w-100 mt-2" id="clearFilters">Clear All Filters</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Categories Column -->
+        <div class="col-md-9">
+            <!-- Sort Options -->
+            <div class="card mb-4">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <span>{{ page_obj.paginator.count }} Categories found</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <label class="me-2">Sort by:</label>
+                        <form method="GET" action="" id="sortForm">
+                            {% if query %}
+                            <input type="hidden" name="q" value="{{ query }}">
+                            {% endif %}
+                            {% if is_active %}
+                            <input type="hidden" name="is_active" value="{{ is_active }}">
+                            {% endif %}
+                            
+                            <select name="sort" id="sort" class="form-select">
+                                <option value="">Default</option>
+                                <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>A - Z</option>
+                                <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Z - A</option>
+                            </select>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Category Grid -->
+            <div class="row row-cols-1 row-cols-md-3 g-4">
+                {% for category in page_obj %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if category.image %}
+                            <img src="{{ category.image.url }}" class="card-img-top" alt="{{ category.name }}"
+                                 onerror="this.src='{% static 'images/no-image.jpg' %}'" style="height: 200px; object-fit: cover;">
+                        {% else %}
+                            <img src="{% static 'images/no-image.jpg' %}" class="card-img-top" alt="{{ category.name }}"
+                                 style="height: 200px; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ category.name }}</h5>
+                            {% if category.description %}
+                            <p class="card-text small text-muted">{{ category.description|truncatewords:10 }}</p>
+                            {% endif %}
+
+                            <!-- Display Subcategories -->
+                            {% if category.subcategories.all %}
+                            <div class="mt-3">
+                                <h6>Subcategories:</h6>
+                                <ul class="list-unstyled">
+                                    {% for subcategory in category.subcategories.all %}
+                                    <li>
+                                        <a href="{% url 'product_app:user_product_list' %}?category={{ subcategory.id }}" 
+                                           class="text-decoration-none text-dark">
+                                            {{ subcategory.name }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer bg-white">
+                            <a href="{% url 'product_app:user_product_list' %}?category={{ category.id }}" 
+                               class="btn btn-primary btn-sm">View Products</a>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <h3>No categories found</h3>
+                    <p>Try adjusting your search or filter criteria</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Category pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+                            <span aria-hidden="true">&laquo;</span> Previous
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link"><span aria-hidden="true">&laquo;</span> Previous</span>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">
+                            Next <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Next <span aria-hidden="true">&raquo;</span></span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Handle sort dropdown changes
+    document.getElementById('sort').addEventListener('change', function() {
+        document.getElementById('sortForm').submit();
+    });
+    
+    // Clear search button functionality
+    const clearSearchBtn = document.getElementById('clearSearch');
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            const searchForm = document.getElementById('searchForm');
+            const searchInput = searchForm.querySelector('input[name="q"]');
+            searchInput.value = '';
+            searchForm.submit();
+        });
+    }
+    
+    // Clear all filters
+    document.getElementById('clearFilters').addEventListener('click', function() {
+        window.location.href = window.location.pathname;
+    });
+    
+    // Auto-submit filter form when any filter changes
+    document.querySelectorAll('.filter-control').forEach(function(element) {
+        element.addEventListener('change', function() {
+            document.getElementById('filterForm').submit();
+        });
+    });
+</script>
+{% endblock %}

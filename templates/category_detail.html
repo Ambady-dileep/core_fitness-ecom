@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="container">
+    <h1>{{ category.name }}</h1>
+    <p><strong>Description:</strong> {{ category.description|default:"No description" }}</p>
+    <p><strong>Parent:</strong> {{ category.parent.name|default:"None" }}</p>
+    <p><strong>Active:</strong> {{ category.is_active|yesno:"Yes,No" }}</p>
+    {% if category.image %}
+    <img src="{{ category.image.url }}" class="img-fluid mb-3" alt="{{ category.name }}" style="max-height: 300px;">
+    {% endif %}
+
+    <h3>Products in this Category</h3>
+    {% if products %}
+    <div class="row">
+        {% for product in products %}
+        <div class="col-md-4 mb-3">
+            <div class="card">
+                {% if product.main_image %}
+                <img src="{{ product.main_image.url }}" class="card-img-top" alt="{{ product.product_name }}" style="height: 200px; object-fit: cover;">
+                {% else %}
+                <img src="{% static 'default.jpg' %}" class="card-img-top" alt="Default Image" style="height: 200px; object-fit: cover;">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.product_name }}</h5>
+                    <p class="card-text">Price: ${{ product.lowest_price|default:"N/A" }}</p>
+                    <a href="{% url 'product_app:admin_product_detail' product.id %}" class="btn btn-sm btn-primary">View Product</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p>No products in this category.</p>
+    {% endif %}
+
+    <a href="{% url 'product_app:admin_categories' %}" class="btn btn-secondary">Back to Categories</a>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Delete Coupon{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>Delete Coupon</h2>
+    <p>Are you sure you want to delete "{{ coupon.code }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="d-flex gap-2">
+            <a href="{% url 'offer_and_coupon:admin_coupon_list' %}" class="btn btn-link">Cancel</a>
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    h2 {
+        font-weight: 400;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #333;
+    }
+    p {
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    .btn-danger {
+        background: #dc3545;
+        border: none;
+    }
+    .btn-danger:hover {
+        background: #c82333;
+    }
+    .btn-link {
+        padding: 0.5rem 1rem;
+        color: #333;
+    }
+    .btn-link:hover {
+        color: #000;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}

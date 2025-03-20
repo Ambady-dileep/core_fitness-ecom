@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Inventory Management</title>
+</head>
+<body>
+    <h1>Inventory Management</h1>
+    
+    <form method="GET">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Search inventory...">
+        <button type="submit">Search</button>
+        <a href="{% url 'cart_and_orders_app:admin_inventory_list' %}?clear=1">Clear</a>
+    </form>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>SKU</th>
+                <th>Flavor</th>
+                <th>Size</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for variant in page_obj %}
+                <tr>
+                    <td>{{ variant.product.product_name }}</td>
+                    <td>{{ variant.sku }}</td>
+                    <td>{{ variant.flavor|default:"N/A" }}</td>
+                    <td>{{ variant.size_weight|default:"N/A" }}</td>
+                    <td>{{ variant.price }}</td>
+                    <td>{{ variant.stock }}</td>
+                    <td><a href="{% url 'cart_and_orders_app:admin_update_stock' variant.id %}">Update Stock</a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7">No inventory items found</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&q={{ search_query }}">Next</a>
+    {% endif %}
+</body>
+</html>

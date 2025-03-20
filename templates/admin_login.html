@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | Core Fitness</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        :root {
+            --primary-color:rgb(58, 58, 143);
+            --secondary-color:rgb(0, 170, 255);
+            --error-color: #ff4e4e;
+            --success-color: #00ca4e;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .login-container {
+            width: min(100%, 400px);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo i {
+            font-size: 3rem;
+            color: white;
+            background: linear-gradient(45deg, var(--secondary-color), var(--primary-color));
+            padding: 1rem;
+            border-radius: 50%;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        h2 {
+            color: white;
+            text-align: center;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            transition: color 0.3s ease;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+        }
+
+        .form-control:focus + i {
+            color: white;
+        }
+
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .error-message {
+            background: rgba(255, 78, 78, 0.1);
+            border: 1px solid rgba(255, 78, 78, 0.2);
+            color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(45deg, var(--secondary-color), var(--primary-color));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .validation-message {
+            display: none;
+            color: var(--error-color);
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            padding-left: 1rem;
+        }
+
+        .form-control.error {
+            border-color: var(--error-color);
+            background: rgba(255, 78, 78, 0.1);
+        }
+
+        .form-control.success {
+            border-color: var(--success-color);
+            background: rgba(0, 202, 78, 0.1);
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 2rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <i class="fas fa-user-shield"></i>
+        </div>
+        <h2>Admin Login</h2>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="error-message">
+                    <i class="fas fa-exclamation-Circle"></i>
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="POST" id="adminLoginForm" novalidate>
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="username">Username</label>
+                <div class="input-group">
+                    <input type="text" 
+                           id="username" 
+                           name="username" 
+                           class="form-control" 
+                           placeholder="Enter your username"
+                           required>
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="validation-message" id="usernameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-group">
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="form-control" 
+                           placeholder="Enter your password"
+                           required>
+                    <i class="fas fa-lock"></i>
+                </div>
+                <div class="validation-message" id="passwordError"></div>
+            </div>
+
+            <button type="submit" class="btn-login">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('adminLoginForm');
+            const username = document.getElementById('username');
+            const password = document.getElementById('password');
+            
+            // Show/Hide error message with animation
+            function showError(input, message) {
+                const formGroup = input.parentElement.parentElement;
+                const errorDisplay = formGroup.querySelector('.validation-message');
+                
+                input.classList.add('error');
+                input.classList.remove('success');
+                errorDisplay.textContent = message;
+                errorDisplay.style.display = 'block';
+                
+                // Add animation
+                errorDisplay.style.animation = 'none';
+                errorDisplay.offsetHeight; // Trigger reflow
+                errorDisplay.style.animation = 'slideIn 0.3s ease';
+            }
+            
+            // Show success state
+            function showSuccess(input) {
+                const formGroup = input.parentElement.parentElement;
+                const errorDisplay = formGroup.querySelector('.validation-message');
+                
+                input.classList.add('success');
+                input.classList.remove('error');
+                errorDisplay.style.display = 'none';
+            }
+            
+            // Check required fields
+            function checkRequired(inputArr) {
+                let isValid = true;
+                inputArr.forEach(input => {
+                    if (input.value.trim() === '') {
+                        showError(input, `${input.id.charAt(0).toUpperCase() + input.id.slice(1)} is required`);
+                        isValid = false;
+                    } else {
+                        showSuccess(input);
+                    }
+                });
+                return isValid;
+            }
+            
+            // Event Listeners
+            form.addEventListener('submit', function(e) {
+                if (!checkRequired([username, password])) {
+                    e.preventDefault();
+                }
+            });
+            
+            // Real-time validation
+            [username, password].forEach(input => {
+                input.addEventListener('input', function() {
+                    if (input.value.trim() !== '') {
+                        showSuccess(input);
+                    }
+                });
+                
+                input.addEventListener('blur', function() {
+                    if (input.value.trim() === '') {
+                        showError(input, `${input.id.charAt(0).toUpperCase() + input.id.slice(1)} is required`);
+                    }
+                });
+            });
+            
+            // Remove error styling on focus
+            [username, password].forEach(input => {
+                input.addEventListener('focus', function() {
+                    const formGroup = this.parentElement.parentElement;
+                    const errorDisplay = formGroup.querySelector('.validation-message');
+                    errorDisplay.style.display = 'none';
+                    this.classList.remove('error');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

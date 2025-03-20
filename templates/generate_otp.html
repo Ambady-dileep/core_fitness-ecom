@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generate OTP</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; }
+        .message { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h2>Generate OTP</h2>
+    <form method="POST" action="{% url 'user_app:generate_otp' %}">
+        {% csrf_token %}
+        <label for="email">Email:</label><br>
+        <input type="email" id="email" name="email" required><br><br>
+        <button type="submit">Generate and Send OTP</button>
+    </form>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="{{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+</body>
+</html>

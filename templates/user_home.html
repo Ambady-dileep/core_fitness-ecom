@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Home - Core Fitness{% endblock %}
+
+{% block extra_css %}
+    <style>
+        .hero-section {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.6)), url('{% static "images/banner_m2.jpg" %}');
+            background-size: cover;
+            background-position: center;
+            color: var(--light-color);
+            padding: 6rem 0;
+            margin-bottom: 2rem;
+            border-radius: 10px;
+        }
+        .hero-section h1 {
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        .hero-section .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: var(--text-on-primary);
+        }
+        .hero-section .btn-primary:hover {
+            background-color: rgb(148, 148, 148);
+            border-color: rgb(255, 255, 254);
+        }
+        .filter-section {
+            background-color: var(--light-color);
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+        }
+        .category-card {
+            background-color: var(--light-color);
+            border-radius: 10px;
+            text-align: center;
+            padding: 1.5rem;
+            height: 100%;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+        }
+        .hero-section h1,
+        .hero-section p {
+            color: #dddddd;
+        }
+
+        .category-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+        .product-card-img-container {
+            height: 200px;
+            overflow: hidden;
+            border-bottom: 1px solid #eee;
+        }
+        form.d-flex {
+            background: none;
+            box-shadow: none;
+            padding: 0;
+        }
+        form select, form input {
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        .filter-sidebar {
+            width: 250px; /* Slim sidebar */
+            padding: 15px;
+            background: none; /* No extra box */
+            border-right: 1px solid #eee; /* Subtle divider */
+        }
+        .filter-sidebar form {
+            background: none;
+            padding: 0;
+            box-shadow: none;
+        }
+        .filter-sidebar select,
+        .filter-sidebar input {
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            padding: 8px;
+            width: 100%;
+        }
+        .filter-sidebar button {
+            width: 100%;
+        }
+        .product-container {
+            flex-grow: 1; /* Takes remaining space */
+            padding-left: 20px; /* Space from sidebar */
+        }
+        
+        .product-card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
+        }
+        .product-card:hover .product-card-img {
+            transform: scale(1.1);
+        }
+        .product-card .card-body {
+            padding: 1.5rem;
+        }
+        .section-heading {
+            position: relative;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            color: var(--dark-color);
+            font-weight: 700;
+        }
+        .section-heading::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 3px;
+            width: 80px;
+            background-color: var(--primary-color);
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold">Welcome to Core Fitness</h1>
+            <p class="lead mb-4">Premium supplements and gear for peak performance</p>
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary btn-lg">Shop Now</a>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="container d-flex">
+        <!-- Sidebar for Filters -->
+        <aside class="filter-sidebar">
+            <form method="get" class="d-flex flex-column gap-3">
+                {{ filter_form.category }}
+                {{ filter_form.min_price }}
+                {{ filter_form.max_price }}
+                {{ filter_form.brand }}
+                <select class="form-select" id="sort" name="sort">
+                    <option value="new_arrivals" {% if sort_by == 'new_arrivals' %}selected{% endif %}>New Arrivals</option>
+                    <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price: Low to High</option>
+                    <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                    <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>A to Z</option>
+                    <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Z to A</option>
+                </select>
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </form>
+        </aside>
+    
+        <!-- Main Content (Products) -->
+        <div class="product-container">
+            {% for product in products %}
+                <!-- Your product cards here -->
+            {% endfor %}
+        </div>
+    </div>
+    
+
+
+    <!-- Categories Section -->
+    <div class="container my-5">
+        <h2 class="section-heading">Shop by Category</h2>
+        <div class="row">
+            {% for category in categories %}
+                <div class="col-md-3 mb-4">
+                    <a href="{% url 'product_app:user_product_list' %}?category={{ category.id }}" class="text-decoration-none">
+                        <div class="category-card">
+                            <div class="category-icon">
+                                <i class="fas fa-bolt"></i> 
+                            </div>
+                            <h5 class="card-title">{{ category.name }}</h5>
+                            <p class="text-muted">{{ category.description|truncatechars:50 }}</p>
+                        </div>
+                    </a>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <p class="text-center">No categories available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Products Section -->
+    <div class="container my-5">
+        <h2 class="section-heading">Featured Products</h2>
+        <div class="row">
+            {% for product in products|slice:":8" %}
+                <div class="col-md-3 col-sm-6 mb-4">
+                    <a href="{% url 'product_app:user_product_detail' product.slug %}" class="text-decoration-none">
+                        <div class="card product-card h-100">
+                            <div class="product-card-img-container">
+                                {% if product.primary_image %}
+                                    <img src="{{ product.primary_image.image.url }}" class="card-img-top product-card-img" alt="{{ product.product_name }}">
+                                {% else %}
+                                    <img src="{% static 'images/default-product.jpg' %}" class="card-img-top product-card-img" alt="No Image">
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ product.product_name }}</h5>
+                                <p class="card-text text-muted mb-1">{{ product.category.name }}</p>
+                                <!-- Star Rating -->
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="rating-stars me-2">
+                                        {% for i in "12345" %}
+                                            {% with star_num=i|add:"0" %}
+                                                <i class="bi bi-star{% if star_num <= product.average_rating|floatformat:'0'|add:'0' %}-fill{% elif star_num <= product.average_rating|add:'0.5'|floatformat:'0'|add:'0' %}-half{% endif %} text-warning"></i>
+                                            {% endwith %}
+                                        {% endfor %}
+                                    </div>
+                                    <span class="text-muted small">{{ product.average_rating|floatformat:1 }}/5</span>
+                                </div>
+                                <p class="card-text product-price">
+                                    {% if product.price %}
+                                        ${{ product.price|floatformat:2 }}
+                                    {% elif product.variants.exists %}
+                                        ${{ product.variants.first.price|floatformat:2 }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <p class="text-center">No products available.</p>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="text-center mt-4">
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">View All Products</a>
+        </div>
+    </div>
+{% endblock %}

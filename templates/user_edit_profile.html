@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container my-6">
+    <div class="row justify-content-center">
+        <div class="col-lg-15">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; background: #ffffff;">
+                <div class="card-body p-4">
+                    <h2 class="fw-semibold mb-4 text-center" style="color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">
+                        <i class="fas fa-user-edit me-2"></i>Edit Profile
+                    </h2>
+                    <form method="post" id="editProfileForm" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Profile Image Section -->
+                        <div class="text-center mb-4">
+                            <div class="mb-3">
+                                {% if user.userprofile.profile_image %}
+                                    <img src="{{ user.userprofile.profile_image.url }}" alt="Current Profile Image" 
+                                         class="img-fluid rounded-circle shadow" id="profileImagePreview" 
+                                         style="height: 150px; width: 150px; object-fit: cover;">
+                                {% else %}
+                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto" 
+                                         id="profileImagePlaceholder" style="height: 150px; width: 150px; border: 2px solid #e2e8f0;">
+                                        <i class="fas fa-user fa-4x text-muted"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3">
+                                <label for="{{ profile_form.profile_image.id_for_label }}" class="form-label fw-medium" 
+                                       style="color: #4a5568; font-size: 13px;">Upload Profile Image</label>
+                                {{ profile_form.profile_image }}
+                                <div class="error-feedback" id="profile-image-error" style="color: #dc3545; font-size: 12px;"></div>
+                                <small class="form-text text-muted" style="font-size: 12px;">Recommended: Square image, at least 300x300 pixels</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <!-- Personal Information -->
+                            <div class="col-md-6">
+                                <h4 class="fw-semibold mb-3" style="color: #2d3748;">Personal Information</h4>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ user_form.full_name.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Full Name</label>
+                                    {{ user_form.full_name }}
+                                    <div class="error-feedback" id="full-name-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ user_form.username.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Username</label>
+                                    {{ user_form.username }}
+                                    <div class="error-feedback" id="username-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ user_form.email.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Email</label>
+                                    {{ user_form.email }}
+                                    <div class="error-feedback" id="email-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ user_form.phone_number.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Phone Number</label>
+                                    {{ user_form.phone_number }}
+                                    <div class="error-feedback" id="phone-number-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Address Details -->
+                            <div class="col-md-6">
+                                <h4 class="fw-semibold mb-3" style="color: #2d3748;">Address Details</h4>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ profile_form.address_line1.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Address Line 1</label>
+                                    {{ profile_form.address_line1 }}
+                                    <div class="error-feedback" id="address-line1-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="{{ profile_form.address_line2.id_for_label }}" class="form-label fw-medium" 
+                                           style="color: #4a5568; font-size: 13px;">Address Line 2 (Optional)</label>
+                                    {{ profile_form.address_line2 }}
+                                    <div class="error-feedback" id="address-line2-error" style="color: #dc3545; font-size: 12px;"></div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ profile_form.city.id_for_label }}" class="form-label fw-medium" 
+                                               style="color: #4a5568; font-size: 13px;">City</label>
+                                        {{ profile_form.city }}
+                                        <div class="error-feedback" id="city-error" style="color: #dc3545; font-size: 12px;"></div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ profile_form.state.id_for_label }}" class="form-label fw-medium" 
+                                               style="color: #4a5568; font-size: 13px;">State</label>
+                                        {{ profile_form.state }}
+                                        <div class="error-feedback" id="state-error" style="color: #dc3545; font-size: 12px;"></div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ profile_form.postal_code.id_for_label }}" class="form-label fw-medium" 
+                                               style="color: #4a5568; font-size: 13px;">Postal Code</label>
+                                        {{ profile_form.postal_code }}
+                                        <div class="error-feedback" id="postal-code-error" style="color: #dc3545; font-size: 12px;"></div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ profile_form.country.id_for_label }}" class="form-label fw-medium" 
+                                               style="color: #4a5568; font-size: 13px;">Country</label>
+                                        {{ profile_form.country }}
+                                        <div class="error-feedback" id="country-error" style="color: #dc3545; font-size: 12px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-dark" style="border-radius: 8px; font-size: 14px;">
+                                <i class="fas fa-save me-2"></i>Update Profile
+                            </button>
+                            <a href="{% url 'user_app:my_profile' %}" class="btn btn-outline-secondary ms-3" 
+                               style="border-radius: 8px; font-size: 14px;">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('editProfileForm');
+        const fileInput = document.getElementById('{{ profile_form.profile_image.id_for_label }}');
+
+        // Image Preview
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('profileImagePreview') || 
+                                   document.createElement('img');
+                    preview.id = 'profileImagePreview';
+                    preview.src = e.target.result;
+                    preview.classList.add('img-fluid', 'rounded-circle', 'shadow');
+                    preview.style.height = '150px';
+                    preview.style.width = '150px';
+                    preview.style.objectFit = 'cover';
+
+                    const placeholder = document.getElementById('profileImagePlaceholder');
+                    if (placeholder) {
+                        placeholder.replaceWith(preview);
+                    }
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // Form Submission via AJAX
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            let isValid = true;
+            clearErrors(this);
+
+            // Client-side Validation
+            const username = this.querySelector('#{{ user_form.username.id_for_label }}');
+            const email = this.querySelector('#{{ user_form.email.id_for_label }}');
+            const phoneNumber = this.querySelector('#{{ user_form.phone_number.id_for_label }}');
+            const fullName = this.querySelector('#{{ user_form.full_name.id_for_label }}');
+            const addressLine1 = this.querySelector('#{{ profile_form.address_line1.id_for_label }}');
+            const city = this.querySelector('#{{ profile_form.city.id_for_label }}');
+            const state = this.querySelector('#{{ profile_form.state.id_for_label }}');
+            const postalCode = this.querySelector('#{{ profile_form.postal_code.id_for_label }}');
+            const country = this.querySelector('#{{ profile_form.country.id_for_label }}');
+
+            if (!username.value || username.value.length < 3 || username.value.length > 20 || !username.value.match(/^[a-zA-Z0-9]+$/)) {
+                showError(username, 'username-error', 'Username must be 3-20 alphanumeric characters');
+                isValid = false;
+            }
+            if (!email.value || !email.value.match(/^[^@]+@[^@]+\.[^@]+$/)) {
+                showError(email, 'email-error', 'Enter a valid email');
+                isValid = false;
+            }
+            if (!phoneNumber.value || !phoneNumber.value.match(/^[6-9]\d{9}$/)) {
+                showError(phoneNumber, 'phone-number-error', 'Enter a valid 10-digit phone number starting with 6-9');
+                isValid = false;
+            }
+            if (!fullName.value) {
+                showError(fullName, 'full-name-error', 'Full name is required');
+                isValid = false;
+            }
+            if (!addressLine1.value) {
+                showError(addressLine1, 'address-line1-error', 'Address Line 1 is required');
+                isValid = false;
+            }
+            if (!city.value) {
+                showError(city, 'city-error', 'City is required');
+                isValid = false;
+            }
+            if (!state.value) {
+                showError(state, 'state-error', 'State is required');
+                isValid = false;
+            }
+            if (!postalCode.value || !postalCode.value.match(/^\d{6}$/)) {
+                showError(postalCode, 'postal-code-error', 'Enter a valid 6-digit postal code');
+                isValid = false;
+            }
+            if (!country.value) {
+                showError(country, 'country-error', 'Country is required');
+                isValid = false;
+            }
+
+            if (isValid) {
+                const formData = new FormData(this);
+                fetch("{% url 'user_app:edit_profile' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Profile Updated',
+                            text: 'Your profile has been updated successfully',
+                            confirmButtonColor: '#000',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.href = "{% url 'user_app:my_profile' %}";
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to update profile',
+                            confirmButtonColor: '#000'
+                        });
+                        if (data.errors) {
+                            for (const [field, error] of Object.entries(data.errors)) {
+                                const input = form.querySelector(`#id_${field}`);
+                                if (input) showError(input, `${field.replace('_', '-')}-error`, error);
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Something went wrong! Check the console for details.',
+                        confirmButtonColor: '#000'
+                    });
+                    console.error('Fetch error:', error);
+                });
+            }
+        });
+
+        // Error Handling Functions
+        function showError(input, errorId, message) {
+            input.classList.add('is-invalid');
+            const errorDiv = document.getElementById(errorId);
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function clearErrors(form) {
+            form.querySelectorAll('.error-feedback').forEach(div => {
+                div.style.display = 'none';
+                div.textContent = '';
+            });
+            form.querySelectorAll('.form-control').forEach(input => input.classList.remove('is-invalid'));
+        }
+    });
+</script>
+{% endblock %}

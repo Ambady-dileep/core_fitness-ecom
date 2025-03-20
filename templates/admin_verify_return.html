@@ -1,0 +1,57 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Verify Return - {{ order.order_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">Verify Return Request for {{ order.order_id }}</h2>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'success' %}success{% else %}warning{% endif %} glass" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card glass">
+        <div class="card-header">
+            <h5 class="mb-0">Return Details</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Order ID:</strong> {{ order.order_id }}</p>
+            <p><strong>User:</strong> {{ order.user.full_name|default:order.user.username }}</p>
+            <p><strong>Reason:</strong> {{ return_request.reason }}</p>
+            <p><strong>Requested:</strong> {{ return_request.requested_at|date:"M d, Y" }}</p>
+            <p><strong>Total Amount:</strong> ${{ order.total_amount }}</p>
+            <p><strong>Current Status:</strong> 
+                {% if return_request.is_verified and return_request.refund_processed %}
+                    <span class="badge bg-success">Refunded</span>
+                {% elif return_request.is_verified %}
+                    <span class="badge bg-success">Approved</span>
+                {% else %}
+                    <span class="badge bg-warning">Pending</span>
+                {% endif %}
+            </p>
+
+            {% if not return_request.is_verified %}
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="action" value="approve" class="btn btn-primary">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button type="submit" name="action" value="reject" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </div>
+                </form>
+            {% else %}
+                <p class="text-muted">This return request has already been processed.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}      

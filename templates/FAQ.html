@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% block title %}FAQ - CoreFitness{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CoreFitness FAQ - Answers to your questions about our supplements, shipping, returns, and more.">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color:rgb(249, 248, 250);
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .faq-container {
+            max-width: 1700px;
+            margin: 0 auto;
+            padding: 80px 20px;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        .header-section h1 {
+            font-size: 2.8rem;
+            font-weight: 300;
+            color:rgb(0, 128, 255);
+            margin-bottom: 10px;
+        }
+        .header-section p {
+            font-size: 1.1rem;
+            font-weight: 400;
+            color: #7f8c8d;
+        }
+
+        .faq-item {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease-in-out;
+        }
+        .faq-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .faq-item h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color:rgb(87, 233, 73);
+            margin-bottom: 15px;
+        }
+        .faq-item p {
+            font-size: 1.1rem;
+            font-weight: 400;
+            color: #555;
+            margin: 0;
+        }
+        .faq-item a {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .faq-item a:hover {
+            text-decoration: underline;
+        }
+
+        .contact-section {
+            text-align: center;
+            padding: 40px;
+            background:rgb(180, 180, 180);
+            color: white;
+            border-radius: 8px;
+            margin-top: 60px;
+        }
+        .contact-section h3 {
+            font-size: 1.8rem;
+            font-weight: 300;
+            margin-bottom: 15px;
+        }
+        .contact-section a {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .contact-section a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header-section h1 {
+                font-size: 2.2rem;
+            }
+            .faq-item h2 {
+                font-size: 1.4rem;
+            }
+            .faq-item p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="faq-container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <h1>Frequently Asked Questions</h1>
+            <p>Last Updated: March 5, 2025</p>
+        </div>
+
+        <!-- FAQ Items -->
+        <div class="faq-item">
+            <h2>1. What types of supplements does CoreFitness offer?</h2>
+            <p>At CoreFitness, we pride ourselves on offering a comprehensive range of high-quality supplements tailored to meet your fitness and wellness needs. Our product lineup includes premium protein powders, energizing pre-workouts, advanced post-workout recovery formulas, essential vitamins, and specialized wellness products. Each product is meticulously crafted to support your fitness journey, whether you're building muscle, enhancing endurance, or maintaining overall health.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>2. Are your products safe to use?</h2>
+            <p>Absolutely. Safety and quality are our top priorities. All CoreFitness supplements are manufactured using premium, rigorously tested ingredients that comply with the highest industry standards. We ensure that every product meets strict quality control measures before reaching you. However, we always recommend consulting with a healthcare professional before starting any new supplement regimen, especially if you have specific health conditions or concerns.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>3. How do I place an order?</h2>
+            <p>Placing an order with CoreFitness is simple and straightforward. Begin by browsing our extensive collection of products on our website. Once you've found the items you need, add them to your cart and proceed to checkout. You'll be prompted to sign in to your account or create a new one if you're a first-time customer. Follow the steps to complete your purchase, and you're all set!</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>4. What are your shipping options?</h2>
+            <p>We offer flexible shipping options to ensure your supplements reach you as quickly and conveniently as possible. Depending on your location, you can choose between standard and expedited shipping. Shipping costs and estimated delivery times are calculated at checkout based on your address. We strive to process and ship all orders within 1-2 business days.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>5. Can I return a product?</h2>
+            <p>Yes, we have a hassle-free 30-day return policy for unopened products in their original packaging. If you're not completely satisfied with your purchase, please contact our customer support team at <a href="mailto:support@corefitness.com">support@corefitness.com</a> to initiate the return process. We'll guide you through the steps and ensure a smooth experience.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>6. How do I track my order?</h2>
+            <p>Once your order has been shipped, you'll receive an email containing your tracking number. You can use this number to monitor the status of your delivery on our shipping partner's website. If you encounter any issues or have questions about your order, feel free to reach out to our support team for assistance.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>7. Do you offer discounts or promotions?</h2>
+            <p>Yes, we frequently run exclusive discounts and promotions to help you save on your favorite supplements. To stay updated on the latest offers, we encourage you to sign up for our newsletter and follow us on social media. Don't miss out on these opportunities to get the best value for your fitness journey!</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>8. Are your supplements suitable for vegetarians/vegans?</h2>
+            <p>Many of our products are designed to accommodate various dietary preferences, including vegetarian and vegan lifestyles. Each product description includes detailed information about its ingredients and suitability for specific diets. We're committed to providing options that align with your values and nutritional needs.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>9. How can I contact customer support?</h2>
+            <p>Our customer support team is here to assist you with any questions or concerns. You can reach us via email at <a href="mailto:support@corefitness.com">support@corefitness.com</a> or by filling out the contact form on our website. We aim to respond to all inquiries within 24 hours and provide the support you need to have a seamless experience with CoreFitness.</p>
+        </div>
+
+        <div class="faq-item">
+            <h2>10. Where are your products made?</h2>
+            <p>All CoreFitness supplements are manufactured in state-of-the-art facilities located in [Country/Region]. These facilities adhere to strict quality control standards and are regularly audited to ensure compliance with global safety and quality regulations. We take pride in delivering products you can trust.</p>
+        </div>
+
+        <!-- Contact Section -->
+        <div class="contact-section">
+            <h3>Still Have Questions?</h3>
+            <p>Contact us at <a href="mailto:support@corefitness.com">support@corefitness.com</a></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const items = document.querySelectorAll('.faq-item');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            items.forEach(item => observer.observe(item));
+        });
+    </script>
+</body>
+</html>
+{% endblock %}

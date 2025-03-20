@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Orders{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="section-title">My Orders</h2>
+
+    <!-- Search and Filter Section -->
+    <div class="mb-4">
+        <form method="get" class="row g-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search orders" value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    {% if search_query or status_filter %}
+                    <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="btn btn-outline-light">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    {% for status_code, status_name in status_choices %}
+                    <option value="{{ status_code }}" {% if status_filter == status_code %}selected{% endif %}>
+                        {{ status_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+
+    <!-- Orders List -->
+    {% if orders %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>{{ order.order_id }}</td>
+                        <td>{{ order.order_date|date:"M d, Y" }}</td>
+                        <td>
+                            <span class="status-{{ order.status|lower }}">{{ order.status }}</span>
+                        </td>
+                        <td>₹{{ order.total_amount }}</td>
+                        <td class="text-end">
+                            <a href="{% url 'cart_and_orders_app:user_order_detail' order_id=order.order_id %}" 
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% if order.status == 'Pending' or order.status == 'Shipped' %}
+                            <a href="{% url 'cart_and_orders_app:user_cancel_order' order_id=order.order_id %}" 
+                               class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-times"></i>
+                            </a>
+                            {% endif %}
+                            {% if order.status == 'Delivered' %}
+                            <a href="{% url 'cart_and_orders_app:user_return_order' order_id=order.order_id %}" 
+                               class="btn btn-sm btn-outline-warning">
+                                <i class="fas fa-undo"></i>
+                            </a>
+                            {% endif %}
+                            {% if order.status != 'Cancelled' %}
+                            <a href="{% url 'cart_and_orders_app:download_invoice' order_id=order.order_id %}" 
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-file-pdf"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <img src="{% static 'images/no_orders.jpg' %}" alt="No orders" class="img-fluid mb-3" style="max-height: 150px;">
+            <h4>No Orders Yet</h4>
+            <p class="minimal-text">Start shopping to see your orders here.</p>
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">
+                Shop Now
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Table Styling */
+    .table {
+        border-collapse: separate;
+        border-spacing: 0 8px;
+        background-color: transparent;
+    }
+    
+    .table th {
+        font-weight: 400;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--light-text);
+        border: none;
+        padding: 0.5rem 1rem;
+        background-color: transparent;
+    }
+    
+    .table td {
+        font-size: 0.9rem;
+        color: var(--text-color);
+        border: none;
+        padding: 1rem;
+        background-color: var(--background-color);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .table tr:hover td {
+        background-color: var(--light-gray);
+    }
+    
+    /* Status Styling */
+    .status-pending {
+        color: #d97706;
+    }
+    .status-shipped {
+        color: #0284c7;
+    }
+    .status-delivered {
+        color: #15803d;
+    }
+    .status-cancelled {
+        color: #dc2626;
+    }
+    
+    /* Buttons */
+    .btn-sm {
+        padding: 0.3rem 0.8rem;
+        font-size: 0.75rem;
+        border-radius: 0;
+    }
+    
+    .btn-outline-primary,
+    .btn-outline-danger,
+    .btn-outline-warning,
+    .btn-outline-secondary {
+        border-width: 1px;
+        padding: 0.2rem 0.6rem;
+    }
+    
+    /* Form Elements */
+    .form-control,
+    .form-select {
+        border-radius: 0;
+        border: 1px solid var(--border-color);
+        font-size: 0.85rem;
+        box-shadow: none;
+        background-color: var(--background-color);
+    }
+    
+    .form-control:focus,
+    .form-select:focus {
+        border-color: var(--accent-color);
+        box-shadow: none;
+    }
+    
+    .input-group .btn {
+        padding: 0 0.8rem;
+    }
+    
+    /* Empty State */
+    .text-center h4 {
+        font-weight: 400;
+        font-size: 1.2rem;
+        color: var(--text-color);
+        margin-bottom: 1rem;
+    }
+    
+    .text-center .minimal-text {
+        font-size: 0.9rem;
+        color: var(--light-text);
+    }
+</style>
+{% endblock %}

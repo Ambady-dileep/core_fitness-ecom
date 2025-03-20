@@ -1,0 +1,47 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h2 mb-4 text-gray-800">User Statistics: {{ user.username }}</h1>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3" style="background-color: #007bff;">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-chart-bar me-2"></i>User Details
+            </h6>
+        </div>
+        <div class="card-body">
+            <p><strong>Full Name:</strong> {{ user.full_name|default:"N/A" }}</p>
+            <p><strong>Email:</strong> {{ user.email }}</p>
+            <p><strong>Phone Number:</strong> {{ user.phone_number|default:"N/A" }}</p>
+            <p><strong>Date Joined:</strong> {{ user.date_joined|date:"M d, Y" }}</p>
+            <p><strong>Status:</strong> {% if user.userprofile.is_blocked %}Blocked{% else %}Active{% endif %}</p>
+            <p><strong>Total Successful Logins:</strong> {{ total_logins }}</p>
+            <p><strong>Total Failed Logins:</strong> {{ failed_logins }}</p>
+
+            <h5 class="mt-4">Recent Login Attempts</h5>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Success</th>
+                        <th>IP Address</th>
+                        <th>User Agent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for attempt in login_attempts %}
+                    <tr>
+                        <td>{{ attempt.timestamp|date:"M d, Y H:i" }}</td>
+                        <td>{{ attempt.success|yesno:"Yes,No" }}</td>
+                        <td>{{ attempt.ip_address|default:"N/A" }}</td>
+                        <td>{{ attempt.user_agent|default:"N/A" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4">No login attempts recorded.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <a href="{% url 'user_app:admin_dashboard' %}" class="btn btn-primary mt-3">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "admin_base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Category{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Edit Category: {{ category.name }}</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Category Name</label>
+                            {{ form.name|add_class:"form-control" }}
+                            {% if form.name.errors %}
+                                <div class="text-danger">
+                                    {{ form.name.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
+                            {{ form.description|add_class:"form-control" }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.parent.id_for_label }}" class="form-label">Parent Category (if any)</label>
+                            {{ form.parent|add_class:"form-select" }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.image.id_for_label }}" class="form-label">Category Image</label>
+                            {% if category.image %}
+                                <div class="mb-2">
+                                    <img src="{{ category.image.url }}" alt="{{ category.name }}" class="img-thumbnail" style="max-height: 150px;">
+                                </div>
+                            {% endif %}
+                            {{ form.image|add_class:"form-control" }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.display_order.id_for_label }}" class="form-label">Display Order</label>
+                            {{ form.display_order|add_class:"form-control" }}
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            {{ form.is_active|add_class:"form-check-input" }}
+                            <label for="{{ form.is_active.id_for_label }}" class="form-check-label">Active</label>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary">Update Category</button>
+                            <a href="{% url 'product_app:admin_category_list' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

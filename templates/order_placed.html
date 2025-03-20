@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+{% load static %}
+    {% if order_success %}
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            Swal.fire({
+                title: '<span style="color: #28a745; font-family: Arial, sans-serif;">Order Successfully Placed!</span>',
+                html: '<p style="color: #333; font-size: 18px;">Thank you for your purchase. Your order is being processed.</p>',
+                icon: 'success',
+                timer: 4000,  // Auto-close after 4 seconds
+                showConfirmButton: false,  // No button since it auto-closes
+                backdrop: 'rgba(0, 0, 0, 0.7)',  // Dark overlay for contrast
+                background: '#fff url({% static "images/placed_order.jpg" %}) no-repeat center/cover',  // Background image
+                padding: '20px',
+                width: '500px',  // Wider popup
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-text'
+                }
+            }).then(() => {
+                window.location.href = "{% url 'user_home' %}";  // Redirect after 4 seconds
+            });
+        </script>
+    {% else %}
+        <p>Something went wrong. Please try again.</p>
+    {% endif %}
+{% endblock %}

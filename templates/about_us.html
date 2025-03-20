@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}About Us - CoreFitness{% endblock %}
+
+{% block content %}
+<div class="about-container">
+    <!-- Header Section -->
+    <div class="header-section">
+        <h1>About CoreFitness</h1>
+        <div class="header-underline"></div>
+    </div>
+
+    <!-- Our Story Section -->
+    <div class="content-row">
+        <div class="content-col">
+            <h2>Our Story</h2>
+            <p>
+                Founded in 2025, CoreFitness was born from a simple belief: true strength comes from within. We create science-backed supplements that fuel performance, recovery, and wellness for athletes and fitness enthusiasts at every level.
+            </p>
+        </div>
+        <div class="content-col image-col">
+            <img src="{% static 'images/about1.jpg' %}" alt="CoreFitness Ethos" class="about-image">
+        </div>
+    </div>
+
+    <!-- Philosophy Section -->
+    <div class="content-row reversed">
+        <div class="content-col image-col">
+            <img src="{% static 'images/about1.jpg' %}" alt="CoreFitness Quality" class="about-image">
+        </div>
+        <div class="content-col">
+            <h2>Our Philosophy</h2>
+            <p>
+                We believe in quality without compromise. Each product is meticulously formulated and rigorously tested to ensure exceptional performance and safety. We're not just selling supplements—we're supporting your journey to becoming your strongest self.
+            </p>
+        </div>
+    </div>
+
+    <!-- Values Section -->
+    <div class="values-section">
+        <h2>What Drives Us</h2>
+        <div class="values-grid">
+            <div class="value-item">
+                <div class="value-icon">
+                    <i class="fas fa-flask"></i>
+                </div>
+                <h3>Quality</h3>
+                <p>Premium ingredients, rigorous testing, exceptional results.</p>
+            </div>
+            <div class="value-item">
+                <div class="value-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3>Community</h3>
+                <p>Building strength together, supporting every journey.</p>
+            </div>
+            <div class="value-item">
+                <div class="value-icon">
+                    <i class="fas fa-lightbulb"></i>
+                </div>
+                <h3>Innovation</h3>
+                <p>Constantly evolving our formulas with cutting-edge science.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call to Action -->
+    <div class="cta-section">
+        <h2>Join Our Journey</h2>
+        <p>Experience the difference quality makes.</p>
+        <a href="{% url 'user_app:user_home' %}" class="cta-btn">Explore Products</a>
+    </div>
+</div>
+
+<style>
+    /* General Styles */
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #fafafa;
+        color: #333;
+        line-height: 1.6;
+    }
+
+    /* Container Styling */
+    .about-container {
+        max-width: 2000px;
+        margin: 0 auto;
+        padding: 80px 20px;
+    }
+
+    /* Header Section */
+    .header-section {
+        text-align: center;
+        margin-bottom: 80px;
+    }
+    
+    .header-section h1 {
+        font-size: 2.5rem;
+        font-weight: 300;
+        color: #222;
+        letter-spacing: 1px;
+        margin-bottom: 15px;
+    }
+    
+    .header-underline {
+        width: 40px;
+        height: 2px;
+        background: #222;
+        margin: 0 auto;
+    }
+
+    /* Content Sections */
+    .content-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 100px;
+        opacity: 0;
+        transform: translateY(15px);
+        transition: all 0.8s ease-out;
+    }
+    
+    .reversed {
+        flex-direction: row-reverse;
+    }
+    
+    .content-row.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    .content-col {
+        flex: 1;
+        min-width: 300px;
+        padding: 0 25px;
+    }
+    
+    .image-col {
+        display: flex;
+        justify-content: center;
+    }
+    
+    .content-col h2 {
+        font-size: 1.8rem;
+        font-weight: 400;
+        color: #222;
+        margin-bottom: 20px;
+        position: relative;
+    }
+    
+    .content-col p {
+        font-size: 1rem;
+        color: #555;
+        line-height: 1.8;
+    }
+
+    /* Image Styling */
+    .about-image {
+        width: 90%;
+        height: auto;
+        border-radius: 4px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        transition: transform 0.3s ease;
+    }
+
+    /* Values Section */
+    .values-section {
+        text-align: center;
+        margin-bottom: 100px;
+    }
+    
+    .values-section h2 {
+        font-size: 1.8rem;
+        font-weight: 400;
+        color: #222;
+        margin-bottom: 40px;
+    }
+    
+    .values-grid {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    
+    .value-item {
+        flex: 1;
+        min-width: 250px;
+        padding: 20px;
+        margin: 10px;
+    }
+    
+    .value-icon {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        width: 60px;
+        height: 60px;
+        margin-bottom: 15px;
+        border-radius: 50%;
+        background-color: #f5f5f5;
+    }
+    
+    .value-icon i {
+        font-size: 1.4rem;
+        color: #222;
+    }
+    
+    .value-item h3 {
+        font-size: 1.2rem;
+        font-weight: 500;
+        margin-bottom: 10px;
+    }
+    
+    .value-item p {
+        font-size: 0.95rem;
+        color: #666;
+    }
+
+    /* Call to Action */
+    .cta-section {
+        text-align: center;
+        padding: 60px 0;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+    }
+    
+    .cta-section h2 {
+        font-size: 1.8rem;
+        font-weight: 400;
+        margin-bottom: 15px;
+    }
+    
+    .cta-section p {
+        font-size: 1rem;
+        color: #555;
+        margin-bottom: 30px;
+    }
+    
+    .cta-btn {
+        background-color: #222;
+        color: white;
+        padding: 12px 30px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: none;
+        border-radius: 2px;
+        letter-spacing: 0.5px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .cta-btn:hover {
+        background-color: #333;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .content-row, .reversed {
+            flex-direction: column;
+        }
+        
+        .content-col {
+            padding: 20px 0;
+        }
+        
+        .values-grid {
+            flex-direction: column;
+        }
+        
+        .header-section {
+            margin-bottom: 50px;
+        }
+        
+        .content-row {
+            margin-bottom: 60px;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const rows = document.querySelectorAll('.content-row');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.2 });
+
+        rows.forEach(row => observer.observe(row));
+    });
+</script>
+{% endblock %}

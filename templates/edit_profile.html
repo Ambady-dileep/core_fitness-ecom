@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Edit Profile - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Edit Profile Card -->
+            <div class="card">
+                <div class="card-body p-4">
+                    <h2 class="section-title mb-4"><i class="fas fa-edit me-2"></i>Edit Profile</h2>
+
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <!-- User Details -->
+                        <div class="mb-4">
+                            <h5 class="card-title">User Details</h5>
+                            {{ user_form.as_p }}
+                        </div>
+
+                        <!-- Address -->
+                        <div class="mb-4">
+                            <h5 class="card-title">Address</h5>
+                            {{ profile_form.as_p }}
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                    </form>
+
+                    <!-- Back to Profile Link -->
+                    <a href="{% url 'my_profile' %}" class="btn btn-outline-light w-100 mt-3">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Profile
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        background-color: #ffffff;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    .card-body {
+        padding: 2rem;
+    }
+    .card-title {
+        color: var(--dark-color);
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+    }
+    .form-control {
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.25rem rgba(186, 255, 57, 0.25);
+    }
+    label {
+        font-weight: 500;
+        color: var(--dark-color);
+        margin-bottom: 5px;
+    }
+    .btn {
+        padding: 12px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+    }
+    .btn-outline-light {
+        border-width: 2px;
+    }
+</style>
+{% endblock %}

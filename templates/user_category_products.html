@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ category.name }} - Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-img-top {
+        height: 200px;
+        object-fit: cover;
+        border-bottom: 1px solid #ddd;
+    }
+    .card {
+        transition: transform 0.3s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    .card-title {
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    .card-text {
+        font-size: 1rem;
+        color: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'product_app:user_product_list' %}">Products</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ category.name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Category Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>{{ category.name }}</h1>
+            {% if category.description %}
+            <p class="text-muted">{{ category.description }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="alert-container mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Products Grid -->
+    <div class="row">
+        {% for product in products %}
+        <div class="col-md-3 mb-4">
+            <div class="card h-100">
+                {% if product.main_image %}
+                <img src="{{ product.main_image.url }}" 
+                     class="card-img-top" 
+                     alt="{{ product.product_name }}">
+                {% elif product.images.first %}
+                <img src="{{ product.images.first.image.url }}"
+                     class="card-img-top"
+                     alt="{{ product.product_name }}">
+                {% else %}
+                <img src="{% static 'images/no-image.jpg' %}" 
+                     class="card-img-top" 
+                     alt="{{ product.product_name }}">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.product_name }}</h5>
+                    <p class="card-text">₹{{ product.price }}</p>
+                    {% if product.stock > 0 %}
+                    <a href="{% url 'product_app:product_detail' product.id %}" class="btn btn-outline-primary btn-sm">View Details</a>
+                    {% else %}
+                    <span class="badge bg-danger">Out of Stock</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info" role="alert">
+                No products found in this category.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Back to Products -->
+    <div class="mt-4">
+        <a href="{% url 'product_app:user_product_list' %}" class="btn btn-outline-secondary">Back to All Products</a>
+    </div>
+</div>
+{% endblock %}

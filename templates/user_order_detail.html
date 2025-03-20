@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% load static cart_filters %}
+
+{% block title %}Order #{{ order.order_id }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav>
+        <a href="{% url 'user_app:user_home' %}" class="text-muted">Home</a> &gt;
+        <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="text-muted">Orders</a> &gt;
+        <span>#{{ order.order_id }}</span>
+    </nav>
+
+    <h2>#{{ order.order_id }}</h2>
+    <p class="text-muted">Status: {{ order.status }}</p>
+
+    <div class="row">
+        <!-- Order Details -->
+        <div class="col-lg-8">
+            <div class="mb-4">
+                <p>Date: {{ order.order_date|date:"M d, Y" }}</p>
+                <p>Payment: {{ order.payment_method }}</p>
+                <p>Total: ${{ order.total_amount|floatformat:2 }}</p>
+                <p>Items: {{ order.items.count }}</p>
+            </div>
+
+            <h5>Items</h5>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items.all %}
+                    <tr>
+                        <td>{{ item.variant.product.product_name }} ({{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"N/A" }})</td>
+                        <td>${{ item.price|floatformat:2 }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price|multiply:item.quantity|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3">Subtotal</td>
+                        <td>${{ subtotal|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="3">Shipping</td>
+                        <td>${{ shipping_cost|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td colspan="3">Total</td>
+                        <td>${{ order.total_amount|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            {% if order.status == 'Delivered' or order.status in 'Pending,Shipped' %}
+            <div class="mb-3">
+                {% if order.status == 'Delivered' %}
+                    <a href="{% url 'cart_and_orders_app:user_return_order' order_id=order.order_id %}" class="btn btn-link">Return Order</a>
+                {% endif %}
+                {% if order.status in 'Pending,Shipped' %}
+                    <a href="{% url 'cart_and_orders_app:user_cancel_order' order_id=order.order_id %}" class="btn btn-link text-danger">Cancel Order</a>
+                {% endif %}
+                <a href="{% url 'cart_and_orders_app:download_invoice' order_id=order.order_id %}" class="btn btn-link">Download Invoice</a>
+            </div>
+            {% endif %}
+
+            {% if order.return_requests.exists %}
+            <h5>Return Requests</h5>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for return_request in order.return_requests.all %}
+                    <tr>
+                        <td>{{ return_request.created_at|date:"M d, Y" }}</td>
+                        <td>{{ return_request.reason }}</td>
+                        <td>
+                            {% if return_request.is_verified == None %}Pending
+                            {% elif return_request.is_verified %}Approved
+                            {% else %}Rejected{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <!-- Shipping and Tracking -->
+        <div class="col-lg-4">
+            <h5>Shipping</h5>
+            <p>
+                {{ order.shipping_address.full_name }}<br>
+                {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %}<br>
+                {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}<br>
+                {{ order.shipping_address.country }}<br>
+                Phone: {{ order.shipping_address.phone_number|default:"N/A" }}
+            </p>
+
+            {% if order.status == 'Shipped' %}
+            <h5>Tracking</h5>
+            {% if order.tracking_number %}
+                <p>Number: {{ order.tracking_number }}</p>
+                <p>Shipped: {{ order.shipped_date|date:"M d, Y"|default:"N/A" }}</p>
+                <p>Est. Delivery: {{ order.estimated_delivery|date:"M d, Y"|default:"N/A" }}</p>
+                <a href="#" class="btn btn-link">Track</a>
+            {% else %}
+                <p class="text-muted">Tracking info pending.</p>
+            {% endif %}
+            {% endif %}
+
+            <h5>Help</h5>
+            <p class="text-muted">Questions?</p>
+            <a href="{% url 'user_app:contact_us' %}" class="btn btn-link">Contact Support</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    nav {
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    h2 {
+        font-weight: 400;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+        color: #333;
+    }
+    h5 {
+        font-weight: 400;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    p, td, th {
+        font-size: 0.9rem;
+    }
+    .text-muted {
+        color: #666;
+    }
+    .table {
+        border-collapse: collapse;
+    }
+    .table th, .table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+    }
+    .btn-link {
+        padding: 0;
+        color: #333;
+    }
+    .btn-link:hover {
+        color: #000;
+        text-decoration: none;
+    }
+    .btn-link.text-danger {
+        color: #dc3545;
+    }
+</style>
+{% endblock %}

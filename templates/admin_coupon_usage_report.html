@@ -1,0 +1,48 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card glow-effect">
+                <div class="card-header">
+                    <h5 class="mb-0">Coupon Usage Report</h5>
+                </div>
+                <div class="card-body">
+                    {% if coupons %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Discount Amount</th>
+                                        <th>Usage Count</th>
+                                        <th>Usage Limit</th>
+                                        <th>Active</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for coupon in coupons %}
+                                        <tr>
+                                            <td>{{ coupon.code }}</td>
+                                            <td>{{ coupon.discount_amount }}</td>
+                                            <td>{{ coupon.usage_count }}</td>
+                                            <td>{{ coupon.usage_limit|default:"Unlimited" }}</td>
+                                            <td>
+                                                <span class="badge {% if coupon.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                                                    {{ coupon.is_active|yesno:"Yes,No" }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No coupons found.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

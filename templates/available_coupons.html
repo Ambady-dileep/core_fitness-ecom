@@ -1,0 +1,60 @@
+<!-- templates/offer_and_coupon/available_coupons.html -->
+{% extends 'base.html' %}
+{% load static cart_filters %}
+
+{% block title %}Available Coupons{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2>Available Coupons</h2>
+    <p class="text-muted">Apply these at checkout to save!</p>
+    {% if coupons %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Discount</th>
+                    <th>Valid From</th>
+                    <th>Valid To</th>
+                    <th>Min Order</th>
+                    <th>Uses Left</th>
+                    <th>Applicable Products</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for coupon in coupons %}
+                <tr>
+                    <td>{{ coupon.code }}</td>
+                    <td>${{ coupon.discount_amount|floatformat:2 }}</td>
+                    <td>{{ coupon.valid_from|date:"M d, Y" }}</td>
+                    <td>{{ coupon.valid_to|date:"M d, Y" }}</td>
+                    <td>${{ coupon.minimum_order_amount|floatformat:2 }}</td>
+                    <td>{% if coupon.usage_limit == 0 %}Unlimited{% else %}{{ coupon.usage_limit|subtract:coupon.usage_count }}{% endif %}</td>
+                    <td>
+                        {% if coupon.applicable_products.exists %}
+                            {% for variant in coupon.applicable_products.all %}
+                                {{ variant.product.product_name }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            All Products
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No coupons available at this time.</p>
+    {% endif %}
+    <a href="{% url 'cart_and_orders_app:checkout' %}" class="btn btn-primary">Go to Checkout</a>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 10px; border: 1px solid #ddd; }
+    .btn-primary { background: #333; border: none; }
+    .btn-primary:hover { background: #000; }
+</style>
+{% endblock %}

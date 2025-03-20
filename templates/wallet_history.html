@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Wallet History for {{ request.user.username }}</h2>
+  {% if wallet %}
+    <p>Current Balance: {{ wallet.balance }}</p>
+    {% with transactions=wallet.transactions.all %}
+      {% if transactions %}
+        <table>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Description</th>
+          </tr>
+          {% for tx in transactions %}
+            <tr>
+              <td>{{ tx.created_at }}</td>
+              <td>{{ tx.transaction_type }}</td>
+              <td>{{ tx.amount }}</td>
+              <td>{{ tx.description }}</td>
+            </tr>
+          {% endfor %}
+        </table>
+      {% else %}
+        <p>No transactions yet.</p>
+      {% endif %}
+    {% endwith %}
+  {% else %}
+    <p>No wallet found.</p>
+  {% endif %}
+{% endblock %}

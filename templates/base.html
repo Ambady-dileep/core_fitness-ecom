@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Core Fitness{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #EEEEEE;
+            --accent-color: #333333;
+            --text-color: #333333;
+            --light-text: #777777;
+            --background-color: #FFFFFF;
+            --light-gray: #F8F8F8;
+            --border-color: #EEEEEE;
+            --hover-color: #DDDDDD;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding-top: 70px;
+            color: var(--text-color);
+            background-color: var(--background-color);
+            line-height: 1.6;
+            font-weight: 300;
+            letter-spacing: 0.02em;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 400;
+            letter-spacing: 0.03em;
+        }
+        
+        /* Navbar Styling - Minimalist */
+        .navbar {
+            background-color: var(--background-color);
+            box-shadow: none;
+            border-bottom: 1px solid var(--border-color);
+            min-height: 80px;
+            padding: 0.7rem 1.5rem;
+        }
+        
+        .navbar-brand {
+            font-weight: 400;
+            color: var(--text-color) !important;
+            letter-spacing: 0.1em;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+        }
+        
+        .navbar-nav .nav-link {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            color: var(--text-color) !important;
+            font-weight: 400;
+            letter-spacing: 0.05em;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+        
+        .nav-link:hover {
+            color: var(--light-text) !important;
+        }
+        
+        .dropdown-menu {
+            border-radius: 0;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            padding: 0.5rem 0;
+        }
+        
+        .dropdown-item {
+            font-size: 0.85rem;
+            padding: 0.5rem 1.5rem;
+            letter-spacing: 0.03em;
+        }
+        
+        .dropdown-item:hover {
+            background-color: var(--light-gray);
+        }
+        
+        .navbar .btn-sm {
+            padding: 0.3rem 1rem;
+            font-size: 0.8rem;
+            border-radius: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 400;
+        }
+        .input-group {
+            width: 160px;
+        }
+        .input-group .form-control {
+            height: 34px;
+            width: 500px
+            border-radius: 0;
+            border: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            box-shadow: none;
+        }
+        
+        .input-group .form-control:focus {
+            box-shadow: none;
+            border-color: var(--accent-color);
+        }
+        
+        .input-group .btn {
+            border-radius: 0;
+            padding: 0 10px;
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Badge styling */
+        .badge {
+            font-size: 0.65rem;
+            padding: 0.2em 0.4em;
+            border-radius: 2px;
+            font-weight: 400;
+            background-color: var(--accent-color);
+        }
+
+        /* Icon styling */
+        .nav-icon {
+            position: relative;
+            display: inline-block;
+            margin-right: 1rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        
+        .nav-icon:hover {
+            opacity: 1;
+        }
+        
+        .nav-icon i {
+            font-size: 1.4rem;
+        }
+        
+        .nav-icon .badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Button styling */
+        .btn-primary {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+            font-weight: 400;
+            border-radius: 0;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            padding: 0.5rem 1.5rem;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+            background-color: #000000;
+            border-color: #000000;
+        }
+        
+        .btn-outline-light {
+            border-color: var(--border-color);
+            color: var(--text-color);
+            border-radius: 0;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        
+        .btn-outline-light:hover {
+            background-color: var(--light-gray);
+            border-color: var(--border-color);
+            color: var(--text-color);
+        }
+        
+        /* Card styling */
+        .card {
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+            transition: transform 0.3s ease;
+            margin-bottom: 30px;
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-title {
+            color: var(--text-color);
+            font-weight: 400;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        
+        .card-body {
+            padding: 1.5rem;
+        }
+        
+        /* Footer styling */
+        footer {
+            background-color: var(--background-color);
+            color: var(--light-text);
+            padding: 3rem 0;
+            margin-top: 4rem;
+            border-top: 1px solid var(--border-color);
+        }
+        footer h5 {
+            color: var(--text-color);
+            font-weight: 400;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1.5rem;
+        }
+        
+        footer a {
+            color: var(--light-text) !important;
+            transition: color 0.2s;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+        
+        footer a:hover {
+            color: var(--text-color) !important;
+        }
+        
+        .social-icons a {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+            margin-right: 10px;
+            background-color: var(--light-gray);
+            transition: all 0.2s;
+            color: var(--text-color) !important;
+        }
+        
+        .social-icons a:hover {
+            background-color: var(--accent-color);
+            color: white !important;
+        }
+        
+        /* Alert styling */
+        .alert-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1030;
+            max-width: 300px;
+        }
+        
+        .alert {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-radius: 0;
+            padding: 0.8rem 1.2rem;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+        }
+        
+        .fade-out {
+            animation: fadeOut 3s forwards;
+            animation-delay: 2s;
+        }
+        
+        @keyframes fadeOut {
+            from {opacity: 1;}
+            to {opacity: 0; display: none;}
+        }
+        
+        /* Section styling */
+        .section-title {
+            margin-bottom: 2rem;
+            color: var(--text-color);
+            font-weight: 400;
+            font-size: 1.3rem;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding-bottom: 0.5rem;
+        }
+        /* Centered Search Bar */
+        .navbar-search {
+            flex-grow: 0; /* Prevents it from stretching too much */
+            width: auto; /* Allows natural width */
+            padding: 0 1rem; /* Optional: adds some spacing */
+        }
+
+        .navbar .input-group {
+            width: 430px; /* Adjust width as needed (increased from 160px) */
+            margin: 0 auto; /* Centers within its container */
+        }
+        @media (max-width: 991px) {
+            .navbar-search {
+                width: 100%;
+                padding: 10px 0;
+            }
+            .navbar .input-group {
+                width: 100%;
+            }
+        }
+
+        .navbar .input-group .form-control {
+            height: 39px;
+            border-radius: 0;
+            border: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            box-shadow: none;
+        }
+
+        .navbar .input-group .form-control:focus {
+            box-shadow: none;
+            border-color: var(--accent-color);
+        }
+
+        .navbar .input-group .btn {
+            border-radius: 0;
+            padding: 0 10px;
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        /* Ensure navbar layout remains balanced */
+        .navbar-collapse {
+            display: flex;
+            justify-content: space-between; /* Distributes space evenly */
+            align-items: center;
+        }
+
+        .navbar-nav.me-auto {
+            flex-grow: 1; /* Allows left nav to take available space */
+        }
+
+        .navbar-nav.ms-auto {
+            flex-grow: 1; /* Allows right nav to take available space */
+            justify-content: flex-end; /* Keeps right items aligned to the end */
+        }
+        
+        .section-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 40px;
+            height: 1px;
+            background-color: var(--accent-color);
+        }
+        
+        /* Container spacing */
+        .container.mt-4 {
+            margin-top: 3rem !important;
+        }
+        
+        /* Whitespace and spacing */
+        .my-5 {
+            margin-top: 4rem !important;
+            margin-bottom: 4rem !important;
+        }
+        
+        .py-5 {
+            padding-top: 4rem !important;
+            padding-bottom: 4rem !important;
+        }
+        
+        /* Custom Minimalist Elements */
+        .minimal-divider {
+            width: 40px;
+            height: 1px;
+            background-color: var(--accent-color);
+            margin: 2rem 0;
+        }
+        
+        .minimal-text {
+            font-weight: 300;
+            line-height: 1.8;
+            letter-spacing: 0.02em;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'user_app:user_home' %}">Core Fitness</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- Left Side Navigation -->
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{% url 'user_app:user_home' %}">Home</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="categoriesDropdown" role="button" 
+                           data-bs-toggle="dropdown" aria-expanded="false">Categories</a>
+                        <ul class="dropdown-menu" aria-labelledby="categoriesDropdown">
+                            <li><a class="dropdown-item" href="{% url 'product_app:user_category_list' %}">All Categories</a></li>
+                            <li><a class="dropdown-item" href="#">Protein</a></li>
+                            <li><a class="dropdown-item" href="#">Pre-Workout</a></li>
+                            <li><a class="dropdown-item" href="#">Vitamins</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'product_app:user_product_list' %}">Products</a>
+                    </li>
+                </ul>
+                            <!-- Centered Search Bar -->
+                    <div class="navbar-search mx-auto">
+                        <form class="d-flex" role="search">
+                            <div class="input-group">
+                                <input class="form-control" type="search" placeholder="Search" aria-label="Search">
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                                <!-- Right Side Navigation -->
+                        <ul class="navbar-nav ms-auto align-items-center">
+                            {% if user.is_authenticated %}
+                                <!-- Wishlist Icon -->
+                                <li class="nav-item me-3">
+                                    <a class="nav-link nav-icon" href="{% url 'cart_and_orders_app:user_wishlist' %}">
+                                        <i class="fas fa-heart"></i>
+                                        <span class="position-absolute badge" id="wishlist-count">
+                                            {{ request.user.wishlist.items.count|default:0 }}
+                                        </span>
+                                    </a>
+                                </li>
+                        <!-- Shopping Cart Icon -->
+                        <li class="nav-item me-3">
+                            <a class="nav-link nav-icon" href="{% url 'cart_and_orders_app:user_cart_list' %}">
+                                <i class="fas fa-shopping-cart"></i>
+                                <span class="position-absolute badge" id="cart-count">
+                                    {{ request.user.cart.items.count|default:0 }}
+                                </span>
+                            </a>
+                        </li>
+                                                
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" 
+                               data-bs-toggle="dropdown" aria-expanded="false">
+                                {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="{% url 'user_app:my_profile' %}">My Profile</a></li>
+                                <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_order_list' %}">My Orders</a></li>
+                                <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_wishlist' %}">My Wishlist</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{% url 'user_app:user_logout' %}">Logout</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item me-3">
+                            <a class="btn btn-outline-light btn-sm" href="{% url 'user_app:user_login' %}">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-primary btn-sm" href="{% url 'user_app:user_signup' %}">Sign Up</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Messages Container -->
+    <div class="alert-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show fade-out" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4 mb-5 mb-md-0">
+                    <h5>About</h5>
+                    <div class="minimal-divider"></div>
+                    <p class="minimal-text">Your ultimate destination for premium fitness supplements and accessories. Elevate your performance with Core Fitness.</p>
+                </div>
+                <div class="col-md-4 mb-5 mb-md-0">
+                    <h5>Links</h5>
+                    <div class="minimal-divider"></div>
+                    <ul class="list-unstyled">
+                        <li class="mb-3"><a href="{% url 'user_app:about_us' %}">About Us</a></li>
+                        <li class="mb-3"><a href="{% url 'user_app:contact_us' %}">Contact Us</a></li>
+                        <li class="mb-3"><a href="{% url 'user_app:faq' %}">FAQ</a></li>
+                        <li class="mb-3"><a href="{% url 'user_app:privacy_policy' %}">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h5>Connect</h5>
+                    <div class="minimal-divider"></div>
+                    <div class="social-icons mb-4">
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-youtube"></i></a>
+                    </div>
+                    <p class="minimal-text mb-1">info@corefitness.com</p>
+                    <p class="minimal-text">+1 (555) 123-4567</p>
+                </div>
+            </div>
+            <div class="minimal-divider mx-auto" style="margin-top: 3rem;"></div>
+            <div class="text-center mt-4">
+                <p class="minimal-text">© 2025 Core Fitness. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(function(alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
+    </script>
+    {% block extra_js %}
+    {% endblock %}
+</body>
+</html>

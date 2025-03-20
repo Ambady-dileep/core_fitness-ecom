@@ -1,0 +1,54 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Delete Category{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">Confirm Deletion</h3>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        {% if category.image %}
+                            <img src="{{ category.image.url }}" alt="{{ category.name }}" class="img-thumbnail mb-3" style="max-height: 150px;">
+                        {% endif %}
+                        <h4>Are you sure you want to delete the category "{{ category.name }}"?</h4>
+                        
+                        {% if category.get_products.count > 0 %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                Warning: This category has {{ category.get_products.count }} product(s). 
+                                Deleting this category will also delete these products.
+                            </div>
+                        {% endif %}
+                        
+                        {% if category.children.count > 0 %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> 
+                                Warning: This category has {{ category.children.count }} subcategories. 
+                                Deleting this category will affect these subcategories.
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-center gap-3">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Yes, Delete
+                            </button>
+                            <a href="{% url 'product_app:admin_categories' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

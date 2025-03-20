@@ -1,0 +1,21 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h2 mb-4 text-gray-800">Overall User Statistics</h1>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3" style="background-color: #007bff;">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-chart-bar me-2"></i>System-Wide Stats
+            </h6>
+        </div>
+        <div class="card-body">
+            <p><strong>Total Users:</strong> {{ total_users }}</p>
+            <p><strong>Active Users:</strong> {{ active_users }}</p>
+            <p><strong>Blocked Users:</strong> {{ blocked_users }}</p>
+            <p><strong>Total Successful Logins:</strong> {{ successful_logins }}</p>
+            <p><strong>Total Failed Logins:</strong> {{ failed_logins }}</p>
+            <a href="{% url 'user_app:admin_dashboard' %}" class="btn btn-primary mt-3">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

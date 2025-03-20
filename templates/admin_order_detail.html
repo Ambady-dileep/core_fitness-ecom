@@ -1,0 +1,101 @@
+{% extends 'admin_base.html' %}
+{% load static cart_filters %}
+
+{% block title %}Order {{ order.order_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>{{ order.order_id }}</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Order Details and Items -->
+        <div class="col-lg-8">
+            <div class="mb-4">
+                <h5>Details</h5>
+                <ul class="list-unstyled">
+                    <li>User: {{ order.user.full_name|default:order.user.username }}</li>
+                    <li>Date: {{ order.order_date|date:"M d, Y H:i" }}</li>
+                    <li>Total: ${{ order.total_amount|floatformat:2 }}</li>
+                    <li>Shipping: 
+                        {% if order.shipping_address %}
+                            {{ order.shipping_address.address_line1 }}, {{ order.shipping_address.city }}, 
+                            {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}, 
+                            {{ order.shipping_address.country }}
+                        {% else %}
+                            Not specified
+                        {% endif %}
+                    </li>
+                </ul>
+                <form method="POST" class="mt-2">
+                    {% csrf_token %}
+                    <label for="id_status" class="form-label">Status:</label>
+                    {{ form.status }}
+                    <button type="submit" class="btn btn-sm btn-primary mt-2">Update</button>
+                </form>
+            </div>
+
+            <div>
+                <h5>Items</h5>
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Variant</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order_items %}
+                            <tr>
+                                <td>{{ item.variant.product.product_name }}</td>
+                                <td>{{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"N/A" }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>${{ item.price|floatformat:2 }}</td>
+                                <td>${{ item.price|multiply:item.quantity|floatformat:2 }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5">No items</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Return Requests -->
+        <div class="col-lg-4">
+            <h5>Returns</h5>
+            {% for return_request in return_requests %}
+                <div class="mb-3">
+                    <p>Reason: {{ return_request.reason }}</p>
+                    <p>Date: {{ return_request.requested_at|date:"M d, Y" }}</p>
+                    <p>Status: 
+                        {% if return_request.is_verified and return_request.refund_processed %}
+                            Refunded
+                        {% elif return_request.is_verified %}
+                            Approved
+                        {% else %}
+                            Pending
+                        {% endif %}
+                    </p>
+                    {% if not return_request.is_verified %}
+                        <a href="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" 
+                           class="btn btn-sm btn-outline-primary">Verify</a>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <p>No returns</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

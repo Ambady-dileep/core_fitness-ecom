@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cancel Order - {{ order.order_id }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">Cancel Order #{{ order.order_id }}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading">Are you sure you want to cancel this order?</h5>
+                        <p>Once canceled, this action cannot be undone. Your payment will be refunded according to our refund policy.</p>
+                    </div>
+
+                    <div class="order-summary mb-4">
+                        <h5>Order Summary</h5>
+                        <table class="table table-bordered">
+                            <tr>
+                                <th>Order ID</th>
+                                <td>{{ order.order_id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Date</th>
+                                <td>{{ order.order_date }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td><span class="badge bg-{{ order.status|lower }}">{{ order.status }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Total Amount</th>
+                                <td>₹{{ order.total_amount }}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Please tell us why you're canceling this order:</label>
+                            <select name="reason" id="reason" class="form-select" required>
+                                <option value="">-- Select a reason --</option>
+                                <option value="Changed my mind">Changed my mind</option>
+                                <option value="Found a better price elsewhere">Found a better price elsewhere</option>
+                                <option value="Ordered by mistake">Ordered by mistake</option>
+                                <option value="Shipping delay">Shipping delay</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3" id="other-reason-container" style="display: none;">
+                            <label for="other-reason" class="form-label">Please specify:</label>
+                            <textarea name="other_reason" id="other-reason" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'cart_and_orders_app:user_order_detail' order_id=order.order_id %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Order
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-times"></i> Confirm Cancellation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const reasonSelect = document.getElementById('reason');
+        const otherReasonContainer = document.getElementById('other-reason-container');
+        
+        reasonSelect.addEventListener('change', function() {
+            if (this.value === 'Other') {
+                otherReasonContainer.style.display = 'block';
+            } else {
+                otherReasonContainer.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

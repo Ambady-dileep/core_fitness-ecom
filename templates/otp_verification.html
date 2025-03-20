@@ -1,0 +1,246 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core Fitness - Verify OTP</title>
+    <!-- Bootstrap CSS (minimal dependency for form styling) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SweetAlert2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            background: linear-gradient(to bottom right, #770000, #000000);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+        }
+
+        .auth-container {
+            width: min(90%, 400px);
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .brand-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+
+        .btn-custom {
+            background: linear-gradient(to bottom right, #bc0f0f, #0b0000);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-weight: 500;
+        }
+
+        .btn-custom:hover {
+            opacity: 0.9;
+        }
+
+        .btn-link {
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: inline-block;
+        }
+
+        .btn-back {
+            background: linear-gradient(to bottom right, #bc0f0f, #0b0000);
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            width: 100%;
+            font-weight: 500;
+            margin-top: 1rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-back:hover {
+            opacity: 0.9;
+            color: white;
+        }
+
+        .text-white {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1 class="brand-title">Core Fitness</h1>
+        <h2 class="text-white mb-3">Verify Email</h2>
+        <p class="text-white mb-3">Enter the OTP sent to {{ email }}</p>
+
+        <form id="verifyOtpForm" method="POST" action="{% url 'user_app:verify_otp_signup' %}">
+            {% csrf_token %}
+            <input type="hidden" name="email" value="{{ email }}">
+            <input type="text" class="form-control" id="otp" name="otp" placeholder="6-digit OTP" required>
+            <button type="submit" class="btn-custom">Verify</button>
+            <button type="button" id="resendOtpBtn" class="btn-link" disabled>Resend OTP</button>
+        </form>
+
+        <a href="{% url 'user_app:user_login' %}" class="btn-back">Back to Login</a>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const verifyOtpForm = document.getElementById('verifyOtpForm');
+            const resendOtpBtn = document.getElementById('resendOtpBtn');
+            const email = "{{ email }}";
+
+            // Display messages using SweetAlert
+            {% if messages %}
+                {% for message in messages %}
+                    Swal.fire({
+                        icon: '{{ message.tags }}' === 'error' ? 'error' : '{{ message.tags }}',
+                        title: '{{ message.tags|capfirst }}',
+                        text: '{{ message }}',
+                        confirmButtonColor: '#bc0f0f',
+                        background: '#fff',
+                        customClass: {
+                            popup: 'rounded-3',
+                            confirmButton: 'btn btn-custom'
+                        }
+                    });
+                {% endfor %}
+            {% endif %}
+
+            // OTP Form Validation
+            verifyOtpForm.addEventListener('submit', function(e) {
+                const otp = verifyOtpForm.querySelector('[name="otp"]');
+                if (!otp.value.trim() || !/^\d{6}$/.test(otp.value)) {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Please enter a valid 6-digit OTP',
+                        confirmButtonColor: '#bc0f0f',
+                        background: '#fff',
+                        customClass: {
+                            popup: 'rounded-3',
+                            confirmButton: 'btn btn-custom'
+                        }
+                    });
+                }
+            });
+
+            // Resend OTP
+            resendOtpBtn.addEventListener('click', function() {
+                fetch("{% url 'user_app:resend_otp_signup' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `email=${encodeURIComponent(email)}`,
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: data.message,
+                            confirmButtonColor: '#bc0f0f',
+                            background: '#fff',
+                            customClass: {
+                                popup: 'rounded-3',
+                                confirmButton: 'btn btn-custom'
+                            }
+                        });
+                        startResendCooldown(180);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.error,
+                            confirmButtonColor: '#bc0f0f',
+                            background: '#fff',
+                            customClass: {
+                                popup: 'rounded-3',
+                                confirmButton: 'btn btn-custom'
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred. Please try again.',
+                        confirmButtonColor: '#bc0f0f',
+                        background: '#fff',
+                        customClass: {
+                            popup: 'rounded-3',
+                            confirmButton: 'btn btn-custom'
+                        }
+                    });
+                });
+            });
+
+            // CSRF Token Helper
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+
+            // Resend Cooldown Timer
+            function startResendCooldown(seconds) {
+                resendOtpBtn.disabled = true;
+                let timeLeft = seconds;
+                resendOtpBtn.textContent = `Resend OTP (${timeLeft}s)`;
+                const interval = setInterval(() => {
+                    timeLeft--;
+                    resendOtpBtn.textContent = `Resend OTP (${timeLeft}s)`;
+                    if (timeLeft <= 0) {
+                        clearInterval(interval);
+                        resendOtpBtn.textContent = 'Resend OTP';
+                        resendOtpBtn.disabled = false;
+                    }
+                }, 1000);
+            }
+
+            // Start the resend cooldown on page load
+            startResendCooldown(180);
+        });
+    </script>
+</body>
+</html>

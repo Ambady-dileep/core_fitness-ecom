@@ -1,0 +1,99 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Coupons{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Coupons</h2>
+        <a href="{% url 'offer_and_coupon:admin_coupon_add' %}" class="btn btn-primary">Add Coupon</a>
+    </div>
+
+    {% if coupons %}
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Discount</th>
+                    <th>Min Order</th>
+                    <th>Active</th>
+                    <th>Valid From</th>
+                    <th>Valid To</th>
+                    <th>Usage Limit</th>
+                    <th>Usage Count</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for coupon in coupons %}
+                    <tr>
+                        <td>{{ coupon.code }}</td>
+                        <td>${{ coupon.discount_amount|floatformat:2 }}</td>
+                        <td>${{ coupon.minimum_order_amount|floatformat:2 }}</td>
+                        <td>{{ coupon.is_active|yesno:"Yes,No" }}</td>
+                        <td>{{ coupon.valid_from|date:"M d, Y H:i" }}</td>
+                        <td>{{ coupon.valid_to|date:"M d, Y H:i" }}</td>
+                        <td>{{ coupon.usage_limit|default:"Unlimited" }}</td>
+                        <td>{{ coupon.usage_count }}</td>
+                        <td>
+                            <a href="{% url 'offer_and_coupon:admin_coupon_edit' coupon.id %}" class="btn btn-link">Edit</a>
+                            <a href="{% url 'offer_and_coupon:admin_coupon_delete' coupon.id %}" class="btn btn-link text-danger">Delete</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-muted">No coupons found.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    h2 {
+        font-weight: 400;
+        font-size: 1.5rem;
+        color: #333;
+    }
+    .table {
+        border-collapse: collapse;
+    }
+    .table th, .table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #eee;
+        font-size: 0.9rem;
+    }
+    .table th {
+        font-weight: 500;
+        color: #666;
+    }
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    .btn-primary {
+        background: #333;
+        border: none;
+    }
+    .btn-primary:hover {
+        background: #000;
+    }
+    .btn-link {
+        padding: 0;
+        color: #333;
+    }
+    .btn-link:hover {
+        color: #000;
+        text-decoration: none;
+    }
+    .btn-link.text-danger {
+        color: #dc3545;
+    }
+    .text-muted {
+        color: #666;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
