@@ -2,6 +2,9 @@ from django import forms
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
+from django.contrib.auth.forms import UserCreationForm
+from .models import CustomUser, Banner
+from offer_and_coupon_app.models import ReferralCode
 from .models import Address, CustomUser, UserProfile, validate_full_name
 
 class AdminLoginForm(forms.Form):
@@ -38,11 +41,13 @@ class UserProfileForm(forms.ModelForm):
         widgets = {
             'username': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Username'
+                'placeholder': 'Username',
+                'readonly': True  # Prevent editing username
             }),
             'email': forms.EmailInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Email'
+                'placeholder': 'Email',
+                'readonly': True  # Prevent editing email
             }),
             'full_name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -197,3 +202,56 @@ class ValidateOTPForm(forms.Form):
         if not otp.isdigit() or len(otp) != 6:
             raise forms.ValidationError("OTP must be a 6-digit number.")
         return otp        
+
+class CustomUserCreationForm(UserCreationForm):
+    referral_code = forms.CharField(max_length=20, required=False, help_text="Optional: Enter referral code if you have one")
+    
+    class Meta:
+        model = CustomUser
+        fields = ('username', 'email', 'full_name', 'phone_number', 'password1', 'password2', 'referral_code')
+    
+    def clean_referral_code(self):
+        code = self.cleaned_data.get('referral_code')
+        
+        if code:
+            try:
+                ReferralCode.objects.get(code=code)
+            except ReferralCode.DoesNotExist:
+                raise forms.ValidationError("Invalid referral code")
+        return code
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        
+        if commit:
+            user.save()
+            referral_code = self.cleaned_data.get('referral_code')
+            if referral_code:
+                from offer_and_coupon_app.models import ReferralCode, Referral
+                try:
+                    referrer_code = ReferralCode.objects.get(code=referral_code)
+                    referral = Referral.objects.create(
+                        referrer=referrer_code.user,
+                        referred_user=user
+                    )
+                    referral.generate_coupon()
+                except ReferralCode.DoesNotExist:
+                    pass 
+                    
+        return user
+    
+
+class BannerForm(forms.ModelForm):
+    class Meta:
+        model = Banner
+        fields = ['title', 'subtitle', 'image', 'url', 'is_active', 'display_order']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Banner Title'}),
+            'subtitle': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Banner Subtitle (Optional)'}),
+            'url': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'https://example.com/page'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'display_order': forms.NumberInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'is_active': 'Active',
+        }

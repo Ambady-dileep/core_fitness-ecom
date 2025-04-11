@@ -25,7 +25,6 @@
             overflow: hidden; /* Prevents scrollbars if video exceeds viewport */
         }
 
-        /* Add video styling */
         .background-video {
             position: fixed;
             top: 0;
@@ -70,9 +69,9 @@
         .form-control {
             background: rgba(255, 255, 255, 0.9);
             border: none;
-            padding: 12px 16px;
+            padding: 10px;
             margin-bottom: 1rem;
-            border-radius: 8px;
+            border-radius: 5px;
             transition: all 0.3s ease;
         }
 
@@ -115,6 +114,7 @@
             font-size: 0.875rem;
             margin-top: -0.75rem;
             margin-bottom: 1rem;
+            min-height: 1rem;
             display: none;
         }
 
@@ -236,32 +236,35 @@
             <div id="signup" class="tab-pane fade {% if signup_active %}show active{% endif %}">
                 <form id="signupForm" method="POST" action="{% url 'user_app:user_signup' %}" novalidate>
                     {% csrf_token %}
-                    <input type="text" class="form-control" name="username" value="{{ form_data.username }}" placeholder="Username" required>
+                    <input type="text" class="form-control" name="username" value="{{ form_data.username }}" placeholder="Username" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="signup-username-error"></div>
-
-                    <input type="text" class="form-control" name="full_name" value="{{ form_data.full_name }}" placeholder="Full Name" required>
+            
+                    <input type="text" class="form-control" name="full_name" value="{{ form_data.full_name }}" placeholder="Full Name" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="full-name-error"></div>
-
-                    <input type="email" class="form-control" name="email" value="{{ form_data.email }}" placeholder="Email" required>
+            
+                    <input type="email" class="form-control" name="email" value="{{ form_data.email }}" placeholder="Email" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="email-error"></div>
-
-                    <input type="tel" class="form-control" name="phone_number" value="{{ form_data.phone_number }}" placeholder="Phone Number" required>
+            
+                    <input type="tel" class="form-control" name="phone_number" value="{{ form_data.phone_number }}" placeholder="Phone Number" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="phone-error"></div>
-
-                    <input type="password" class="form-control" name="password1" placeholder="Password" required>
+            
+                    <input type="password" class="form-control" name="password1" placeholder="Password" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="password1-error"></div>
-
-                    <input type="password" class="form-control" name="password2" placeholder="Confirm Password" required>
+            
+                    <input type="password" class="form-control" name="password2" placeholder="Confirm Password" required style="padding: 8px; font-size: 0.9rem;">
                     <div class="error-feedback" id="password2-error"></div>
-
-                    <button type="submit" class="btn btn-custom">Sign Up</button>
+            
+                    <input type="text" class="form-control" name="referral_code" value="{{ form_data.referral_code|default:'' }}" placeholder="Referral Code (optional)" style="padding: 8px; font-size: 0.9rem;">
+                    <div class="error-feedback" id="referral-code-error"></div>
+            
+                    <button type="submit" class="btn btn-custom" style="padding: 10px; font-size: 0.9rem;">Sign Up</button>
                 </form>
-
-                <div class="divider">
+            
+                <div class="divider" style="margin: 0.5rem 0;">
                     <span>or</span>
                 </div>
-
-                <a href="{% url 'social:begin' 'google-oauth2' %}" class="google-btn text-decoration-none text-dark">
+            
+                <a href="{% url 'social:begin' 'google-oauth2' %}" class="google-btn text-decoration-none text-dark" style="padding: 10px; margin: 0.5rem 0;">
                     <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google">
                     <span>Continue with Google</span>
                 </a>

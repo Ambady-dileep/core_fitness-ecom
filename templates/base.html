@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css" rel="stylesheet">
+    
     <!-- Custom CSS -->
     <style>
         :root {
@@ -23,6 +24,9 @@
             --light-gray: #F8F8F8;
             --border-color: #EEEEEE;
             --hover-color: #DDDDDD;
+            --cart-icon-color: #4A90E2; /* Minimalist blue for cart */
+            --wishlist-icon-color: #E94E77; /* Minimalist pink for wishlist */
+            --icon-hover-color: #000000; /* Black on hover for both */
         }
         
         body {
@@ -51,10 +55,10 @@
         }
         
         .navbar-brand {
-            font-weight: 400;
+            font-weight: 900;
             color: var(--text-color) !important;
-            letter-spacing: 0.1em;
-            font-size: 1.1rem;
+            letter-spacing: 0.1rem;
+            font-size: 1.9rem;
             text-transform: uppercase;
         }
         
@@ -97,12 +101,13 @@
             letter-spacing: 0.05em;
             font-weight: 400;
         }
+        
         .input-group {
             width: 160px;
         }
+        
         .input-group .form-control {
             height: 34px;
-            width: 500px
             border-radius: 0;
             border: 1px solid var(--border-color);
             font-size: 0.85rem;
@@ -135,12 +140,19 @@
             position: relative;
             display: inline-block;
             margin-right: 1rem;
-            opacity: 0.7;
-            transition: opacity 0.2s;
+            transition: color 0.2s ease; /* Smooth color transition */
         }
         
-        .nav-icon:hover {
-            opacity: 1;
+        .nav-icon.cart-icon i {
+            color: var(--cart-icon-color);
+        }
+        
+        .nav-icon.wishlist-icon i {
+            color: var(--wishlist-icon-color);
+        }
+        
+        .nav-icon:hover i {
+            color: var(--icon-hover-color);
         }
         
         .nav-icon i {
@@ -227,6 +239,7 @@
             margin-top: 4rem;
             border-top: 1px solid var(--border-color);
         }
+        
         footer h5 {
             color: var(--text-color);
             font-weight: 400;
@@ -303,17 +316,19 @@
             letter-spacing: 0.1em;
             padding-bottom: 0.5rem;
         }
+        
         /* Centered Search Bar */
         .navbar-search {
-            flex-grow: 0; /* Prevents it from stretching too much */
-            width: auto; /* Allows natural width */
-            padding: 0 1rem; /* Optional: adds some spacing */
+            flex-grow: 0;
+            width: auto;
+            padding: 0 1rem;
         }
 
         .navbar .input-group {
-            width: 430px; /* Adjust width as needed (increased from 160px) */
-            margin: 0 auto; /* Centers within its container */
+            width: 430px;
+            margin: 0 auto;
         }
+        
         @media (max-width: 991px) {
             .navbar-search {
                 width: 100%;
@@ -344,20 +359,19 @@
             border-color: var(--accent-color);
         }
 
-        /* Ensure navbar layout remains balanced */
         .navbar-collapse {
             display: flex;
-            justify-content: space-between; /* Distributes space evenly */
+            justify-content: space-between;
             align-items: center;
         }
 
         .navbar-nav.me-auto {
-            flex-grow: 1; /* Allows left nav to take available space */
+            flex-grow: 1;
         }
 
         .navbar-nav.ms-auto {
-            flex-grow: 1; /* Allows right nav to take available space */
-            justify-content: flex-end; /* Keeps right items aligned to the end */
+            flex-grow: 1;
+            justify-content: flex-end;
         }
         
         .section-title::after {
@@ -370,12 +384,10 @@
             background-color: var(--accent-color);
         }
         
-        /* Container spacing */
         .container.mt-4 {
             margin-top: 3rem !important;
         }
         
-        /* Whitespace and spacing */
         .my-5 {
             margin-top: 4rem !important;
             margin-bottom: 4rem !important;
@@ -386,7 +398,6 @@
             padding-bottom: 4rem !important;
         }
         
-        /* Custom Minimalist Elements */
         .minimal-divider {
             width: 40px;
             height: 1px;
@@ -401,13 +412,15 @@
         }
     </style>
     
-    {% block extra_css %}{% endblock %}
+    {% block extra_css %}
+    {% endblock %}
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'user_app:user_home' %}">Core Fitness</a>
+            <a class="navbar-brand" href="{% url 'user_app:user_home' %}">
+                <i class="fas fa-dumbbell me-2"></i>Core Fitness</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
                     aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -419,53 +432,44 @@
                     <li class="nav-item">
                         <a class="nav-link active" aria-current="page" href="{% url 'user_app:user_home' %}">Home</a>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="categoriesDropdown" role="button" 
-                           data-bs-toggle="dropdown" aria-expanded="false">Categories</a>
-                        <ul class="dropdown-menu" aria-labelledby="categoriesDropdown">
-                            <li><a class="dropdown-item" href="{% url 'product_app:user_category_list' %}">All Categories</a></li>
-                            <li><a class="dropdown-item" href="#">Protein</a></li>
-                            <li><a class="dropdown-item" href="#">Pre-Workout</a></li>
-                            <li><a class="dropdown-item" href="#">Vitamins</a></li>
-                        </ul>
-                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'product_app:user_product_list' %}">Products</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'product_app:user_category_list' %}">Categories</a>
+                    </li>
                 </ul>
-                            <!-- Centered Search Bar -->
-                    <div class="navbar-search mx-auto">
-                        <form class="d-flex" role="search">
-                            <div class="input-group">
-                                <input class="form-control" type="search" placeholder="Search" aria-label="Search">
-                                <button class="btn btn-primary" type="submit">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                                <!-- Right Side Navigation -->
-                        <ul class="navbar-nav ms-auto align-items-center">
-                            {% if user.is_authenticated %}
-                                <!-- Wishlist Icon -->
-                                <li class="nav-item me-3">
-                                    <a class="nav-link nav-icon" href="{% url 'cart_and_orders_app:user_wishlist' %}">
-                                        <i class="fas fa-heart"></i>
-                                        <span class="position-absolute badge" id="wishlist-count">
-                                            {{ request.user.wishlist.items.count|default:0 }}
-                                        </span>
-                                    </a>
-                                </li>
+                <!-- Centered Search Bar -->
+                <div class="navbar-search mx-auto">
+                    <form class="d-flex" role="search">
+                        <div class="input-group">
+                            <input class="form-control" type="search" placeholder="Search" aria-label="Search">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if user.is_authenticated %}
+                        <!-- Wishlist Icon -->
+                        <li class="nav-item me-3">
+                            <a class="nav-link nav-icon wishlist-icon" href="{% url 'cart_and_orders_app:user_wishlist' %}">
+                                <i class="fas fa-heart"></i>
+                                <span class="position-absolute badge" id="wishlist-count">
+                                    {{ request.user.wishlist_items.count|default:0 }}
+                                </span>
+                            </a>
+                        </li>
                         <!-- Shopping Cart Icon -->
                         <li class="nav-item me-3">
-                            <a class="nav-link nav-icon" href="{% url 'cart_and_orders_app:user_cart_list' %}">
+                            <a class="nav-link nav-icon cart-icon" href="{% url 'cart_and_orders_app:user_cart_list' %}">
                                 <i class="fas fa-shopping-cart"></i>
                                 <span class="position-absolute badge" id="cart-count">
                                     {{ request.user.cart.items.count|default:0 }}
                                 </span>
                             </a>
                         </li>
-                                                
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" 
                                data-bs-toggle="dropdown" aria-expanded="false">
@@ -475,6 +479,7 @@
                                 <li><a class="dropdown-item" href="{% url 'user_app:my_profile' %}">My Profile</a></li>
                                 <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_order_list' %}">My Orders</a></li>
                                 <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_wishlist' %}">My Wishlist</a></li>
+                                <li><a class="dropdown-item" href="{% url 'offer_and_coupon_app:wallet_dashboard' %}">My Wallet</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'user_app:user_logout' %}">Logout</a></li>
                             </ul>
@@ -484,7 +489,7 @@
                             <a class="btn btn-outline-light btn-sm" href="{% url 'user_app:user_login' %}">Login</a>
                         </li>
                         <li class="nav-item">
-                            <a class="btn btn-primary btn-sm" href="{% url 'user_app:user_signup' %}">Sign Up</a>
+                            <a class="btn btn-primary btn-sm" href="{% url 'user_app:user_signup' %}">Sign Up</a></li>
                         </li>
                     {% endif %}
                 </ul>
@@ -537,8 +542,8 @@
                         <a href="#"><i class="fab fa-instagram"></i></a>
                         <a href="#"><i class="fab fa-youtube"></i></a>
                     </div>
-                    <p class="minimal-text mb-1">info@corefitness.com</p>
-                    <p class="minimal-text">+1 (555) 123-4567</p>
+                    <p class="minimal-text mb-1">corefitness@gmail.com</p>
+                    <p class="minimal-text">+91 8547502375</p>
                 </div>
             </div>
             <div class="minimal-divider mx-auto" style="margin-top: 3rem;"></div>
@@ -554,6 +559,7 @@
     <script>
         console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
         document.addEventListener('DOMContentLoaded', function() {
+            // Auto-dismiss alerts after 5 seconds
             setTimeout(function() {
                 const alerts = document.querySelectorAll('.alert');
                 alerts.forEach(function(alert) {
@@ -561,9 +567,58 @@
                     bsAlert.close();
                 });
             }, 5000);
+
+            // Function to update wishlist count
+            function updateWishlistCount(count) {
+                const wishlistCountBadge = document.getElementById('wishlist-count');
+                if (wishlistCountBadge) {
+                    wishlistCountBadge.textContent = count;
+                }
+            }
+
+            // Function to update cart count (assuming it’s already working)
+            function updateCartCount(count) {
+                const cartCountBadge = document.getElementById('cart-count');
+                if (cartCountBadge) {
+                    cartCountBadge.textContent = count;
+                }
+            }
+
+            document.addEventListener('wishlist-updated', function(e) {
+                const wishlistCountBadge = document.getElementById('wishlist-count');
+                if (wishlistCountBadge) {
+                    const count = e.detail.count >= 0 ? e.detail.count : 0;
+                    wishlistCountBadge.textContent = count;
+                    wishlistCountBadge.style.display = count > 0 ? 'flex' : 'none'; // Hide badge if count is 0
+                }
+            });
+
+            document.addEventListener('cart-updated', function(e) {
+                const cartCountBadge = document.getElementById('cart-count');
+                if (cartCountBadge) {
+                    const count = e.detail.count >= 0 ? e.detail.count : 0;
+                    cartCountBadge.textContent = count;
+                    cartCountBadge.style.display = count > 0 ? 'flex' : 'none'; // Hide badge if count is 0
+                }
+            }); 
         });
+
+        // Function to get CSRF token from cookies (for AJAX)
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
     </script>
-    {% block extra_js %}
-    {% endblock %}
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

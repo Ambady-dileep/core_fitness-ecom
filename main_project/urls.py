@@ -19,8 +19,6 @@ from django.conf import settings
 from django.conf.urls.static import static
 from .views import handler404
 
-app_name = 'offer_and_coupon'
-
 urlpatterns = [
     path('', include('user_app.urls')),
     path('', include('product_app.urls')), 

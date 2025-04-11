@@ -1,4 +1,4 @@
-# main_project/middleware.py
+
 from django.shortcuts import render
 
 class Custom404Middleware:

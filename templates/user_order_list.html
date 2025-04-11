@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static cart_filters %}
 
-{% block title %}My Orders{% endblock %}
+{% block title %}My Orders - Core Fitness{% endblock %}
 
 {% block content %}
-<div class="container py-5">
+<div class="container py-5 order-list"> <!-- Added 'order-list' class for scoping -->
     <h2 class="section-title">My Orders</h2>
 
     <!-- Search and Filter Section -->
@@ -12,7 +12,7 @@
         <form method="get" class="row g-3">
             <div class="col-md-6">
                 <div class="input-group">
-                    <input type="text" name="q" class="form-control" placeholder="Search orders" value="{{ search_query }}">
+                    <input type="text" name="q" class="form-control" placeholder="Search by Order ID" value="{{ search_query }}">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-search"></i>
                     </button>
@@ -39,7 +39,7 @@
     <!-- Orders List -->
     {% if orders %}
         <div class="table-responsive">
-            <table class="table">
+            <table class="table table-hover">
                 <thead>
                     <tr>
                         <th>Order ID</th>
@@ -53,31 +53,35 @@
                     {% for order in orders %}
                     <tr>
                         <td>{{ order.order_id }}</td>
-                        <td>{{ order.order_date|date:"M d, Y" }}</td>
+                        <td>{{ order.order_date|date:"d M Y" }}</td>
                         <td>
-                            <span class="status-{{ order.status|lower }}">{{ order.status }}</span>
+                            <span class="badge status-{{ order.status|lower }}">{{ order.status }}</span>
                         </td>
-                        <td>₹{{ order.total_amount }}</td>
+                        <td>₹{{ order.total_amount|floatformat:2 }}</td>
                         <td class="text-end">
-                            <a href="{% url 'cart_and_orders_app:user_order_detail' order_id=order.order_id %}" 
-                               class="btn btn-sm btn-outline-primary">
+                            <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" 
+                               class="btn btn-sm btn-outline-light me-2" 
+                               aria-label="View details for order {{ order.order_id }}">
                                 <i class="fas fa-eye"></i>
                             </a>
                             {% if order.status == 'Pending' or order.status == 'Shipped' %}
-                            <a href="{% url 'cart_and_orders_app:user_cancel_order' order_id=order.order_id %}" 
-                               class="btn btn-sm btn-outline-danger">
+                            <a href="{% url 'cart_and_orders_app:user_cancel_order' order.order_id %}" 
+                               class="btn btn-sm btn-outline-danger me-2 cancel-order" 
+                               aria-label="Cancel order {{ order.order_id }}">
                                 <i class="fas fa-times"></i>
                             </a>
                             {% endif %}
                             {% if order.status == 'Delivered' %}
-                            <a href="{% url 'cart_and_orders_app:user_return_order' order_id=order.order_id %}" 
-                               class="btn btn-sm btn-outline-warning">
+                            <a href="{% url 'cart_and_orders_app:user_return_order' order.order_id %}" 
+                               class="btn btn-sm btn-outline-warning return-order" 
+                               aria-label="Return order {{ order.order_id }}">
                                 <i class="fas fa-undo"></i>
                             </a>
                             {% endif %}
                             {% if order.status != 'Cancelled' %}
-                            <a href="{% url 'cart_and_orders_app:download_invoice' order_id=order.order_id %}" 
-                               class="btn btn-sm btn-outline-secondary">
+                            <a href="{% url 'cart_and_orders_app:download_invoice' order.order_id %}" 
+                               class="btn btn-sm btn-outline-light" 
+                               aria-label="Download invoice for order {{ order.order_id }}">
                                 <i class="fas fa-file-pdf"></i>
                             </a>
                             {% endif %}
@@ -90,11 +94,9 @@
     {% else %}
         <div class="text-center py-5">
             <img src="{% static 'images/no_orders.jpg' %}" alt="No orders" class="img-fluid mb-3" style="max-height: 150px;">
-            <h4>No Orders Yet</h4>
-            <p class="minimal-text">Start shopping to see your orders here.</p>
-            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">
-                Shop Now
-            </a>
+            <h4 class="minimal-text">No Orders Yet</h4>
+            <p class="minimal-text text-muted">Start shopping to see your orders here.</p>
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">Shop Now</a>
         </div>
     {% endif %}
 </div>
@@ -102,25 +104,43 @@
 
 {% block extra_css %}
 <style>
-    /* Table Styling */
-    .table {
+    /* Scoped to .order-list to avoid affecting base.html */
+    .order-list {
+        background-color: var(--background-color);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .order-list .section-title {
+        font-weight: 400;
+        font-size: 1.3rem;
+        color: var(--text-color);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding-bottom: 0.5rem;
+        position: relative;
+    }
+    .order-list .section-title::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 40px;
+        height: 1px;
+        background-color: var(--accent-color);
+    }
+    .order-list .table {
         border-collapse: separate;
         border-spacing: 0 8px;
         background-color: transparent;
     }
-    
-    .table th {
+    .order-list .table th {
         font-weight: 400;
         font-size: 0.85rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--light-text);
+        color: var(--text-color);
         border: none;
         padding: 0.5rem 1rem;
-        background-color: transparent;
     }
-    
-    .table td {
+    .order-list .table td {
         font-size: 0.9rem;
         color: var(--text-color);
         border: none;
@@ -128,71 +148,127 @@
         background-color: var(--background-color);
         border-bottom: 1px solid var(--border-color);
     }
-    
-    .table tr:hover td {
+    .order-list .table tr:hover td {
         background-color: var(--light-gray);
     }
-    
-    /* Status Styling */
-    .status-pending {
-        color: #d97706;
+    .order-list .badge {
+        padding: 0.4rem 0.8rem;
+        border-radius: 2px;
+        font-size: 0.75rem;
+        font-weight: 400;
     }
-    .status-shipped {
-        color: #0284c7;
+    .order-list .status-pending {
+        background-color: #f39c12;
+        color: white;
     }
-    .status-delivered {
-        color: #15803d;
+    .order-list .status-shipped {
+        background-color: #3498db;
+        color: white;
     }
-    .status-cancelled {
-        color: #dc2626;
+    .order-list .status-out-for-delivery {
+        background-color: #2980b9;
+        color: white;
     }
-    
-    /* Buttons */
-    .btn-sm {
+    .order-list .status-delivered {
+        background-color: #27ae60;
+        color: white;
+    }
+    .order-list .status-cancelled {
+        background-color: #e74c3c;
+        color: white;
+    }
+    .order-list .btn-sm {
         padding: 0.3rem 0.8rem;
         font-size: 0.75rem;
         border-radius: 0;
     }
-    
-    .btn-outline-primary,
-    .btn-outline-danger,
-    .btn-outline-warning,
-    .btn-outline-secondary {
-        border-width: 1px;
-        padding: 0.2rem 0.6rem;
+    .order-list .btn-primary {
+        background-color: var(--accent-color);
+        border-color: var(--accent-color);
+        padding: 0.5rem 1.5rem;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
-    
-    /* Form Elements */
-    .form-control,
-    .form-select {
-        border-radius: 0;
+    .order-list .btn-primary:hover {
+        background-color: #000000;
+        border-color: #000000;
+    }
+    .order-list .btn-outline-light {
+        border-color: var(--border-color);
+        color: var(--text-color);
+    }
+    .order-list .btn-outline-light:hover {
+        background-color: var(--light-gray);
+    }
+    .order-list .btn-outline-danger {
+        border-color: #e74c3c;
+        color: #e74c3c;
+    }
+    .order-list .btn-outline-danger:hover {
+        background-color: #e74c3c;
+        color: white;
+    }
+    .order-list .btn-outline-warning {
+        border-color: #f39c12;
+        color: #f39c12;
+    }
+    .order-list .btn-outline-warning:hover {
+        background-color: #f39c12;
+        color: white;
+    }
+    .order-list .form-control,
+    .order-list .form-select {
         border: 1px solid var(--border-color);
+        border-radius: 0;
         font-size: 0.85rem;
         box-shadow: none;
-        background-color: var(--background-color);
     }
-    
-    .form-control:focus,
-    .form-select:focus {
+    .order-list .form-control:focus,
+    .order-list .form-select:focus {
         border-color: var(--accent-color);
         box-shadow: none;
     }
-    
-    .input-group .btn {
+    .order-list .input-group .btn {
         padding: 0 0.8rem;
     }
-    
-    /* Empty State */
-    .text-center h4 {
-        font-weight: 400;
+    .order-list .text-center h4 {
+        font-weight: 300;
         font-size: 1.2rem;
-        color: var(--text-color);
-        margin-bottom: 1rem;
+        color: var(--light-text);
     }
-    
-    .text-center .minimal-text {
-        font-size: 0.9rem;
+    .order-list .text-muted {
+        font-size: 0.85rem;
         color: var(--light-text);
     }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.cancel-order, .return-order').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = this.href;
+            const action = this.classList.contains('cancel-order') ? 'cancel' : 'return';
+            Swal.fire({
+                title: `Are you sure you want to ${action} this order?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No',
+                confirmButtonColor: '#e74c3c',
+                cancelButtonColor: '#7f8c8d'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = url;
+                }
+            });
+        });
+    });
+});
+</script>
 {% endblock %}

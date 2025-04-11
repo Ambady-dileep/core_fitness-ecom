@@ -4,6 +4,7 @@ from django.core.validators import RegexValidator
 from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
 import re
+from cloudinary.models import CloudinaryField
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -70,20 +71,13 @@ class CustomUser(AbstractUser):
         db_index=True
     )
 
-    # Status fields
     is_blocked = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
-    
-    
-    # Timestamp fields
+    login_attempts = models.IntegerField(default=0)
+    last_login_attempt = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Login attempt tracking
-    last_login_attempt = models.DateTimeField(null=True, blank=True)
-    login_attempts = models.IntegerField(default=0)
 
-    # Override the default groups field
     groups = models.ManyToManyField(
         'auth.Group',
         related_name='custom_users',
@@ -119,34 +113,23 @@ class CustomUser(AbstractUser):
         super().save(*args, **kwargs)
 
     def check_login_attempts(self):
-        """
-        Check if user can attempt login or is temporarily blocked
-        Returns True if user can attempt login, False otherwise
-        """
         if self.login_attempts >= 5:
             if self.last_login_attempt:
                 block_duration = datetime.now() - self.last_login_attempt.replace(tzinfo=None)
                 if block_duration < timedelta(minutes=15):
                     return False
                 else:
-                    # Reset attempts after 15 minutes
                     self.login_attempts = 0
                     self.last_login_attempt = None
                     self.save()
         return True
 
     def increment_login_attempts(self):
-        """
-        Increment the number of failed login attempts
-        """
         self.login_attempts += 1
         self.last_login_attempt = datetime.now()
         self.save()
 
     def reset_login_attempts(self):
-        """
-        Reset login attempts after successful login
-        """
         self.login_attempts = 0
         self.last_login_attempt = None
         self.save()
@@ -215,3 +198,22 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
         UserProfile.objects.create(user=instance)
     elif hasattr(instance, 'profile'):
         instance.profile.save()
+
+
+class Banner(models.Model):
+    title = models.CharField(max_length=100)
+    subtitle = models.CharField(max_length=200, blank=True, null=True)
+    image = CloudinaryField('banner_image')
+    url = models.URLField(blank=True, null=True, help_text="URL to link the banner to (optional)")
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0, help_text="Banners will be displayed in ascending order")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', '-created_at']
+        verbose_name = 'Banner'
+        verbose_name_plural = 'Banners'
+
+    def __str__(self):
+        return self.title

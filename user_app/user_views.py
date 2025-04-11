@@ -4,14 +4,17 @@ from .forms import AddressForm, GenerateOTPForm, ValidateOTPForm
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.contrib import messages
+from django.db.models import Q, Min, Count, Avg
+from product_app.models import Product, Category
 from django.shortcuts import render, redirect
 from .models import CustomUser as User
 from django.views.decorators.http import require_POST
-from .forms import UserProfileForm, ProfileForm
 from django.views.decorators.http import require_http_methods
-from .models import Address, UserProfile
+from .models import Address
 from .forms import UserProfileForm, ProfileForm, CustomPasswordChangeForm
+from .models import Banner
 from django.conf import settings
+from product_app.models import Product, Category, Review
 from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -19,31 +22,26 @@ from django.core.exceptions import ValidationError
 from django.views.decorators.cache import never_cache
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.db.models import Q, Min
 from django.http import JsonResponse
 from cart_and_orders_app.models import Order  
+from .forms import CustomUserCreationForm
 from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
-from django.views.decorators.http import require_http_methods
-from product_app.models import Product, Category
 from .utils.otp_utils import generate_otp, store_otp, get_otp, delete_otp, set_otp_cooldown, get_otp_cooldown
 
 logger = logging.getLogger(__name__)
 
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 @require_http_methods(["GET", "POST"])
-@ensure_csrf_cookie  # Ensure CSRF token is set for AJAX calls
+@ensure_csrf_cookie  
 def user_login(request):
-    """Handle user login functionality and provide context for OTP modal."""
     if request.user.is_authenticated:
         return redirect('user_app:user_home')
-        
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
-        
         try:
             user = User.objects.get(username=username)
             
@@ -98,6 +96,7 @@ def user_signup(request):
         password1 = request.POST.get('password1', '')
         password2 = request.POST.get('password2', '')
         full_name = request.POST.get('full_name', '').strip()
+        referral_code = request.POST.get('referral_code', request.session.get('referral_code', '')).strip()
 
         logger.debug(f"Received signup form data: username={username}, email={email}, phone_number={phone_number}, full_name={full_name}")
 
@@ -184,7 +183,8 @@ def user_signup(request):
                 'email': email,
                 'phone_number': phone_number,
                 'password': password1,
-                'full_name': full_name
+                'full_name': full_name,
+                'referral_code': referral_code
             }
 
             messages.success(request, "An OTP has been sent to your email. Please verify to complete signup.")
@@ -194,6 +194,9 @@ def user_signup(request):
             logger.error(f"Failed to send OTP during signup: {str(e)}", exc_info=True)
             messages.error(request, f"Failed to send OTP: {str(e)}. Please try again.")
             return render(request, 'signup_login.html', context)
+        
+    if 'referral_code' in request.session:
+        context['form_data']['referral_code'] = request.session['referral_code']
     
     return render(request, 'signup_login.html', context)
 
@@ -222,43 +225,67 @@ def change_password(request):
             return redirect('user_app:my_profile')
     return redirect('user_app:my_profile')
 
-# USER SIDE BELOW
 @never_cache
 @login_required
 def user_home(request):
     if not request.user.is_authenticated:
-        return redirect('user_login')
-    
+        return redirect('user_app:user_login')
+
     category_id = request.GET.get('category')
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
     brand = request.GET.get('brand')
     sort_by = request.GET.get('sort')
     search_query = request.GET.get('search')
+    availability = request.GET.get('availability')
+    rating = request.GET.get('rating')
+    banners = Banner.objects.filter(is_active=True).order_by('display_order')
 
+    # Base queryset: Active products with active variants
     products = Product.objects.filter(
-        variants__isnull=False
+        is_active=True,
+        variants__isnull=False,  # Use 'variants' as per error message
+        variants__is_active=True
     ).annotate(
-        lowest_price=Min('variants__price')
+        lowest_price=Min('variants__original_price')  # Use 'variants' here
     ).distinct()
 
+    # Apply filters
     if category_id:
         products = products.filter(category_id=category_id)
+    
     if min_price and max_price:
         products = products.filter(lowest_price__gte=min_price, lowest_price__lte=max_price)
     elif min_price:
         products = products.filter(lowest_price__gte=min_price)
     elif max_price:
         products = products.filter(lowest_price__lte=max_price)
+    
     if brand:
         products = products.filter(brand=brand)
+    
     if search_query:
         products = products.filter(
             Q(product_name__icontains=search_query) |
             Q(description__icontains=search_query) |
-            Q(category__name__icontains=search_query)
+            Q(category__name__icontains=search_query) |
+            Q(brand__icontains=search_query)
         )
+    
+    if availability:
+        if availability == 'in_stock':
+            products = products.filter(variants__stock__gt=0)  # Use 'variants'
+        elif availability == 'out_of_stock':
+            products = products.filter(variants__stock=0)  # Use 'variants'
+    
+    if rating:
+        try:
+            rating_float = float(rating)
+            products = products.filter(average_rating__gte=rating_float)
+        except ValueError:
+            pass
 
+    # Apply sorting
     if sort_by == 'price_low':
         products = products.order_by('lowest_price')
     elif sort_by == 'price_high':
@@ -269,14 +296,35 @@ def user_home(request):
         products = products.order_by('-product_name')
     elif sort_by == 'new_arrivals':
         products = products.order_by('-created_at')
+    elif sort_by == 'best_sellers':
+        products = products.annotate(
+            order_count=Count('orderitem')
+        ).order_by('-order_count')
     else:
         products = products.order_by('-created_at')
 
+    # Specific product sections
+    featured_products = products.annotate(
+        avg_rating=Avg('reviews__rating')
+    ).filter(is_active=True).order_by('-avg_rating')[:8]
+    new_arrivals = products.order_by('-created_at')[:8]
+    top_rated = products.annotate(
+        avg_rating=Avg('reviews__rating')
+    ).filter(avg_rating__gte=4.0).order_by('-avg_rating')[:8]
+    recent_reviews = Review.objects.filter(is_approved=True).order_by('-created_at')[:3]
+
     categories = Category.objects.filter(is_active=True)
-    brands = Product.objects.values_list('brand', flat=True).distinct()
+    brands = Product.objects.filter(
+        is_active=True,
+        variants__is_active=True  # Use 'variants'
+    ).values_list('brand', flat=True).distinct()
 
     context = {
-        'products': products.distinct(),
+        'products': products,
+        'featured_products': featured_products,
+        'new_arrivals': new_arrivals,
+        'top_rated': top_rated,
+        'recent_reviews': recent_reviews,
         'categories': categories,
         'brands': brands,
         'selected_category': category_id,
@@ -285,8 +333,9 @@ def user_home(request):
         'selected_brand': brand,
         'sort_by': sort_by,
         'search_query': search_query,
+        'banners': banners,
     }
-    return render(request, 'user_home.html', context)
+    return render(request, 'user_app/user_home.html', context)
 
 def about_us(request):
     return render(request, 'about_us.html')
@@ -395,9 +444,12 @@ def add_address(request):
 @login_required
 @csrf_protect
 def edit_address(request, address_id):
-    """Edit an address via AJAX."""
-    address = Address.objects.get(id=address_id, user=request.user)
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+    try:
+        address = Address.objects.get(id=address_id, user=request.user)
+    except Address.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Address not found or you don\'t have permission'}, status=404)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         if request.method == 'GET':
             return JsonResponse({
                 'success': True,
@@ -431,22 +483,22 @@ def edit_address(request, address_id):
                         'is_default': address.is_default,
                     }
                 })
-            return JsonResponse({
-                'success': False,
-                'message': 'Invalid form data',
-                'errors': form.errors
-            }, status=400)
-    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+            else:
+                print(form.errors)  # Debug output to console
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid form data',
+                    'errors': form.errors
+                }, status=400)
+    return JsonResponse({'success': False, 'message': 'Invalid request method or not an AJAX request'}, status=400)
 
 @login_required
 def delete_address(request, address_id):
-    """Delete an address."""
-    address = Address.objects.get(id=address_id, user=request.user)
     if request.method == 'POST':
+        address = get_object_or_404(Address, id=address_id, user=request.user)
         address.delete()
-        return_url = request.GET.get('next', reverse('user_app:my_profile'))
-        return redirect(return_url)
-    return redirect('user_app:my_profile')
+        return JsonResponse({'success': True, 'message': 'Address deleted successfully'})
+    return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
 
 @login_required
 @require_POST
@@ -460,12 +512,10 @@ def set_default_address(request, address_id):
 
 @login_required
 def user_address_list(request):
-    """Redirect to profile page since addresses are displayed there."""
     return redirect('user_app:my_profile')
 
 @require_http_methods(["POST"])
 def generate_and_send_otp(request):
-    """Generate and send OTP via AJAX for password reset."""
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = GenerateOTPForm(request.POST)
         if form.is_valid():
@@ -495,7 +545,6 @@ def generate_and_send_otp(request):
 
 @require_http_methods(["POST"])
 def validate_otp(request):
-    """Validate OTP via AJAX and redirect to password reset page."""
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = ValidateOTPForm(request.POST)
         email = request.POST.get('email')
@@ -522,7 +571,6 @@ def validate_otp(request):
 
 @require_http_methods(["POST"])
 def resend_otp(request):
-    """Resend OTP via AJAX."""
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         email = request.POST.get('email')
         if not email:
@@ -553,7 +601,6 @@ def resend_otp(request):
 
 @require_http_methods(["GET", "POST"])
 def password_reset_confirm(request, uidb64, token):
-    """Handle password reset confirmation after OTP validation."""
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
@@ -564,8 +611,6 @@ def password_reset_confirm(request, uidb64, token):
         if request.method == 'POST':
             new_password1 = request.POST.get('new_password1')
             new_password2 = request.POST.get('new_password2')
-
-            # Password validation (consistent with user_signup)
             if not new_password1 or not new_password2:
                 messages.error(request, "Both password fields are required.")
             elif new_password1 != new_password2:
@@ -587,15 +632,11 @@ def password_reset_confirm(request, uidb64, token):
                 except Exception as e:
                     logger.error(f"Password reset error: {str(e)}")
                     messages.error(request, "An error occurred while resetting your password.")
-
-            # Re-render form with errors
             return render(request, 'password_reset_confirm.html', {
                 'validlink': True,
                 'uidb64': uidb64,
                 'token': token,
             })
-
-        # GET request: Show the password reset form
         return render(request, 'password_reset_confirm.html', {
             'validlink': True,
             'uidb64': uidb64,
@@ -608,117 +649,96 @@ def password_reset_confirm(request, uidb64, token):
 @require_http_methods(["GET"])
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def verify_otp_signup_page(request, email):
-    """Render the OTP verification page for signup."""
     logger.info(f"Accessing verify_otp_signup_page for email: {email}")
-    
     try:
-        # Check if signup data exists in the session
         if 'signup_data' not in request.session:
             logger.warning("Session expired: 'signup_data' not found in session")
             messages.error(request, 'Session expired. Please sign up again.')
             return redirect('user_app:user_signup')
-
-        # Ensure the email matches the one in the session
         signup_data = request.session['signup_data']
         logger.debug(f"Session signup_data: {signup_data}")
         if signup_data.get('email') != email:
             logger.warning(f"Email mismatch: session email={signup_data.get('email')}, URL email={email}")
             messages.error(request, 'Invalid email. Please sign up again.')
             return redirect('user_app:user_signup')
-
-        # Render the OTP verification page
         context = {'email': email}
         logger.info(f"Rendering otp_verification.html with context: {context}")
         response = render(request, 'otp_verification.html', context)
         logger.info(f"Response rendered, content length: {len(response.content)}")
         return response
-
     except Exception as e:
         logger.error(f"Error in verify_otp_signup_page: {str(e)}", exc_info=True)
         messages.error(request, f"An error occurred: {str(e)}. Please try again.")
         return redirect('user_app:user_signup')
 
-
-
 @require_http_methods(["POST"])
 def verify_otp_signup(request):
-    """Verify OTP for signup and create user account if valid."""
     if request.method == 'POST':
         email = request.POST.get('email')
         user_otp = request.POST.get('otp')
-
-        # Check if signup data exists in the session and matches the email
         signup_data = request.session.get('signup_data')
         if not signup_data or signup_data.get('email') != email:
             messages.error(request, 'Invalid session or email. Please sign up again.')
             return redirect('user_app:user_signup')
-
-        # Validate OTP
         stored_otp = get_otp(email)
         try:
             if stored_otp and int(user_otp) == stored_otp:
-                # OTP is valid, create the user
-                try:
-                    user = User.objects.create_user(
-                        username=signup_data['username'],
-                        email=signup_data['email'],
-                        phone_number=signup_data['phone_number'],
-                        password=signup_data['password'],
-                        full_name=signup_data['full_name']
-                    )
+                delete_otp(email)
+                del request.session['signup_data']
+                if 'referral_code' in request.session:
+                    del request.session['referral_code']
+                
+                form_data = {
+                    'username': signup_data['username'],
+                    'email': signup_data['email'],
+                    'phone_number': signup_data['phone_number'],
+                    'password1': signup_data['password'],
+                    'password2': signup_data['password'],
+                    'full_name': signup_data['full_name'],
+                    'referral_code': signup_data.get('referral_code', '')
+                }
+                form = CustomUserCreationForm(form_data)
+                if form.is_valid():
+                    user = form.save(commit=False)
                     user.is_active = True
-                    user.is_verified = True  # Mark as verified since OTP is confirmed
+                    user.is_verified = True
                     user.save()
-
-                    # Log the user in
                     authenticated_user = authenticate(request, username=signup_data['username'], password=signup_data['password'])
                     if authenticated_user:
                         login(request, authenticated_user)
-
-                    # Clean up: delete OTP and session data
-                    delete_otp(email)
-                    del request.session['signup_data']
-
                     messages.success(request, "Account created successfully! Welcome to Core Fitness.")
                     return redirect('user_app:user_home')
-                except Exception as e:
-                    logger.error(f"Error creating user after OTP verification: {str(e)}")
-                    messages.error(request, "An error occurred while creating your account. Please try again.")
-                    return redirect('user_app:user_signup')
+                else:
+                    context = {'email': email, 'form_errors': form.errors}
+                    return render(request, 'otp_verification.html', context)
             else:
                 messages.error(request, "Invalid or expired OTP. Please try again.")
                 return redirect('user_app:verify_otp_signup_page', email=email)
         except ValueError:
             messages.error(request, "OTP must be a number.")
             return redirect('user_app:verify_otp_signup_page', email=email)
-
+        except Exception as e:
+            logger.error(f"Error creating user after OTP verification: {str(e)}")
+            messages.error(request, "An error occurred while creating your account. Please try again.")
+            return redirect('user_app:user_signup')
     return redirect('user_app:user_signup')
 
 
 @require_http_methods(["POST"])
 def resend_otp_signup(request):
-    """Resend OTP via AJAX for signup verification."""
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         email = request.POST.get('email')
         if not email:
             return JsonResponse({'success': False, 'error': 'No email provided.'}, status=400)
-
-        # Check if signup data exists in the session and matches the email
         signup_data = request.session.get('signup_data')
         if not signup_data or signup_data.get('email') != email:
             return JsonResponse({'success': False, 'error': 'Invalid session or email. Please sign up again.'}, status=400)
-
-        # Check OTP cooldown
         if get_otp_cooldown(email):
             return JsonResponse({'success': False, 'error': 'Please wait 3 minutes before resending.'}, status=429)
-
         try:
-            # Generate and store new OTP
             new_otp = generate_otp()
-            store_otp(email, new_otp, timeout=180)  # Store OTP for 3 minutes
-            set_otp_cooldown(email, timeout=180)  # Set cooldown for 3 minutes
-
-            # Send new OTP via email
+            store_otp(email, new_otp, timeout=180)  
+            set_otp_cooldown(email, timeout=180)  
             send_mail(
                 subject="Core Fitness - Verify Your Email",
                 message=f"Your new OTP for signup is: {new_otp}. It expires in 3 minutes.",
@@ -726,7 +746,6 @@ def resend_otp_signup(request):
                 recipient_list=[email],
                 fail_silently=False,
             )
-
             return JsonResponse({'success': True, 'message': 'New OTP sent to your email.'})
         except Exception as e:
             logger.error(f"Failed to resend OTP for signup: {str(e)}")

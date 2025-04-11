@@ -1,61 +1,62 @@
-from django.contrib.auth import authenticate, login, logout
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from user_app.models import CustomUser
-from .models import UserProfile
 from django.shortcuts import render, redirect
 from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from user_app.models import CustomUser, UserProfile, LoginAttempt
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from django.urls import reverse
+from .forms import BannerForm
 from urllib.parse import urlencode
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from user_app.models import CustomUser, UserProfile, LoginAttempt, Banner
+from django.shortcuts import render, redirect
+from django.db.models import Q, Count
+from datetime import datetime, timedelta
 import logging
-from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
 
 def is_admin(user):
     return user.is_authenticated and user.is_superuser
 
+
 @never_cache
 @require_http_methods(["GET", "POST"])
 def admin_login(request):
+    logger = logging.getLogger(__name__)
     if request.user.is_authenticated and request.user.is_superuser:
-        return redirect('user_app:admin_dashboard')
+        return redirect('user_app:admin_customer_list')
         
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
         
         try:
-            user = CustomUser.objects.get(username=username)
-            if not user.is_superuser:
+            user_obj = CustomUser.objects.get(username=username)
+            if not user_obj.is_superuser:
+                logger.warning(f"Unauthorized admin access attempt by username: {username}")
                 messages.error(request, "You are not authorized to access the admin panel.")
                 return render(request, 'admin_login.html')
             
-            if user.profile.is_blocked: 
+            if user_obj.profile.is_blocked: 
+                logger.warning(f"Blocked admin account attempted login: {username}")
                 messages.error(request, "Your account has been blocked. Please contact support.")
                 return render(request, 'admin_login.html')
 
             user = authenticate(request, username=username, password=password)
             if user:
                 login(request, user)
-                user.reset_login_attempts()  # Reset attempts on successful login
-                return redirect('user_app:admin_dashboard')
+                logger.info(f"Admin login successful: {username}")
+                return redirect('user_app:admin_customer_list')
             else:
-                user.increment_login_attempts()  # Increment failed attempts
-                if not user.check_login_attempts():
-                    messages.error(request, "Too many failed attempts. Account locked for 15 minutes.")
-                else:
-                    messages.error(request, "Invalid username or password.")
+                logger.warning(f"Failed admin login attempt: {username}")
+                messages.error(request, "Invalid username or password.")
         except CustomUser.DoesNotExist:
+            logger.warning(f"Admin login attempt with non-existent username: {username}")
             messages.error(request, "Username does not exist.")
     
     return render(request, 'admin_login.html')
@@ -65,24 +66,61 @@ def admin_login(request):
 @user_passes_test(is_admin)
 @never_cache
 def admin_dashboard(request):
+    logger.info(f"Admin {request.user.username} accessed the dashboard")
+
+    # Basic statistics
+    total_users = CustomUser.objects.filter(is_superuser=False).count()
+    blocked_users = UserProfile.objects.filter(is_blocked=True, user__is_superuser=False).count()
+    active_users = total_users - blocked_users
+    today = datetime.now()
+    user_growth_data = []
+    labels = []
+    for i in range(5, -1, -1):  # Last 6 months, including current
+        month_start = (today - timedelta(days=30 * i)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_end = (month_start + timedelta(days=31)).replace(day=1) - timedelta(seconds=1)
+        month_users = CustomUser.objects.filter(
+            date_joined__gte=month_start,
+            date_joined__lte=month_end,
+            is_superuser=False
+        ).count()
+        user_growth_data.append(month_users)
+        labels.append(month_start.strftime('%b'))
+
+    # Context for the template
+    context = {
+        'title': 'Admin Dashboard - CoreFitness',
+        'total_users': total_users,
+        'active_users': active_users,
+        'blocked_users': blocked_users,
+        'user_growth_data': user_growth_data,  # For Chart.js
+        'user_growth_labels': labels,          # For Chart.js
+    }
+    return render(request, 'admin_dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_admin)
+@never_cache
+def admin_customer_list(request):
+    logger = logging.getLogger(__name__)
+    
+    # Exclude superusers (admins) from the user list
+    users = CustomUser.objects.filter(is_superuser=False).order_by('username')
+    
+    # Search functionality
     search_query = request.GET.get('search', '')
-    
-    # User list
     if search_query:
-        users = CustomUser.objects.filter(
-            Q(username__icontains=search_query) | 
+        users = users.filter(
+            Q(username__icontains=search_query) |
             Q(email__icontains=search_query) |
-            Q(full_name__icontains=search_query)
-        ).filter(is_superuser=False).select_related('profile')
-    else:
-        users = CustomUser.objects.filter(is_superuser=False).select_related('profile')
-    
-    users = users.order_by('-date_joined')
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query)
+        )
+        logger.info(f"Admin {request.user.username} searched for users with query: {search_query}")
     
     # Pagination
+    paginator = Paginator(users, 10)  # Show 10 users per page
     page = request.GET.get('page', 1)
-    items_per_page = 10
-    paginator = Paginator(users, items_per_page)
     try:
         users_page = paginator.page(page)
     except PageNotAnInteger:
@@ -90,38 +128,38 @@ def admin_dashboard(request):
     except EmptyPage:
         users_page = paginator.page(paginator.num_pages)
     
-    # Basic stats for dashboard
     total_users = CustomUser.objects.filter(is_superuser=False).count()
-    blocked_users = UserProfile.objects.filter(is_blocked=True).count()
+    blocked_users = UserProfile.objects.filter(is_blocked=True, user__is_superuser=False).count()
     active_users = total_users - blocked_users
-    
+
     context = {
         'users': users_page,
         'search_query': search_query,
         'total_users': total_users,
-        'blocked_users': blocked_users,
         'active_users': active_users,
+        'blocked_users': blocked_users,
+        'title': 'Admin Dashboard',
     }
-    return render(request, 'admin_dashboard.html', context)
+    return render(request, 'admin_customer_list.html', context)
 
 
 @login_required
 @user_passes_test(is_admin)
 @require_POST
 def toggle_user_block(request, user_id):
+    logger = logging.getLogger(__name__)
     try:
         user = CustomUser.objects.get(id=user_id)
-        # Get or create UserProfile to ensure it exists
         user_profile, created = UserProfile.objects.get_or_create(user=user)
         user_profile.is_blocked = not user_profile.is_blocked
         user_profile.save()
         status = "blocked" if user_profile.is_blocked else "unblocked"
+        logger.info(f"User '{user.username}' {status} by admin {request.user.username}")
         messages.success(request, f"User '{user.username}' has been {status} successfully!")
     except CustomUser.DoesNotExist:
         logger.error(f"User not found for id={user_id}")
         messages.error(request, "User not found!")
     
-    # Redirect with preserved parameters
     search_query = request.POST.get('search_query', '')
     page = request.POST.get('page', '1')
     query_params = {}
@@ -129,7 +167,7 @@ def toggle_user_block(request, user_id):
         query_params['search'] = search_query
     if page != '1':
         query_params['page'] = page
-    redirect_url = reverse('user_app:admin_dashboard')
+    redirect_url = reverse('user_app:admin_customer_list')
     if query_params:
         redirect_url += f"?{urlencode(query_params)}"
     return redirect(redirect_url)
@@ -138,18 +176,20 @@ def toggle_user_block(request, user_id):
 @user_passes_test(is_admin)
 @require_POST
 def delete_user(request, user_id):
+    logger = logging.getLogger(__name__)
     try:
         user = CustomUser.objects.get(id=user_id)
         if user.is_superuser:
+            logger.warning(f"Attempt to delete superuser account {user.username} by {request.user.username}")
             messages.error(request, "Cannot delete a superuser account!")
         else:
             user.delete()
+            logger.info(f"User '{user.username}' deleted by admin {request.user.username}")
             messages.success(request, f"User '{user.username}' has been deleted successfully!")
     except CustomUser.DoesNotExist:
         logger.error(f"User not found for deletion, id={user_id}")
         messages.error(request, "User not found!")
     
-    # Redirect with preserved parameters
     search_query = request.POST.get('search_query', '')
     page = request.POST.get('page', '1')
     query_params = {}
@@ -157,7 +197,7 @@ def delete_user(request, user_id):
         query_params['search'] = search_query
     if page != '1':
         query_params['page'] = page
-    redirect_url = reverse('user_app:admin_dashboard')
+    redirect_url = reverse('user_app:admin_customer_list')
     if query_params:
         redirect_url += f"?{urlencode(query_params)}"
     return redirect(redirect_url)
@@ -165,39 +205,99 @@ def delete_user(request, user_id):
 @login_required
 @user_passes_test(is_admin)
 @never_cache
-def user_stats(request, user_id=None):
-    if user_id:
-        # Detailed stats for a specific user
-        try:
-            user = CustomUser.objects.get(id=user_id)
-            login_attempts = LoginAttempt.objects.filter(user=user).order_by('-timestamp')[:10]
-            total_logins = LoginAttempt.objects.filter(user=user, success=True).count()
-            failed_logins = LoginAttempt.objects.filter(user=user, success=False).count()
-            context = {
-                'user': user,
-                'login_attempts': login_attempts,
-                'total_logins': total_logins,
-                'failed_logins': failed_logins,
-            }
-            return render(request, 'user_stats.html', context)
-        except CustomUser.DoesNotExist:
-            messages.error(request, "User not found!")
-            return redirect('user_app:admin_dashboard')
+def admin_banner_list(request):
+    logger.info(f"Admin {request.user.username} accessed banner management")
+    banners = Banner.objects.all().order_by('display_order', '-created_at')
+
+    # Pagination
+    paginator = Paginator(banners, 10)  # Show 10 banners per page
+    page = request.GET.get('page', 1)
+    try:
+        banners_page = paginator.page(page)
+    except PageNotAnInteger:
+        banners_page = paginator.page(1)
+    except EmptyPage:
+        banners_page = paginator.page(paginator.num_pages)
+
+    context = {
+        'banners': banners_page,
+        'title': 'Banner Management',
+    }
+    return render(request, 'admin_banner_list.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+@never_cache
+def admin_banner_create(request):
+    if request.method == 'POST':
+        form = BannerForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Banner created successfully!")
+            return redirect('user_app:admin_banner_list')
     else:
-        # Overall user stats
-        total_users = CustomUser.objects.filter(is_superuser=False).count()
-        blocked_users = UserProfile.objects.filter(is_blocked=True).count()
-        active_users = total_users - blocked_users
-        successful_logins = LoginAttempt.objects.filter(success=True).count()
-        failed_logins = LoginAttempt.objects.filter(success=False).count()
-        context = {
-            'total_users': total_users,
-            'blocked_users': blocked_users,
-            'active_users': active_users,
-            'successful_logins': successful_logins,
-            'failed_logins': failed_logins,
-        }
-        return render(request, 'admin_stats.html', context)
+        form = BannerForm()
+    
+    context = {
+        'form': form,
+        'title': 'Create Banner',
+    }
+    return render(request, 'admin_banner_form.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+@never_cache
+def admin_banner_edit(request, banner_id):
+    try:
+        banner = Banner.objects.get(id=banner_id)
+    except Banner.DoesNotExist:
+        messages.error(request, "Banner not found!")
+        return redirect('user_app:admin_banner_list')
+    
+    if request.method == 'POST':
+        form = BannerForm(request.POST, request.FILES, instance=banner)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Banner updated successfully!")
+            return redirect('user_app:admin_banner_list')
+    else:
+        form = BannerForm(instance=banner)
+    
+    context = {
+        'form': form,
+        'banner': banner,
+        'title': 'Edit Banner',
+    }
+    return render(request, 'admin_banner_form.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def admin_banner_delete(request, banner_id):
+    try:
+        banner = Banner.objects.get(id=banner_id)
+        banner.delete()
+        messages.success(request, "Banner deleted successfully!")
+    except Banner.DoesNotExist:
+        messages.error(request, "Banner not found!")
+    
+    return redirect('user_app:admin_banner_list')
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def admin_banner_toggle_status(request, banner_id):
+    try:
+        banner = Banner.objects.get(id=banner_id)
+        banner.is_active = not banner.is_active
+        banner.save()
+        status = "activated" if banner.is_active else "deactivated"
+        messages.success(request, f"Banner '{banner.title}' {status} successfully!")
+    except Banner.DoesNotExist:
+        messages.error(request, "Banner not found!")
+    
+    return redirect('user_app:admin_banner_list')
+
 
 @login_required
 @user_passes_test(is_admin)

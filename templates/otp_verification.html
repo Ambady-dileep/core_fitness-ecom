@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Core Fitness - Verify OTP</title>
-    <!-- Bootstrap CSS (minimal dependency for form styling) -->
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- SweetAlert2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
@@ -86,6 +86,13 @@
         .text-white {
             color: white;
         }
+
+        .error-list {
+            color: #ffcccc;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -93,6 +100,16 @@
         <h1 class="brand-title">Core Fitness</h1>
         <h2 class="text-white mb-3">Verify Email</h2>
         <p class="text-white mb-3">Enter the OTP sent to {{ email }}</p>
+
+        {% if form_errors %}
+            <div class="error-list">
+                <ul>
+                    {% for field, errors in form_errors.items %}
+                        <li>{{ field|capfirst }}: {{ errors|join:", " }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
 
         <form id="verifyOtpForm" method="POST" action="{% url 'user_app:verify_otp_signup' %}">
             {% csrf_token %}
@@ -113,7 +130,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             const verifyOtpForm = document.getElementById('verifyOtpForm');
             const resendOtpBtn = document.getElementById('resendOtpBtn');
-            const email = "{{ email }}";
+            const email = "{{ email|escapejs }}";
 
             // Display messages using SweetAlert
             {% if messages %}
@@ -240,6 +257,21 @@
 
             // Start the resend cooldown on page load
             startResendCooldown(180);
+
+            // Display form errors as SweetAlert on page load if present
+            {% if form_errors %}
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Validation Error',
+                    html: `{% for field, errors in form_errors.items %}<p>{{ field|capfirst }}: {{ errors|join:", " }}</p>{% endfor %}`,
+                    confirmButtonColor: '#bc0f0f',
+                    background: '#fff',
+                    customClass: {
+                        popup: 'rounded-3',
+                        confirmButton: 'btn btn-custom'
+                    }
+                });
+            {% endif %}
         });
     </script>
 </body>

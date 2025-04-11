@@ -4,202 +4,547 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.views.decorators.cache import never_cache
 from django.db.models import Q
-from django.urls import reverse
-from .models import Category, Product
+from .models import Category, Product, Brand
 from .forms import CategoryForm
+from offer_and_coupon_app.models import CategoryOffer
+from django.views.decorators.http import require_POST
+from django.db.models import Count
+from django.urls import reverse
+from django.http import JsonResponse
+from django.utils import timezone
+from .forms import BrandForm
 
 def is_admin(user):
-    """Check if the user is an admin (staff or superuser)."""
-    return user.is_staff or user.is_superuser
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
 
-# Admin Views
 @login_required
 @user_passes_test(is_admin)
-@never_cache
 def admin_category_list(request):
-    """
-    Display a paginated list of all categories for admin.
-    """
-    query = request.GET.get('q')
-    sort_by = request.GET.get('sort', '')
     categories = Category.objects.all()
-
+    
+    # Search filter
+    query = request.GET.get('q', '')
     if query:
         categories = categories.filter(
             Q(name__icontains=query) |
             Q(description__icontains=query)
         )
-
-    # Apply sorting
-    if sort_by == 'a_to_z':
-        categories = categories.order_by('name')
-    elif sort_by == 'z_to_a':
-        categories = categories.order_by('-name')
+    
+    # Active/Inactive filter
+    show_inactive = request.GET.get('show_inactive', 'false')
+    if show_inactive == 'false':
+        categories = categories.filter(is_active=True)
+    elif show_inactive == 'only_inactive':
+        categories = categories.filter(is_active=False)
+    
+    # Sorting
+    sort_by = request.GET.get('sort', 'name')
+    sort_mapping = {
+        'name': 'name',
+        'a_to_z': 'name',
+        'z_to_a': '-name',
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'products': '-products_count'
+    }
+    order_by = sort_mapping.get(sort_by, 'name')
+    if sort_by == 'products':
+        categories = categories.annotate(products_count=Count('products')).order_by(order_by)
     else:
-        categories = categories.order_by('name')  # Default sorting
-
-    paginator = Paginator(categories, 10)  # 10 categories per page
+        categories = categories.order_by(order_by)
+    
+    # Pagination
+    paginator = Paginator(categories, 12)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
+    
     context = {
         'page_obj': page_obj,
-        'title': 'Admin Categories',
+        'title': 'Supplement Categories',
         'query': query,
         'sort_by': sort_by,
+        'show_inactive': show_inactive,
+        'total_categories': categories.count(),
     }
-    return render(request, 'admin_category_list.html', context)
+    return render(request, 'product_app/admin_category_list.html', context)
 
 @login_required
 @user_passes_test(is_admin)
 @never_cache
-def category_detail(request, category_id):
-    """
-    Display details of a specific category for admin.
-    """
-    category = get_object_or_404(Category, id=category_id)
-    products = category.products.prefetch_related('variants')
+def admin_category_detail(request, category_id=None, slug=None):
+    if slug:
+        category = get_object_or_404(Category, slug=slug)
+    else:
+        category = get_object_or_404(Category, id=category_id)
+    
+    # Correct prefetch_related to include variant images
+    products = category.products.prefetch_related(
+        'variants__variant_images'  # Updated to fetch images through variants
+    ).order_by('product_name')
+    
+    subcategories = category.subcategories.all()
+    brands = category.brands.all()
+    
+    product_paginator = Paginator(products, 12)
+    product_page = request.GET.get('product_page', 1)
+    product_page_obj = product_paginator.get_page(product_page)
+    
     context = {
         'category': category,
-        'products': products,
+        'products': product_page_obj,
+        'subcategories': subcategories,
+        'brands': brands,
+        'total_products': products.count(),
         'title': f'Category: {category.name}',
     }
-    return render(request, 'admin_category_detail.html', context)
+    return render(request, 'product_app/admin_category_detail.html', context)
 
 @login_required
 @user_passes_test(is_admin)
 @never_cache
-def add_category(request):
-    """
-    Add a new category (admin only).
-    """
+def admin_add_category(request):
     if request.method == 'POST':
         form = CategoryForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Category added successfully!")
-            return redirect('product_app:admin_category_list')
-        else:
-            messages.error(request, "Please correct the errors below.")
+            category = form.save()
+            success_url = reverse('product_app:admin_category_list')
+            return redirect(f'{success_url}?success=added&name={category.name}')
+        messages.error(request, "Please correct the errors below.")
     else:
         form = CategoryForm()
-    
+
     context = {
         'form': form,
         'title': 'Add New Category',
+        'action': 'Add',
+        'category': None,
     }
-    return render(request, 'admin_add_category.html', context)
+    return render(request, 'product_app/admin_category_form.html', context)
 
 @login_required
 @user_passes_test(is_admin)
 @never_cache
-def edit_category(request, category_id):
-    """
-    Edit an existing category (admin only).
-    """
+def admin_edit_category(request, category_id):
     category = get_object_or_404(Category, id=category_id)
     if request.method == 'POST':
         form = CategoryForm(request.POST, request.FILES, instance=category)
         if form.is_valid():
-            category = form.save()
-            messages.success(request, f"Category '{category.name}' updated successfully!")
-            return redirect('product_app:admin_category_list')
-        else:
-            messages.error(request, "Please correct the errors below.")
+            if request.POST.get('image-clear') == 'on' and not request.FILES.get('image'):
+                category.image = None
+                category.save(update_fields=['image'])
+            category = form.save() 
+            success_url = reverse('product_app:admin_category_list')
+            return redirect(f'{success_url}?success=updated&name={category.name}')
+        messages.error(request, "Please correct the errors below.")
     else:
         form = CategoryForm(instance=category)
-    
+
     context = {
         'form': form,
-        'category': category,
+        'category': category,  
         'title': f'Edit Category: {category.name}',
+        'action': 'Edit', 
     }
-    return render(request, 'admin_edit_category.html', context)
+    return render(request, 'product_app/admin_category_form.html', context)
 
+
+import logging
+logger = logging.getLogger(__name__)
 @login_required
 @user_passes_test(is_admin)
-@never_cache
-def delete_category(request, category_id):
-    """
-    Delete a category (admin only). Uses CASCADE for related products.
-    """
+@require_POST
+def admin_delete_category(request, category_id):
     category = get_object_or_404(Category, id=category_id)
-    if request.method == 'POST':
-        category_name = category.name
+    category_name = category.name
+    try:
         category.delete()
-        messages.success(request, f'Category "{category_name}" deleted successfully.')
-        return redirect('product_app:admin_category_list')
-    context = {
-        'category': category,
-        'title': f'Delete Category: {category.name}',
-    }
-    return render(request, 'admin_delete_category.html', context)
+        logger.info(f"Admin {request.user.username} deleted category '{category_name}'")
+        return JsonResponse({
+            'success': True,
+            'message': f"Category '{category_name}' deleted successfully!"
+        })
+    except Exception as e:
+        logger.error(f"Error deleting category '{category_name}': {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f"Failed to delete category '{category_name}'."
+        }, status=500)
+
 
 @login_required
 @user_passes_test(is_admin)
 @never_cache
-def admin_category_products(request, category_id):
-    """
-    Display products for a specific category in admin panel.
-    """
-    category = get_object_or_404(Category, id=category_id)
-    products = category.products.prefetch_related('variants')
-    context = {
-        'category': category,
-        'products': products,
-        'title': f'Products in {category.name}',
-    }
-    return render(request, 'admin_category_products.html', context)
+def admin_toggle_category_status(request, category_id):
+    if request.method == 'POST' and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+        category = get_object_or_404(Category, id=category_id)
+        category.is_active = not category.is_active
+        category.save(update_fields=['is_active', 'updated_at'])
+        
+        return JsonResponse({
+            'success': True,
+            'is_active': category.is_active,
+            'message': f'Category "{category.name}" is now {"active" if category.is_active else "inactive"}.'
+        })
+    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
 
-# User Views
 @never_cache
-@login_required
 def user_category_list(request):
-    """
-    Display a paginated list of active categories for users.
-    """
-    query = request.GET.get('q')
-    sort_by = request.GET.get('sort', '')
-    categories = Category.objects.filter(is_active=True)  # Removed prefetch_related
-
+    categories = Category.objects.all()  
+    
+    # Search filter
+    query = request.GET.get('q', '').strip()
     if query:
         categories = categories.filter(
-            Q(name__icontains=query) |
+            Q(name__icontains=query) | 
             Q(description__icontains=query)
         )
 
-    # Apply sorting
-    if sort_by == 'a_to_z':
-        categories = categories.order_by('name')
-    elif sort_by == 'z_to_a':
-        categories = categories.order_by('-name')
-    else:
-        categories = categories.order_by('name')  # Default sorting
+    # Active/Inactive filter
+    is_active = request.GET.get('is_active', '')
+    if is_active == 'true':
+        categories = categories.filter(is_active=True)
+    elif is_active == 'false':
+        categories = categories.filter(is_active=False)
 
-    paginator = Paginator(categories, 10)
+    # Sorting
+    sort_by = request.GET.get('sort', '')
+    sort_options = {
+        'a_to_z': 'name',
+        'z_to_a': '-name',
+        '': 'name'  # Default sorting
+    }
+    categories = categories.order_by(sort_options.get(sort_by, 'name'))
+
+    # Fetch active offers
+    now = timezone.now()
+    category_offers = CategoryOffer.objects.filter(
+        is_active=True,
+        valid_from__lte=now,
+        valid_to__gte=now
+    ).prefetch_related('categories')
+    
+    # Map categories to their active offers
+    offers_by_category = {}
+    for offer in category_offers:
+        for category in offer.categories.all():
+            offers_by_category.setdefault(category.id, []).append(offer)
+
+    # Pagination
+    paginator = Paginator(categories, per_page=12)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     context = {
         'page_obj': page_obj,
-        'title': 'Categories',
+        'title': 'Shop by Category',
         'query': query,
         'sort_by': sort_by,
+        'is_active': is_active,
+        'offers_by_category': offers_by_category,
     }
-    return render(request, 'user_category_list.html', context)
+    return render(request, 'product_app/user_category_list.html', context)
 
-
-@login_required
 @never_cache
+@login_required
 def user_category_products(request, category_id):
-    """
-    Display products under a specific category for users.
-    """
     category = get_object_or_404(Category, id=category_id, is_active=True)
-    products = category.products.filter(is_active=True, is_listed=True).prefetch_related('variants')
+    products = category.products.filter(
+        is_active=True, 
+        is_listed=True
+    ).prefetch_related('variants')
     context = {
         'category': category,
         'products': products,
         'title': f'Products in {category.name}',
     }
     return render(request, 'user_category_products.html', context)
+
+@never_cache
+def get_subcategories(request):
+    parent_id = request.GET.get('parent_id')
+    if not parent_id:
+        return JsonResponse({'subcategories': []})
+    subcategories = Category.objects.filter(
+        parent_id=parent_id, 
+        is_active=True
+    ).values('id', 'name')
+    
+    return JsonResponse({'subcategories': list(subcategories)})
+
+
+################################################################### User Facing #############################################################################################
+
+@never_cache
+def user_category_list(request):
+    try:
+        # Start with all categories, ordered by 'name' to avoid UnorderedObjectListWarning
+        categories = Category.objects.all().order_by('name')
+        
+        # Filter to parent categories only
+        parent_categories = categories.filter(parent__isnull=True)
+        
+        # Search filter
+        query = request.GET.get('q', '').strip()
+        if query:
+            parent_categories = parent_categories.filter(
+                Q(name__icontains=query) | 
+                Q(description__icontains=query)
+            )
+
+        # Active/Inactive filter
+        is_active = request.GET.get('is_active', '')
+        if is_active == 'true':
+            parent_categories = parent_categories.filter(is_active=True)
+        elif is_active == 'false':
+            parent_categories = parent_categories.filter(is_active=False)
+
+        # Sorting
+        sort_by = request.GET.get('sort', '')
+        sort_options = {
+            'a_to_z': 'name',
+            'z_to_a': '-name',
+            '': 'name'  # Default sorting
+        }
+        parent_categories = parent_categories.order_by(sort_options.get(sort_by, 'name'))
+
+        # Fetch active offers
+        now = timezone.now()
+        category_offers = CategoryOffer.objects.filter(
+            is_active=True,
+            valid_from__lte=now,
+            valid_to__gte=now
+        ).prefetch_related('categories')
+        
+        # Map categories to their active offers
+        offers_by_category = {}
+        for offer in category_offers:
+            for category in offer.categories.all():
+                offers_by_category.setdefault(category.id, []).append(offer)
+
+        # Pagination
+        paginator = Paginator(parent_categories, per_page=12)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        context = {
+            'page_obj': page_obj,
+            'title': 'Shop by Category',
+            'query': query,
+            'sort_by': sort_by,
+            'is_active': is_active,
+            'offers_by_category': offers_by_category,
+        }
+        return render(request, 'product_app/user_category_list.html', context)
+    
+    except Exception as e:
+        logger.error(f"Error in user_category_list: {str(e)}", exc_info=True)
+        # Return an error page or fallback context
+        context = {
+            'page_obj': Paginator(Category.objects.none(), per_page=12).get_page(1),
+            'title': 'Shop by Category',
+            'query': query,
+            'sort_by': sort_by,
+            'is_active': is_active,
+            'offers_by_category': {},  # Ensure it's always a dict
+            'error_message': 'An error occurred while loading categories. Please try again later.',
+        }
+        return render(request, 'product_app/user_category_list.html', context)
+
+@never_cache
+def user_category_detail(request, slug):
+    category = get_object_or_404(Category, slug=slug, is_active=True)
+    products = category.products.filter(is_active=True)
+    subcategories = category.subcategories.filter(is_active=True)
+
+    # Fetch active offers for this category
+    now = timezone.now()
+    category_offers = CategoryOffer.objects.filter(
+        categories=category,
+        is_active=True,
+        valid_from__lte=now,
+        valid_to__gte=now
+    )
+
+    # Filters
+    brand_filter = request.GET.getlist('brand')
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+    sort_by = request.GET.get('sort', 'newest')
+
+    if brand_filter:
+        products = products.filter(brand__name__in=brand_filter)
+
+    if min_price:
+        try:
+            min_price = float(min_price)
+            products = products.filter(variants__discounted_price__gte=min_price)
+        except ValueError:
+            pass
+    
+    if max_price:
+        try:
+            max_price = float(max_price)
+            products = products.filter(variants__discounted_price__lte=max_price)
+        except ValueError:
+            pass
+    
+    sort_options = {
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'price_low': 'min_price',  
+        'price_high': '-min_price',  
+        'name_az': 'product_name',
+        'name_za': '-product_name',
+        'rating': '-average_rating'
+    }
+    products = products.order_by(sort_options.get(sort_by, '-created_at'))
+    available_brands = products.values_list('brand__name', flat=True).distinct()
+
+    paginator = Paginator(products, per_page=12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'category': category,
+        'products': page_obj,
+        'subcategories': subcategories,
+        'available_brands': available_brands,
+        'selected_brands': brand_filter,
+        'min_price': min_price,
+        'max_price': max_price,
+        'sort_by': sort_by,
+        'title': category.name,
+        'category_offers': category_offers,
+    }
+    return render(request, 'product_app/user_category_detail.html', context)
+
+
+###############################################################################################################################################################################
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_list(request):
+    show_deleted = request.GET.get('show_deleted') == 'true'
+    search_query = request.GET.get('search', '')
+
+    if show_deleted:
+        brands = Brand.objects.all()
+    else:
+        brands = Brand.objects.filter(is_deleted=False)
+
+    if search_query:
+        brands = brands.filter(name__icontains=search_query)
+
+    brands = brands.annotate(products_count=Count('products')).order_by('name')
+
+    page = request.GET.get('page', 1)
+    paginator = Paginator(brands, 10)  
+    brands_page = paginator.get_page(page)
+    
+    context = {
+        'brands': brands_page,
+        'show_deleted': show_deleted,
+        'search_query': search_query,
+        'total_brands': brands.count(),
+        'active_brands': brands.filter(is_active=True).count(),
+        'inactive_brands': brands.filter(is_active=False).count(),
+        'deleted_brands': brands.filter(is_deleted=True).count(),
+        'brands_with_active_products': {brand.id: brand.products.filter(is_active=True) for brand in brands_page},
+    }
+    return render(request, 'product_app/admin_brand_list.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_create(request):
+    if request.method == 'POST':
+        form = BrandForm(request.POST, request.FILES)
+        if form.is_valid():
+            brand = form.save()
+            messages.success(request, f'Brand "{brand.name}" has been created successfully.')
+            return redirect('product_app:admin_brand_list')
+    else:
+        form = BrandForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Brand',
+    }
+    
+    return render(request, 'product_app/admin_brand_form.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_edit(request, brand_id):
+    brand = get_object_or_404(Brand, id=brand_id)
+    
+    if request.method == 'POST':
+        form = BrandForm(request.POST, request.FILES, instance=brand)
+        if form.is_valid():
+            brand = form.save()
+            messages.success(request, f'Brand "{brand.name}" has been updated successfully.')
+            return redirect('product_app:admin_brand_list')
+    else:
+        form = BrandForm(instance=brand)
+    
+    context = {
+        'form': form,
+        'brand': brand,
+        'title': f'Edit Brand: {brand.name}',
+    }
+    return render(request, 'product_app/admin_brand_form.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_delete(request, brand_id):
+    if request.method == 'POST' and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+        brand = get_object_or_404(Brand, id=brand_id)
+        permanent_delete = request.POST.get('permanent_delete') == 'true'
+        if permanent_delete:
+            brand_name = brand.name
+            brand.hard_delete()
+            return JsonResponse({'success': True, 'message': f'Brand "{brand_name}" permanently deleted.'})
+        else:
+            brand.delete()
+            return JsonResponse({'success': True, 'message': f'Brand "{brand.name}" moved to trash.'})
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_restore(request, brand_id):
+    if request.method == 'POST' and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+        brand = get_object_or_404(Brand, id=brand_id)
+        brand.restore()
+        return JsonResponse({'success': True, 'message': f'Brand "{brand.name}" has been restored.'})
+    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_brand_detail(request, brand_id):
+    brand = get_object_or_404(Brand, id=brand_id)
+    products = brand.products.filter(is_active=True)
+    page = request.GET.get('page', 1)
+    paginator = Paginator(products, 10)
+    products_page = paginator.get_page(page)
+    context = {
+        'brand': brand,
+        'products': products_page,
+        'products_count': products.count(),
+    }
+    return render(request, 'product_app/admin_brand_detail.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def admin_toggle_brand_status(request, brand_id):
+    if request.method == 'POST' and request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+        brand = get_object_or_404(Brand, id=brand_id)
+        brand.is_active = not brand.is_active
+        brand.save(update_fields=['is_active', 'updated_at'])
+        return JsonResponse({
+            'success': True,
+            'is_active': brand.is_active,
+            'message': f'Brand "{brand.name}" is now {"active" if brand.is_active else "inactive"}.'
+        })
+    return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)

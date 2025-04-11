@@ -1,0 +1,1 @@
+default_app_config = 'offer_and_coupon_app.apps.OfferAndCouponAppConfig'

@@ -3,6 +3,8 @@ from django.db import models
 from django.utils import timezone
 from .models import Order, ReturnRequest
 from offer_and_coupon_app.models import Coupon
+from user_app.models import Address
+from .models import SalesReport
 
 class OrderStatusForm(forms.ModelForm):
     class Meta:
@@ -11,6 +13,10 @@ class OrderStatusForm(forms.ModelForm):
         widgets = {
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['status'].choices = Order.STATUS_CHOICES
 
 class OrderCreateForm(forms.ModelForm):
     class Meta:
@@ -21,25 +27,29 @@ class OrderCreateForm(forms.ModelForm):
             'payment_method': forms.Select(attrs={'class': 'form-select'}),
             'coupon': forms.Select(attrs={'class': 'form-select'}),
         }
-
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
-        # Filter shipping_address to show only user's addresses
         if user:
-            self.fields['shipping_address'].queryset = user.addresses.all()
-            
-        # Filter coupons to show only valid ones
-        self.fields['coupon'].queryset = Coupon.objects.filter(
-            is_active=True,
-            valid_from__lte=timezone.now(),
-            valid_to__gte=timezone.now()
-        ).exclude(
-            usage_limit__gt=0,
-            usage_count__gte=models.F('usage_limit')
-        )
+            self.fields['shipping_address'].queryset = Address.objects.filter(user=user)
+            default_address = Address.objects.filter(user=user, is_default=True).first()
+            if default_address:
+                self.fields['shipping_address'].initial = default_address
+        self.fields['coupon'].queryset = Coupon.objects.filter(is_active=True).exclude(
+            usage_limit__gt=0, usage_count__gte=models.F('usage_limit')
+        ).filter(valid_from__lte=timezone.now(), valid_to__gte=timezone.now())
         self.fields['coupon'].required = False
+        self.fields['coupon'].empty_label = "No coupon"
+    def clean(self):
+        cleaned_data = super().clean()
+        shipping_address = cleaned_data.get('shipping_address')
+        payment_method = cleaned_data.get('payment_method')
+        
+        if not shipping_address:
+            raise forms.ValidationError("Please select a shipping address.")
+        if payment_method not in dict(Order.PAYMENT_CHOICES):
+            raise forms.ValidationError("Invalid payment method selected.")
+        return cleaned_data
 
 class ReturnRequestForm(forms.ModelForm):
     class Meta:
@@ -52,12 +62,21 @@ class ReturnRequestForm(forms.ModelForm):
                 'placeholder': 'Please explain why you want to return this order'
             }),
         }
+    def __init__(self, *args, **kwargs):
+        self.order = kwargs.pop('order', None)
+        super().__init__(*args, **kwargs)
 
     def clean_reason(self):
         reason = self.cleaned_data['reason']
         if len(reason) < 10:
             raise forms.ValidationError("Please provide a more detailed reason (minimum 10 characters)")
         return reason
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.order and self.order.status != 'Delivered':
+            raise forms.ValidationError("This order cannot be returned as it has not been delivered.")
+        return cleaned_data
 
 class CouponApplyForm(forms.Form):
     coupon_code = forms.CharField(
@@ -74,6 +93,43 @@ class CouponApplyForm(forms.Form):
             coupon = Coupon.objects.get(code=code)
             if not coupon.is_valid:
                 raise forms.ValidationError("This coupon is not valid or has expired")
+            # Store the coupon object for use in views
+            self.cleaned_data['coupon'] = coupon
         except Coupon.DoesNotExist:
             raise forms.ValidationError("Invalid coupon code")
         return code
+    
+
+class SalesReportForm(forms.Form):
+    report_type = forms.ChoiceField(choices=SalesReport.REPORT_TYPES, widget=forms.RadioSelect)
+    start_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        required=False,
+        help_text="Required for custom range"
+    )
+    end_date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        required=False,
+        help_text="Required for custom range"
+    )
+    export = forms.BooleanField(
+        required=False,
+        label="Export to CSV",
+        initial=False
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        report_type = cleaned_data.get('report_type')
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        
+        if report_type == 'CUSTOM':
+            if not start_date:
+                self.add_error('start_date', 'Start date is required for custom range')
+            if not end_date:
+                self.add_error('end_date', 'End date is required for custom range')
+            if start_date and end_date and start_date > end_date:
+                self.add_error('end_date', 'End date must be after start date')
+                
+        return cleaned_data

@@ -1,4 +1,6 @@
 {% extends 'admin_base.html' %}
+{% load static %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h2 mb-4 text-gray-800">User Statistics: {{ user.username }}</h1>
@@ -9,39 +11,118 @@
             </h6>
         </div>
         <div class="card-body">
-            <p><strong>Full Name:</strong> {{ user.full_name|default:"N/A" }}</p>
-            <p><strong>Email:</strong> {{ user.email }}</p>
-            <p><strong>Phone Number:</strong> {{ user.phone_number|default:"N/A" }}</p>
-            <p><strong>Date Joined:</strong> {{ user.date_joined|date:"M d, Y" }}</p>
-            <p><strong>Status:</strong> {% if user.userprofile.is_blocked %}Blocked{% else %}Active{% endif %}</p>
-            <p><strong>Total Successful Logins:</strong> {{ total_logins }}</p>
-            <p><strong>Total Failed Logins:</strong> {{ failed_logins }}</p>
+            <!-- User Details -->
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Full Name:</strong> {{ user.full_name|default:"N/A" }}</p>
+                    <p><strong>Email:</strong> {{ user.email }}</p>
+                    <p><strong>Phone Number:</strong> {{ user.phone_number|default:"N/A" }}</p>
+                    <p><strong>Date Joined:</strong> {{ user.date_joined|date:"M d, Y" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p>
+                        <strong>Status:</strong> 
+                        <span class="{% if user.userprofile.is_blocked %}text-danger{% else %}text-success{% endif %}">
+                            {% if user.userprofile.is_blocked %}Blocked{% else %}Active{% endif %}
+                        </span>
+                    </p>
+                    <p><strong>Total Successful Logins:</strong> {{ total_logins }}</p>
+                    <p><strong>Total Failed Logins:</strong> {{ failed_logins }}</p>
+                    <!-- Toggle Block Button -->
+                    <form method="post" action="{% url 'user_app:toggle_user_block' user.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn {% if user.userprofile.is_blocked %}btn-success{% else %}btn-danger{% endif %} btn-sm">
+                            <i class="fas fa-{% if user.userprofile.is_blocked %}unlock{% else %}lock{% endif %} me-1"></i>
+                            {% if user.userprofile.is_blocked %}Unblock{% else %}Block{% endif %} User
+                        </button>
+                    </form>
+                </div>
+            </div>
 
+            <!-- Recent Login Attempts -->
             <h5 class="mt-4">Recent Login Attempts</h5>
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Success</th>
-                        <th>IP Address</th>
-                        <th>User Agent</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for attempt in login_attempts %}
-                    <tr>
-                        <td>{{ attempt.timestamp|date:"M d, Y H:i" }}</td>
-                        <td>{{ attempt.success|yesno:"Yes,No" }}</td>
-                        <td>{{ attempt.ip_address|default:"N/A" }}</td>
-                        <td>{{ attempt.user_agent|default:"N/A" }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="4">No login attempts recorded.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <a href="{% url 'user_app:admin_dashboard' %}" class="btn btn-primary mt-3">Back to Dashboard</a>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Success</th>
+                            <th>IP Address</th>
+                            <th>User Agent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attempt in login_attempts %}
+                        <tr>
+                            <td>{{ attempt.timestamp|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <span class="{% if attempt.success %}text-success{% else %}text-danger{% endif %}">
+                                    {{ attempt.success|yesno:"Yes,No" }}
+                                </span>
+                            </td>
+                            <td>{{ attempt.ip_address|default:"N/A" }}</td>
+                            <td>{{ attempt.user_agent|default:"N/A" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center">No login attempts recorded.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Navigation -->
+            <div class="mt-3">
+                <a href="{% url 'user_app:admin_customer_list' %}" class="btn btn-primary">Back to Dashboard</a>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Inline Styles (optional, can be moved to a CSS file) -->
+<style>
+    .text-success { color: #28a745 !important; }
+    .text-danger { color: #dc3545 !important; }
+    .btn-sm { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
+    .table-hover tbody tr:hover { background-color: #f5f5f5; }
+    .thead-dark { background-color: #343a40; color: #fff; }
+</style>
+
+<!-- JavaScript for Confirmation on Block/Unblock -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleForm = document.querySelector('form[action*="/admin/toggle_user_block/"]');
+        toggleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const action = this.querySelector('button').textContent.trim().includes('Block') ? 'block' : 'unblock';
+            Swal.fire({
+                title: `Are you sure?`,
+                text: `Do you want to ${action} this user?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: `Yes, ${action} user!`
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    this.submit();
+                }
+            });
+        });
+
+        {% if messages %}
+            {% for message in messages %}
+                let messageType = "{{ message.tags }}";
+                Swal.fire({
+                    title: messageType.includes('error') ? 'Error' : 'Success',
+                    text: '{{ message }}',
+                    icon: messageType.includes('error') ? 'error' : 'success',
+                    confirmButtonText: 'OK'
+                });
+            {% endfor %}
+        {% endif %}
+    });
+</script>
 {% endblock %}

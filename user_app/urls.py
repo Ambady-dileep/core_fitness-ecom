@@ -4,7 +4,7 @@ from django.contrib.auth import views as auth_views
 from . import user_views
 from . import admin_views
 
-app_name = 'user_app'  # Define the namespace for user_app
+app_name = 'user_app'  
 
 urlpatterns = [
     # Authentication URLs
@@ -15,16 +15,16 @@ urlpatterns = [
     path('change-password/', user_views.change_password, name='change_password'),
 
     # Address Management URLs
-    path('profile/addresses/', user_views.user_address_list, name='user_address_list'),  # Added for user_checkout redirect
+    path('profile/addresses/', user_views.user_address_list, name='user_address_list'), 
     path('profile/address/add/', user_views.add_address, name='add_address'),
     path('profile/address/<int:address_id>/edit/', user_views.edit_address, name='edit_address'),
     path('profile/address/<int:address_id>/delete/', user_views.delete_address, name='delete_address'),
-    path('address/delete/<int:address_id>/', user_views.delete_address, name='delete_address_alt'),  # Alternative path
     path('profile/address/<int:address_id>/set-default/', user_views.set_default_address, name='set_default_address'),
 
     # Admin URLs
     path('admin/login/', admin_views.admin_login, name='admin_login'),
     path('admin/dashboard/', admin_views.admin_dashboard, name='admin_dashboard'),
+    path('admin/customer-list/', admin_views.admin_customer_list, name='admin_customer_list'),
     path('admin/logout/', admin_views.admin_logout, name='admin_logout'),
     path('admin/toggle_user_block/<int:user_id>/', admin_views.toggle_user_block, name='toggle_user_block'),
 
@@ -47,7 +47,13 @@ urlpatterns = [
     path('verify-otp-signup/<str:email>/', user_views.verify_otp_signup_page, name='verify_otp_signup_page'),
 
     path('admin/delete_user/<int:user_id>/', admin_views.delete_user, name='delete_user'),
-    path('admin/user_stats/', admin_views.user_stats, name='user_stats'),
-    path('admin/user_stats/<int:user_id>/', admin_views.user_stats, name='user_stats_detail'),
+
+    # Banner Management
+    path('admin/banners/', admin_views.admin_banner_list, name='admin_banner_list'),
+    path('admin/banners/create/', admin_views.admin_banner_create, name='admin_banner_create'),
+    path('admin/banners/edit/<int:banner_id>/', admin_views.admin_banner_edit, name='admin_banner_edit'),
+    path('admin/banners/delete/<int:banner_id>/', admin_views.admin_banner_delete, name='admin_banner_delete'),
+    path('admin/banners/toggle-status/<int:banner_id>/', admin_views.admin_banner_toggle_status, name='admin_banner_toggle_status'),
+
 ]
 

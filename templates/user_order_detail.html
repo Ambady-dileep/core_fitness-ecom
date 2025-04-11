@@ -1,130 +1,174 @@
 {% extends 'base.html' %}
 {% load static cart_filters %}
 
-{% block title %}Order #{{ order.order_id }}{% endblock %}
+{% block title %}Order #{{ order.order_id }} - Core Fitness{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <nav>
-        <a href="{% url 'user_app:user_home' %}" class="text-muted">Home</a> &gt;
-        <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="text-muted">Orders</a> &gt;
-        <span>#{{ order.order_id }}</span>
-    </nav>
-
-    <h2>#{{ order.order_id }}</h2>
-    <p class="text-muted">Status: {{ order.status }}</p>
-
-    <div class="row">
-        <!-- Order Details -->
-        <div class="col-lg-8">
-            <div class="mb-4">
-                <p>Date: {{ order.order_date|date:"M d, Y" }}</p>
-                <p>Payment: {{ order.payment_method }}</p>
-                <p>Total: ${{ order.total_amount|floatformat:2 }}</p>
-                <p>Items: {{ order.items.count }}</p>
-            </div>
-
-            <h5>Items</h5>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Price</th>
-                        <th>Qty</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in order.items.all %}
-                    <tr>
-                        <td>{{ item.variant.product.product_name }} ({{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"N/A" }})</td>
-                        <td>${{ item.price|floatformat:2 }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>${{ item.price|multiply:item.quantity|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="3">Subtotal</td>
-                        <td>${{ subtotal|floatformat:2 }}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="3">Shipping</td>
-                        <td>${{ shipping_cost|floatformat:2 }}</td>
-                    </tr>
-                    <tr>
-                        <td colspan="3">Total</td>
-                        <td>${{ order.total_amount|floatformat:2 }}</td>
-                    </tr>
-                </tfoot>
-            </table>
-
-            {% if order.status == 'Delivered' or order.status in 'Pending,Shipped' %}
-            <div class="mb-3">
-                {% if order.status == 'Delivered' %}
-                    <a href="{% url 'cart_and_orders_app:user_return_order' order_id=order.order_id %}" class="btn btn-link">Return Order</a>
-                {% endif %}
-                {% if order.status in 'Pending,Shipped' %}
-                    <a href="{% url 'cart_and_orders_app:user_cancel_order' order_id=order.order_id %}" class="btn btn-link text-danger">Cancel Order</a>
-                {% endif %}
-                <a href="{% url 'cart_and_orders_app:download_invoice' order_id=order.order_id %}" class="btn btn-link">Download Invoice</a>
-            </div>
-            {% endif %}
-
-            {% if order.return_requests.exists %}
-            <h5>Return Requests</h5>
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Reason</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for return_request in order.return_requests.all %}
-                    <tr>
-                        <td>{{ return_request.created_at|date:"M d, Y" }}</td>
-                        <td>{{ return_request.reason }}</td>
-                        <td>
-                            {% if return_request.is_verified == None %}Pending
-                            {% elif return_request.is_verified %}Approved
-                            {% else %}Rejected{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% endif %}
+<div class="container py-5">
+    <div class="order-wrapper">
+        <nav class="breadcrumb">
+            <a href="{% url 'user_app:user_home' %}">Home</a> >
+            <a href="{% url 'cart_and_orders_app:user_order_list' %}">Orders</a> >
+            <span>#{{ order.order_id }}</span>
+        </nav>
+        <div class="order-header">
+            <h2>#{{ order.order_id }}</h2>
+            <span class="badge status-{{ order.status|lower }}">{{ order.status }}</span>
         </div>
 
-        <!-- Shipping and Tracking -->
-        <div class="col-lg-4">
-            <h5>Shipping</h5>
-            <p>
-                {{ order.shipping_address.full_name }}<br>
-                {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %}<br>
-                {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}<br>
-                {{ order.shipping_address.country }}<br>
-                Phone: {{ order.shipping_address.phone_number|default:"N/A" }}
-            </p>
+        {% if messages %}
+            <div class="messages mb-4">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
 
-            {% if order.status == 'Shipped' %}
-            <h5>Tracking</h5>
-            {% if order.tracking_number %}
-                <p>Number: {{ order.tracking_number }}</p>
-                <p>Shipped: {{ order.shipped_date|date:"M d, Y"|default:"N/A" }}</p>
-                <p>Est. Delivery: {{ order.estimated_delivery|date:"M d, Y"|default:"N/A" }}</p>
-                <a href="#" class="btn btn-link">Track</a>
-            {% else %}
-                <p class="text-muted">Tracking info pending.</p>
-            {% endif %}
-            {% endif %}
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <h3>Details</h3>
+                    <div class="details">
+                        <p><strong>Date:</strong> {{ order.order_date|date:"d M Y" }}</p>
+                        <p><strong>Payment:</strong> {{ order.payment_method }}</p>
+                        <p><strong>Items:</strong> {{ order.items.count }}</p>
+                    </div>
+                    <h3>Items</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Price</th>
+                                <th>Offer</th>
+                                <th>Qty</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in order.items.all %}
+                            <tr>
+                                <td>{{ item.variant.product.product_name }} ({{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"" }})</td>
+                                <td>₹{{ item.price|floatformat:2 }}</td>
+                                <td>
+                                    {% if item.applied_offer == 'product' %}
+                                        <span class="badge bg-primary">Product Offer</span>
+                                    {% elif item.applied_offer == 'category' %}
+                                        <span class="badge bg-success">Category Offer</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.quantity }}</td>
+                                <td>₹{{ item.price|multiply:item.quantity|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4">Subtotal</td>
+                                <td>₹{{ subtotal|floatformat:2 }}</td>
+                            </tr>
+                            {% if total_offer_discount > 0 %}
+                            <tr>
+                                <td colspan="4">Offer Discount</td>
+                                <td class="text-success">-₹{{ total_offer_discount|floatformat:2 }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td colspan="4">Shipping</td>
+                                <td>₹{{ shipping_cost|floatformat:2 }}</td>
+                            </tr>
+                            {% if order.discount_amount > 0 %}
+                            <tr>
+                                <td colspan="4">Coupon Discount</td>
+                                <td class="text-success">-₹{{ order.discount_amount|floatformat:2 }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td colspan="4">Total</td>
+                                <td>₹{{ order.total_amount|floatformat:2 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <div class="actions">
+                        {% if order.status == 'Delivered' %}
+                            <button class="btn btn-outline" data-bs-toggle="modal" data-bs-target="#returnOrderModal">Return</button>
+                        {% endif %}
+                        {% if order.status in 'Pending,Shipped' %}
+                            <button class="btn btn-outline" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel</button>
+                        {% endif %}
+                        <a href="{% url 'cart_and_orders_app:download_invoice' order.order_id %}" class="btn btn-outline">Invoice</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <h3>Shipping</h3>
+                    <p>{{ order.shipping_address.full_name }}<br>{{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %}<br>{{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}<br>{{ order.shipping_address.country }}</p>
+                </div>
+                {% if order.status in 'Shipped,Out for Delivery,Delivered' and order.tracking_number %}
+                <div class="card">
+                    <h3>Tracking</h3>
+                    <p><strong>Number:</strong> {{ order.tracking_number }}<br><strong>Shipped:</strong> {{ order.shipped_date|date:"d M Y"|default:"N/A" }}<br><strong>Est. Delivery:</strong> {{ order.estimated_delivery|date:"d M Y"|default:"N/A" }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
 
-            <h5>Help</h5>
-            <p class="text-muted">Questions?</p>
-            <a href="{% url 'user_app:contact_us' %}" class="btn btn-link">Contact Support</a>
+        <!-- Cancel Order Modal -->
+        <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cancelOrderModalLabel">Cancel Order #{{ order.order_id }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure? This cannot be undone.</p>
+                        <form method="post" action="{% url 'cart_and_orders_app:user_cancel_order' order.order_id %}">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="reason" class="form-label">Reason</label>
+                                <select name="reason" id="reason" class="form-select" required>
+                                    <option value="">Select</option>
+                                    <option value="Changed my mind">Changed my mind</option>
+                                    <option value="Found a better price elsewhere">Found a better price elsewhere</option>
+                                    <option value="Ordered by mistake">Ordered by mistake</option>
+                                    <option value="Shipping delay">Shipping delay</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="other-reason-container" style="display: none;">
+                                <label for="other-reason" class="form-label">Details</label>
+                                <textarea name="other_reason" id="other-reason" class="form-control" rows="2"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Confirm</button>
+                            <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Back</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Return Order Modal -->
+        <div class="modal fade" id="returnOrderModal" tabindex="-1" aria-labelledby="returnOrderModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="returnOrderModalLabel">Return Order #{{ order.order_id }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Please provide a reason for returning this order.</p>
+                        <form method="post" action="{% url 'cart_and_orders_app:user_return_order' order.order_id %}">
+                            {% csrf_token %}
+                            {{ return_form.as_p }}
+                            <button type="submit" class="btn btn-primary">Submit Return Request</button>
+                            <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -132,44 +176,165 @@
 
 {% block extra_css %}
 <style>
-    nav {
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
+    .container {
+        max-width: 900px;
+        padding: 40px 20px;
     }
-    h2 {
-        font-weight: 400;
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
-        color: #333;
+    .order-wrapper {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    h5 {
-        font-weight: 400;
-        font-size: 1rem;
-        margin-bottom: 1rem;
+    .breadcrumb {
+        font-size: 0.85rem;
+        color: #999;
+        margin-bottom: 20px;
     }
-    p, td, th {
-        font-size: 0.9rem;
-    }
-    .text-muted {
+    .breadcrumb a {
         color: #666;
-    }
-    .table {
-        border-collapse: collapse;
-    }
-    .table th, .table td {
-        padding: 0.5rem;
-        border-bottom: 1px solid #eee;
-    }
-    .btn-link {
-        padding: 0;
-        color: #333;
-    }
-    .btn-link:hover {
-        color: #000;
         text-decoration: none;
     }
-    .btn-link.text-danger {
-        color: #dc3545;
+    .breadcrumb a:hover {
+        color: #333;
     }
+    .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    h2 {
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: #333;
+        margin: 0;
+    }
+    h3 {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: #333;
+        margin: 20px 0 10px;
+    }
+    p {
+        font-size: 0.9rem;
+        color: #666;
+        margin: 5px 0;
+    }
+    .card {
+        border: none;
+        padding: 15px;
+        background: transparent;
+    }
+    .details p {
+        margin: 5px 0;
+    }
+    .table {
+        width: 100%;
+        font-size: 0.9rem;
+        color: #333;
+    }
+    .table th {
+        font-weight: 500;
+        color: #666;
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    .table td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+    }
+    .table tfoot td {
+        font-weight: 500;
+        padding: 8px;
+    }
+    .badge {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+    }
+    .text-muted {
+        color: #999;
+    }
+    .text-success {
+        color: #28a745;
+    }
+    .actions {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    .btn {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+    .btn-primary {
+        background: #333;
+        color: #fff;
+        border: none;
+    }
+    .btn-primary:hover {
+        background: #555;
+    }
+    .btn-outline {
+        border: 1px solid #333;
+        color: #333;
+        background: transparent;
+    }
+    .btn-outline:hover {
+        background: #f5f5f5;
+    }
+    .modal-content {
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .modal-header {
+        border-bottom: none;
+        padding: 15px 20px;
+    }
+    .modal-title {
+        font-size: 1.2rem;
+        font-weight: 500;
+    }
+    .modal-body {
+        padding: 20px;
+    }
+    .form-label {
+        font-size: 0.9rem;
+        color: #333;
+    }
+    .form-select, .form-control {
+        font-size: 0.9rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .status-pending { background: #f39c12; color: #fff; }
+    .status-shipped { background: #3498db; color: #fff; }
+    .status-out-for-delivery { background: #2980b9; color: #fff; }
+    .status-delivered { background: #27ae60; color: #fff; }
+    .status-cancelled { background: #e74c3c; color: #fff; }
+    .alert {
+        padding: 10px;
+        border-radius: 4px;
+    }
+    .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const reasonSelect = document.getElementById('reason');
+        const otherReasonContainer = document.getElementById('other-reason-container');
+        
+        if (reasonSelect) {
+            reasonSelect.addEventListener('change', function() {
+                otherReasonContainer.style.display = this.value === 'Other' ? 'block' : 'none';
+            });
+        }
+    });
+</script>
 {% endblock %}
