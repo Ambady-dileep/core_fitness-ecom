@@ -5,49 +5,61 @@ from product_app.models import Product, ProductVariant, Category
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+from datetime import timedelta
+from django import forms
+from .models import Coupon
 
 class CouponForm(forms.ModelForm):
     class Meta:
         model = Coupon
-        fields = ['code', 'is_active', 'valid_from', 'valid_to', 'usage_limit', 
-                  'minimum_order_amount', 'discount_amount', 'applicable_products']
+        fields = ['code', 'discount_percentage', 'minimum_order_amount', 'valid_from', 'valid_to', 'usage_limit', 'is_active']
         widgets = {
             'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'discount_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'minimum_order_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'valid_from': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'valid_to': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'usage_limit': forms.NumberInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'valid_from': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
-            'valid_to': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
-            'usage_limit': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
-            'minimum_order_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': 0}),
-            'discount_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
-            'applicable_products': forms.SelectMultiple(attrs={'class': 'select2'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.initial['valid_from'] = timezone.now()
+            self.initial['valid_to'] = timezone.now() + timedelta(days=30)
+            self.initial['is_active'] = True
+
+    def clean_code(self):
+        code = self.cleaned_data['code'].strip().upper()
+        if not code:
+            raise ValidationError("Coupon code cannot be empty.")
+        return code
+
+    def clean_discount_percentage(self):
+        discount = self.cleaned_data['discount_percentage']
+        if discount <= 0 or discount > 100:
+            raise ValidationError("Discount percentage must be between 0.01 and 100.")
+        return discount
+
+    def clean_minimum_order_amount(self):
+        amount = self.cleaned_data['minimum_order_amount']
+        if amount < 0:
+            raise ValidationError("Minimum order amount cannot be negative.")
+        return amount
+
+    def clean_usage_limit(self):
+        limit = self.cleaned_data['usage_limit']
+        if limit < 0:
+            raise ValidationError("Usage limit cannot be negative.")
+        return limit
 
     def clean(self):
         cleaned_data = super().clean()
         valid_from = cleaned_data.get('valid_from')
         valid_to = cleaned_data.get('valid_to')
-        discount_amount = cleaned_data.get('discount_amount')
-        minimum_order_amount = cleaned_data.get('minimum_order_amount')
-        usage_limit = cleaned_data.get('usage_limit')
-        code = cleaned_data.get('code')
-
-        if valid_from and valid_to:
-            if valid_from >= valid_to:
-                raise ValidationError("Start date must be before end date")
-
-        if discount_amount is not None and discount_amount <= 0:
-            raise ValidationError({"discount_amount": "Discount amount must be positive."})
-        if minimum_order_amount is not None and minimum_order_amount < 0:
-            raise ValidationError({"minimum_order_amount": "Minimum order amount cannot be negative."})
-        if usage_limit is not None and usage_limit < 0:
-            raise ValidationError({"usage_limit": "Usage limit cannot be negative."})
-
-        # Coupon code format (optional: enforce alphanumeric and uppercase)
-        if code and not code.isalnum():
-            raise ValidationError({"code": "Coupon code must be alphanumeric."})
-        if code:
-            cleaned_data['code'] = code.upper()  # Ensure uppercase in form
-
+        if valid_from and valid_to and valid_to <= valid_from:
+            raise ValidationError("Valid to date must be after valid from date.")
         return cleaned_data
 
 class UserCouponForm(forms.ModelForm):
@@ -74,7 +86,7 @@ class WalletTransactionForm(forms.ModelForm):
 class WalletForm(forms.ModelForm):
     class Meta:
         model = Wallet
-        fields = ['user', 'balance']  # Excludes created_at/updated_at
+        fields = ['user', 'balance']  
         widgets = {
             'balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'readonly': 'readonly'}),
         }

@@ -26,20 +26,19 @@ class MultipleFileField(forms.FileField):
             return [super().clean(d, initial) for d in data]
         return [super().clean(data, initial)]
 
-
 class ProductFilterForm(forms.Form):
     search = forms.CharField(
         required=False, 
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Search products...'})
     )
     category = forms.ModelChoiceField(
-        queryset=Category.objects.none(),
+        queryset=Category.objects.filter(is_active=True),
         required=False,
         empty_label="All Categories",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
     brand = forms.ModelChoiceField(
-        queryset=Brand.objects.none(),
+        queryset=Brand.objects.filter(is_active=True),
         required=False,
         empty_label="All Brands",
         widget=forms.Select(attrs={'class': 'form-select'})
@@ -68,7 +67,7 @@ class CategoryForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['parent'].queryset = Category.objects.filter(is_active=True).exclude(id=self.instance.id if self.instance.pk else None)
-        self.fields['brands'].queryset = Brand.objects.filter(is_active=True, is_deleted=False)
+        self.fields['brands'].queryset = Brand.objects.filter(is_active=True)
 
     def clean_parent(self):
         parent = self.cleaned_data.get('parent')
@@ -87,7 +86,6 @@ class CategoryForm(forms.ModelForm):
         if name and Category.objects.filter(name=name, parent=parent).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("A category with this name and parent already exists.")
         return cleaned_data
-
 
 class BrandForm(forms.ModelForm):
     logo = CloudinaryFileField(
@@ -112,14 +110,6 @@ class BrandForm(forms.ModelForm):
             raise forms.ValidationError("A brand with this name already exists.")
         return name
 
-    def save(self, commit=True):
-        brand = super().save(commit=commit)
-        if brand.is_deleted and brand.is_active:
-            brand.is_deleted = False
-            if commit:
-                brand.save(update_fields=['is_deleted'])
-        return brand
-    
 class ReviewForm(forms.ModelForm):
     class Meta:
         model = Review
@@ -151,4 +141,3 @@ class ReviewForm(forms.ModelForm):
         if len(comment) > 5000:
             raise forms.ValidationError("Comment cannot exceed 5000 characters.")
         return comment
-    

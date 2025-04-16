@@ -316,29 +316,13 @@
             letter-spacing: 0.1em;
             padding-bottom: 0.5rem;
         }
-        
-        /* Centered Search Bar */
-        .navbar-search {
-            flex-grow: 0;
-            width: auto;
-            padding: 0 1rem;
-        }
 
         .navbar .input-group {
             width: 430px;
             margin: 0 auto;
         }
         
-        @media (max-width: 991px) {
-            .navbar-search {
-                width: 100%;
-                padding: 10px 0;
-            }
-            .navbar .input-group {
-                width: 100%;
-            }
-        }
-
+        @media (max-width: 991px) 
         .navbar .input-group .form-control {
             height: 39px;
             border-radius: 0;
@@ -439,17 +423,6 @@
                         <a class="nav-link" href="{% url 'product_app:user_category_list' %}">Categories</a>
                     </li>
                 </ul>
-                <!-- Centered Search Bar -->
-                <div class="navbar-search mx-auto">
-                    <form class="d-flex" role="search">
-                        <div class="input-group">
-                            <input class="form-control" type="search" placeholder="Search" aria-label="Search">
-                            <button class="btn btn-primary" type="submit">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </form>
-                </div>
                 <ul class="navbar-nav ms-auto align-items-center">
                     {% if user.is_authenticated %}
                         <!-- Wishlist Icon -->
@@ -496,18 +469,6 @@
             </div>
         </div>
     </nav>
-
-    <!-- Messages Container -->
-    <div class="alert-container">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show fade-out" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    </div>
 
     <!-- Main Content -->
     <div class="container mt-4">
@@ -557,8 +518,21 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize wishlist count from localStorage or from server
+            const storedWishlistCount = localStorage.getItem('wishlistCount');
+            const serverWishlistCount = {{ request.user.wishlist_items.count|default:0 }};
+            
+            // Use localStorage value if exists, otherwise use server count and update localStorage
+            if (storedWishlistCount !== null) {
+                updateWishlistCount(parseInt(storedWishlistCount));
+            } else {
+                updateWishlistCount(serverWishlistCount);
+                localStorage.setItem('wishlistCount', serverWishlistCount);
+            }
+            
+            console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
+            
             // Auto-dismiss alerts after 5 seconds
             setTimeout(function() {
                 const alerts = document.querySelectorAll('.alert');
@@ -567,42 +541,39 @@
                     bsAlert.close();
                 });
             }, 5000);
-
+            
             // Function to update wishlist count
             function updateWishlistCount(count) {
                 const wishlistCountBadge = document.getElementById('wishlist-count');
                 if (wishlistCountBadge) {
                     wishlistCountBadge.textContent = count;
+                    wishlistCountBadge.style.display = count > 0 ? 'flex' : 'none';
                 }
+                localStorage.setItem('wishlistCount', count);
             }
-
-            // Function to update cart count (assuming it’s already working)
+            
+            // Function to update cart count
             function updateCartCount(count) {
                 const cartCountBadge = document.getElementById('cart-count');
                 if (cartCountBadge) {
-                    cartCountBadge.textContent = count;
+                  cartCountBadge.textContent = count;
+                  cartCountBadge.style.display = count > 0 ? 'flex' : 'none';
                 }
             }
-
+        
+            // Listen for wishlist-updated events
             document.addEventListener('wishlist-updated', function(e) {
-                const wishlistCountBadge = document.getElementById('wishlist-count');
-                if (wishlistCountBadge) {
-                    const count = e.detail.count >= 0 ? e.detail.count : 0;
-                    wishlistCountBadge.textContent = count;
-                    wishlistCountBadge.style.display = count > 0 ? 'flex' : 'none'; // Hide badge if count is 0
-                }
+                const count = e.detail.count >= 0 ? e.detail.count : 0;
+                updateWishlistCount(count);
             });
-
+            
+            // Listen for cart-updated events
             document.addEventListener('cart-updated', function(e) {
-                const cartCountBadge = document.getElementById('cart-count');
-                if (cartCountBadge) {
-                    const count = e.detail.count >= 0 ? e.detail.count : 0;
-                    cartCountBadge.textContent = count;
-                    cartCountBadge.style.display = count > 0 ? 'flex' : 'none'; // Hide badge if count is 0
-                }
-            }); 
+                const count = e.detail.count >= 0 ? e.detail.count : 0;
+                updateCartCount(count);
+            });
         });
-
+        
         // Function to get CSRF token from cookies (for AJAX)
         function getCookie(name) {
             let cookieValue = null;
@@ -619,6 +590,10 @@
             return cookieValue;
         }
     </script>
-    {% block extra_js %}{% endblock %}
+{% block extra_js %}
+{% endblock %}
 </body>
 </html>
+
+
+

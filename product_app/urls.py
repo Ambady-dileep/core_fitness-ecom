@@ -1,20 +1,16 @@
-# product_app/urls.py
 from django.urls import path
 from .product_views import (
     admin_product_list,
-    admin_delete_product,
-    admin_permanent_delete_product,
-    admin_restore_product,
     admin_product_detail,
     user_product_list,
-    admin_deactivate_variant,
-    admin_activate_variant,
     user_product_detail,
-    get_product_variants,
     admin_add_product,
     admin_toggle_product_status,
-    admin_edit_product,  
-    admin_delete_variant,
+    get_product_variants,
+    admin_edit_product,
+    get_variant_images,
+    approve_review,
+    delete_review,
     admin_toggle_variant_status,
     add_review,
     autocomplete,
@@ -33,17 +29,19 @@ from .category_views import (
     admin_brand_create,
     admin_brand_edit,
     admin_brand_delete,
-    admin_brand_restore,
     admin_brand_detail,
-    admin_toggle_brand_status,    
+    admin_toggle_brand_status,
 )
 
 app_name = 'product_app'
 
 urlpatterns = [
+    # User Routes
     path('products/', user_product_list, name='user_product_list'),
     path('products/<slug:slug>/', user_product_detail, name='user_product_detail'),
     path('add-review/', add_review, name='add_review'),
+    path('admin/reviews/<int:review_id>/approve/', approve_review, name='admin_approve_review'),
+    path('admin/reviews/<int:review_id>/delete/', delete_review, name='admin_delete_review'),
     path('autocomplete/', autocomplete, name='autocomplete'),
 
     # User-Facing Category Routes
@@ -56,17 +54,10 @@ urlpatterns = [
     path('admin/products/add/', admin_add_product, name='admin_add_product'),
     path('admin/products/<slug:slug>/', admin_product_detail, name='admin_product_detail'),
     path('admin/products/<slug:slug>/edit/', admin_edit_product, name='admin_edit_product'),
-    path('admin/products/<slug:slug>/delete/', admin_delete_product, name='admin_delete_product'),
-    path('admin/products/<int:product_id>/permanent-delete/', admin_permanent_delete_product, name='admin_permanent_delete_product'),
-    path('admin/products/<slug:slug>/restore/', admin_restore_product, name='admin_restore_product'),
     path('admin/product/<int:product_id>/variants/', get_product_variants, name='admin_product_variants'),
-    path('admin/product/variant/<int:variant_id>/toggle-status/', admin_toggle_variant_status, name='admin_toggle_variant_status'),
     path('admin/product/<int:product_id>/toggle-status/', admin_toggle_product_status, name='admin_toggle_product_status'),
-    
-    # Admin Variant Routes
-    path('admin/variants/<int:variant_id>/deactivate/', admin_deactivate_variant, name='admin_deactivate_variant'),
-    path('admin/variants/<int:variant_id>/activate/', admin_activate_variant, name='admin_activate_variant'),
-    path('admin/variants/<int:variant_id>/delete/', admin_delete_variant, name='admin_delete_variant'),
+    path('get-variant-images/<int:variant_id>/', get_variant_images, name='get_variant_images'),
+    path('admin/product/variant/<int:variant_id>/toggle-status/', admin_toggle_variant_status, name='admin_toggle_variant_status'),
 
     # Admin Category Routes
     path('admin/categories/', admin_category_list, name='admin_category_list'),
@@ -82,7 +73,6 @@ urlpatterns = [
     path('admin/brands/create/', admin_brand_create, name='admin_brand_create'),
     path('admin/brands/<int:brand_id>/edit/', admin_brand_edit, name='admin_brand_edit'),
     path('admin/brands/<int:brand_id>/delete/', admin_brand_delete, name='admin_brand_delete'),
-    path('admin/brands/<int:brand_id>/restore/', admin_brand_restore, name='admin_brand_restore'),
     path('admin/brands/<int:brand_id>/detail/', admin_brand_detail, name='admin_brand_detail'),
     path('admin/brands/<int:brand_id>/toggle-status/', admin_toggle_brand_status, name='admin_toggle_brand_status'),
 ]

@@ -1,11 +1,7 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from user_app.models import CustomUser
-from django.shortcuts import render, redirect
-from django.db.models import Q
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from user_app.models import CustomUser, UserProfile, LoginAttempt
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from django.urls import reverse
@@ -13,9 +9,11 @@ from .forms import BannerForm
 from urllib.parse import urlencode
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from user_app.models import CustomUser, UserProfile, LoginAttempt, Banner
-from django.shortcuts import render, redirect
-from django.db.models import Q, Count
+from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models import Q, Count, Sum, F
+from django.utils import timezone
 from datetime import datetime, timedelta
+from cart_and_orders_app.models import Order, OrderItem
 import logging
 
 logger = logging.getLogger(__name__)
@@ -64,38 +62,97 @@ def admin_login(request):
 
 @login_required
 @user_passes_test(is_admin)
-@never_cache
 def admin_dashboard(request):
     logger.info(f"Admin {request.user.username} accessed the dashboard")
 
+    # Time filter
+    time_filter = request.GET.get('time_filter', 'monthly')
+    now = timezone.now()
+    start_date = now
+
+    if time_filter == 'daily':
+        start_date = now - timedelta(days=1)
+    elif time_filter == 'weekly':
+        start_date = now - timedelta(days=7)
+    elif time_filter == 'monthly':
+        start_date = now - timedelta(days=30)
+    elif time_filter == 'yearly':
+        start_date = now - timedelta(days=365)
+
+    # Sales data for chart
+    orders = Order.objects.filter(order_date__gte=start_date, status='Delivered')
+    sales_data = []
+    labels = []
+    
+    if time_filter == 'daily':
+        for hour in range(24):
+            hour_start = start_date.replace(hour=hour, minute=0, second=0)
+            hour_end = hour_start + timedelta(hours=1)
+            amount = orders.filter(order_date__gte=hour_start, order_date__lt=hour_end).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            sales_data.append(float(amount))
+            labels.append(hour_start.strftime('%H:%M'))
+    elif time_filter == 'weekly':
+        for i in range(7):
+            day = (start_date + timedelta(days=i)).date()
+            amount = orders.filter(order_date__date=day).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            sales_data.append(float(amount))
+            labels.append(day.strftime('%a'))
+    elif time_filter == 'monthly':
+        for i in range(30):
+            day = (start_date + timedelta(days=i)).date()
+            amount = orders.filter(order_date__date=day).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            sales_data.append(float(amount))
+            labels.append(day.strftime('%d %b'))
+    elif time_filter == 'yearly':
+        for i in range(12):
+            month_start = (start_date + timedelta(days=30*i)).replace(day=1)
+            month_end = (month_start + timedelta(days=31)).replace(day=1) - timedelta(seconds=1)
+            amount = orders.filter(order_date__gte=month_start, order_date__lt=month_end).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            sales_data.append(float(amount))
+            labels.append(month_start.strftime('%b'))
+
+    # Top 10 best-selling products
+    top_products = OrderItem.objects.filter(order__status='Delivered').values(
+        'variant__product__product_name'
+    ).annotate(
+        total_sold=Sum('quantity'),
+        total_revenue=Sum(F('quantity') * F('price'))
+    ).order_by('-total_sold')[:10]
+
+    # Top 10 best-selling categories
+    top_categories = OrderItem.objects.filter(order__status='Delivered').values(
+        'variant__product__category__name'
+    ).annotate(
+        total_sold=Sum('quantity'),
+        total_revenue=Sum(F('quantity') * F('price'))
+    ).order_by('-total_sold')[:10]
+
+    # Top 10 best-selling brands
+    top_brands = OrderItem.objects.filter(order__status='Delivered').values(
+        'variant__product__brand__name'
+    ).annotate(
+        total_sold=Sum('quantity'),
+        total_revenue=Sum(F('quantity') * F('price'))
+    ).order_by('-total_sold')[:10]
+
     # Basic statistics
     total_users = CustomUser.objects.filter(is_superuser=False).count()
-    blocked_users = UserProfile.objects.filter(is_blocked=True, user__is_superuser=False).count()
-    active_users = total_users - blocked_users
-    today = datetime.now()
-    user_growth_data = []
-    labels = []
-    for i in range(5, -1, -1):  # Last 6 months, including current
-        month_start = (today - timedelta(days=30 * i)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        month_end = (month_start + timedelta(days=31)).replace(day=1) - timedelta(seconds=1)
-        month_users = CustomUser.objects.filter(
-            date_joined__gte=month_start,
-            date_joined__lte=month_end,
-            is_superuser=False
-        ).count()
-        user_growth_data.append(month_users)
-        labels.append(month_start.strftime('%b'))
+    total_orders = orders.count()
+    total_revenue = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
 
-    # Context for the template
     context = {
-        'title': 'Admin Dashboard - CoreFitness',
+        'title': 'Admin Dashboard',
         'total_users': total_users,
-        'active_users': active_users,
-        'blocked_users': blocked_users,
-        'user_growth_data': user_growth_data,  # For Chart.js
-        'user_growth_labels': labels,          # For Chart.js
+        'total_orders': total_orders,
+        'total_revenue': float(total_revenue),
+        'sales_data': sales_data,
+        'sales_labels': labels,
+        'time_filter': time_filter,
+        'top_products': top_products,
+        'top_categories': top_categories,
+        'top_brands': top_brands,
     }
-    return render(request, 'admin_dashboard.html', context)
+    return render(request, 'user_app/admin_dashboard.html', context)
 
 
 @login_required

@@ -26,7 +26,7 @@ class Category(models.Model):
         null=True,
         related_name='subcategories'
     )
-    brands = models.ManyToManyField('Brand', related_name='categories', blank=True)  
+    brands = models.ManyToManyField('Brand', related_name='categories', blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -42,6 +42,10 @@ class Category(models.Model):
             self.slug = slug
         super().save(*args, **kwargs)
 
+    def delete(self, using=None, keep_parents=False):
+        self.is_active = False
+        self.save(update_fields=['is_active'])
+
     def __str__(self):
         return self.name
 
@@ -56,7 +60,6 @@ class Brand(models.Model):
     logo = CloudinaryField('image', blank=True, null=True, folder='brands')
     website = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -72,17 +75,8 @@ class Brand(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, using=None, keep_parents=False):
-        self.is_deleted = True
         self.is_active = False
-        self.save(update_fields=['is_deleted', 'is_active'])
-
-    def hard_delete(self):
-        self.products.all().delete()
-        super().delete()
-
-    def restore(self):
-        self.is_deleted = False
-        self.save(update_fields=['is_deleted'])
+        self.save(update_fields=['is_active'])
 
     @property
     def product_count(self):
@@ -127,10 +121,7 @@ class Product(models.Model):
     def primary_variant(self):
         return self.variants.filter(is_active=True).first()
     
-    @property
-    def primary_image(self):
-        return self.variant_images.filter(is_primary=True).first()
-        
+    # Removed duplicate property
     @property
     def primary_image(self):
         primary_variant = self.primary_variant
@@ -146,8 +137,9 @@ class Product(models.Model):
                 best_price = min(best_price, price_after_offer)
         return best_price
     
+    # Fixed property to make it a calculated field, not overriding the DB field
     @property
-    def average_rating(self):
+    def calculated_average_rating(self):
         return self.reviews.aggregate(avg=Avg('rating'))['avg'] or 0
 
     def update_average_rating(self):
@@ -193,6 +185,30 @@ class Product(models.Model):
 
     def approved_reviews(self):
         return self.reviews.filter(is_approved=True)
+    
+    # Add this method that might be missing (referenced in the error)
+    @property
+    def best_price(self):
+        # Return a dictionary with price info instead of a tuple
+        primary_variant = self.primary_variant
+        if not primary_variant:
+            return {'price': 0, 'original_price': 0, 'discount': 0}
+            
+        original_price = primary_variant.original_price
+        discount_percentage = primary_variant.discount_percentage
+        discounted_price = original_price * (1 - discount_percentage / 100)
+        
+        # Apply any product offers
+        best_offer_price = self.get_best_offer_price(discounted_price)
+        
+        # Calculate total discount percentage
+        total_discount = ((original_price - best_offer_price) / original_price) * 100 if original_price > 0 else 0
+        
+        return {
+            'price': best_offer_price,
+            'original_price': original_price,
+            'discount': round(total_discount, 2)
+        }
 
     def __str__(self):
         return self.product_name
@@ -212,6 +228,7 @@ class ProductVariant(models.Model):
     size_weight = models.CharField(max_length=50, blank=True, null=True)
     original_price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percentage = models.DecimalField(
+    
         max_digits=5,
         decimal_places=2,
         default=0.00,
@@ -245,9 +262,13 @@ class ProductVariant(models.Model):
     @property
     def best_price(self):
         from offer_and_coupon_app.models import CategoryOffer
+        from decimal import Decimal, InvalidOperation
         
-        # Base price after variant discount
-        discounted_price = Decimal(str(self.discounted_price()))
+        try:
+            # Base price after variant discount
+            discounted_price = Decimal(str(self.discounted_price()))
+        except (TypeError, ValueError, InvalidOperation):
+            discounted_price = self.original_price or Decimal('0.00')
         
         # Initialize best price options
         product_offer_price = discounted_price
@@ -260,6 +281,10 @@ class ProductVariant(models.Model):
         for offer in product_offers:
             if offer.is_valid():
                 price_after_offer = offer.apply_to_product(self.product, discounted_price)
+                if isinstance(price_after_offer, tuple):
+                    price_after_offer = Decimal(str(price_after_offer[0]))
+                elif not isinstance(price_after_offer, Decimal):
+                    price_after_offer = Decimal(str(price_after_offer))
                 applied_product_offers.append({
                     'name': offer.name,
                     'original_price': discounted_price,
@@ -268,7 +293,7 @@ class ProductVariant(models.Model):
                 })
                 product_offer_price = min(product_offer_price, price_after_offer)
         
-        # Category Offers (including parent categories)
+        # Category Offers
         category = self.product.category
         all_relevant_categories = {category}
         while category.parent:
@@ -283,6 +308,10 @@ class ProductVariant(models.Model):
         for offer in category_offers:
             if offer.is_valid() and self.product.category in offer.get_all_categories():
                 price_after_offer = offer.apply_to_product(self.product, discounted_price)
+                if isinstance(price_after_offer, tuple):
+                    price_after_offer = Decimal(str(price_after_offer[0]))
+                elif not isinstance(price_after_offer, Decimal):
+                    price_after_offer = Decimal(str(price_after_offer))
                 applied_category_offers.append({
                     'name': offer.name,
                     'original_price': discounted_price,
@@ -291,15 +320,19 @@ class ProductVariant(models.Model):
                 })
                 category_offer_price = min(category_offer_price, price_after_offer)
         
-        # Choose the best offer (lowest price) between product and category offers
-        final_price = min(product_offer_price, category_offer_price)
-        applied_offer_type = 'product' if product_offer_price < category_offer_price else 'category'
+        # Choose the best offer (lowest price)
+        final_price = min(product_offer_price, category_offer_price, discounted_price)
+        applied_offer_type = (
+            'product' if product_offer_price < min(category_offer_price, discounted_price)
+            else 'category' if category_offer_price < discounted_price
+            else 'variant'
+        )
         
         return {
             'price': final_price,
             'product_offers': applied_product_offers if applied_offer_type == 'product' else [],
             'category_offers': applied_category_offers if applied_offer_type == 'category' else [],
-            'original_price': self.original_price,
+            'original_price': self.original_price or Decimal('0.00'),
             'discounted_price': discounted_price,
             'applied_offer_type': applied_offer_type
         }

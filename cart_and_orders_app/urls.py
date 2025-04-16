@@ -25,7 +25,7 @@ urlpatterns = [
     # User side - Wishlist
     path('wishlist/', views.user_wishlist, name='user_wishlist'),
     path('add-to-wishlist/<int:variant_id>/', views.user_add_to_wishlist, name='user_add_to_wishlist'),
-    path('remove-from-wishlist/<int:wishlist_id>/', views.user_remove_from_wishlist, name='user_remove_from_wishlist'),
+    path('wishlist/remove-by-variant/<int:variant_id>/', views.user_remove_from_wishlist_by_variant, name='remove_from_wishlist_by_variant'),
     path('wishlist/check/', views.check_wishlist, name='check_wishlist'),
     path('wishlist/remove/<int:variant_id>/', views.user_remove_from_wishlist_by_variant, name='user_remove_from_wishlist_by_variant'),
 
@@ -34,6 +34,7 @@ urlpatterns = [
     path('place-order/', views.place_order, name='place_order'),
     path('cart/razorpay-callback/', views.razorpay_callback, name='razorpay_callback'),  
     path('order/success/<str:order_id>/', views.user_order_success, name='order_success'),  
+    path('cart/clear/', views.clear_cart, name='clear_cart'),
     path('initiate-payment/', views.initiate_payment, name='initiate_payment'),
 
     # Order Management URLs

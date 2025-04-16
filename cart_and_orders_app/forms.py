@@ -21,11 +21,10 @@ class OrderStatusForm(forms.ModelForm):
 class OrderCreateForm(forms.ModelForm):
     class Meta:
         model = Order
-        fields = ['shipping_address', 'payment_method', 'coupon']
+        fields = ['shipping_address', 'payment_method']
         widgets = {
             'shipping_address': forms.Select(attrs={'class': 'form-select'}),
             'payment_method': forms.Select(attrs={'class': 'form-select'}),
-            'coupon': forms.Select(attrs={'class': 'form-select'}),
         }
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -35,11 +34,7 @@ class OrderCreateForm(forms.ModelForm):
             default_address = Address.objects.filter(user=user, is_default=True).first()
             if default_address:
                 self.fields['shipping_address'].initial = default_address
-        self.fields['coupon'].queryset = Coupon.objects.filter(is_active=True).exclude(
-            usage_limit__gt=0, usage_count__gte=models.F('usage_limit')
-        ).filter(valid_from__lte=timezone.now(), valid_to__gte=timezone.now())
-        self.fields['coupon'].required = False
-        self.fields['coupon'].empty_label = "No coupon"
+
     def clean(self):
         cleaned_data = super().clean()
         shipping_address = cleaned_data.get('shipping_address')

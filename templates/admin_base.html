@@ -507,9 +507,8 @@
         <div class="sidebar-section">Marketing</div>
         <ul class="nav flex-column">
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'user_app:admin_banner_list' %}">
-                    <div class="sb-nav-link-icon"><i class="fas fa-images"></i></div>
-                    Banner Management
+                <a class="nav-link {% if 'admin/banners' in request.path %}active{% endif %}" href="{% url 'user_app:admin_banner_list' %}">
+                    <i class="fas fa-image"></i> <span>Banner</span>
                 </a>
             </li>
             <li class="nav-item">

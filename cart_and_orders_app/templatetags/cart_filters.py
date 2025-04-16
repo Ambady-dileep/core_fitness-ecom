@@ -1,6 +1,7 @@
 from django import template
 from decimal import Decimal
 import logging
+from offer_and_coupon_app.utils import get_best_offer_for_product
 
 register = template.Library()
 
@@ -60,3 +61,7 @@ def subtract(value, arg):
     except (ValueError, TypeError) as e:
         logger.error(f"Subtract filter error: value={value}, arg={arg}, error={e}")
         return 0
+    
+@register.simple_tag
+def get_best_offer_for_product_tag(product, price):
+    return get_best_offer_for_product(product, price)

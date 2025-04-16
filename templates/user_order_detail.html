@@ -48,7 +48,14 @@
                             {% for item in order.items.all %}
                             <tr>
                                 <td>{{ item.variant.product.product_name }} ({{ item.variant.flavor|default:"N/A" }} {{ item.variant.size_weight|default:"" }})</td>
-                                <td>₹{{ item.price|floatformat:2 }}</td>
+                                <td>
+                                    ₹{{ item.price|floatformat:2 }}
+                                    {% if item.applied_offer %}
+                                    <div class="small text-success">
+                                        Save ₹{{ item.variant.original_price|subtract:item.price|multiply:item.quantity|floatformat:2 }}
+                                    </div>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if item.applied_offer == 'product' %}
                                         <span class="badge bg-primary">Product Offer</span>
@@ -68,6 +75,24 @@
                                 <td colspan="4">Subtotal</td>
                                 <td>₹{{ subtotal|floatformat:2 }}</td>
                             </tr>
+                            <!-- New: Offer Details -->
+                            {% if offer_details %}
+                            <tr>
+                                <td colspan="5">
+                                    <div class="mt-2">
+                                        <strong>Applied Offers:</strong>
+                                        <ul class="list-group list-group-flush">
+                                            {% for offer in offer_details %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                                                <span>{{ offer.product }} ({{ offer.offer_type|title }} Offer: {{ offer.offer_name }})</span>
+                                                <span class="text-success">Saved ₹{{ offer.discount|floatformat:2 }}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
                             {% if total_offer_discount > 0 %}
                             <tr>
                                 <td colspan="4">Offer Discount</td>
@@ -78,10 +103,10 @@
                                 <td colspan="4">Shipping</td>
                                 <td>₹{{ shipping_cost|floatformat:2 }}</td>
                             </tr>
-                            {% if order.discount_amount > 0 %}
+                            {% if order.coupon and order.discount_amount > total_offer_discount %}
                             <tr>
-                                <td colspan="4">Coupon Discount</td>
-                                <td class="text-success">-₹{{ order.discount_amount|floatformat:2 }}</td>
+                                <td colspan="4">Coupon Discount ({{ order.coupon.code }})</td>
+                                <td class="text-success">-₹{{ order.discount_amount|subtract:total_offer_discount|floatformat:2 }}</td>
                             </tr>
                             {% endif %}
                             <tr>
@@ -320,6 +345,7 @@
     }
     .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .list-group-item { font-size: 0.85rem; padding: 0.5rem 1rem; }
 </style>
 {% endblock %}
 

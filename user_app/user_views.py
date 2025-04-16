@@ -70,9 +70,8 @@ def user_login(request):
         except User.DoesNotExist:
             messages.error(request, "Invalid username or password.")
     
-    # Context for GET request to include OTP form
     context = {
-        'generate_otp_form': GenerateOTPForm(),  # Pass form for modal
+        'generate_otp_form': GenerateOTPForm(), 
     }
     return render(request, 'signup_login.html', context)
 
@@ -241,18 +240,25 @@ def user_home(request):
     rating = request.GET.get('rating')
     banners = Banner.objects.filter(is_active=True).order_by('display_order')
 
-    # Base queryset: Active products with active variants
+    # Base queryset: Active products with active variants from active categories and brands
     products = Product.objects.filter(
         is_active=True,
-        variants__isnull=False,  # Use 'variants' as per error message
+        category__is_active=True,  # Filter by active categories
+        variants__isnull=False,
         variants__is_active=True
     ).annotate(
-        lowest_price=Min('variants__original_price')  # Use 'variants' here
+        lowest_price=Min('variants__original_price')
     ).distinct()
+
+    # Add filter for active brands (only if brand is not null)
+    products = products.filter(
+        Q(brand__isnull=True) | Q(brand__is_active=True)
+    )
 
     # Apply filters
     if category_id:
-        products = products.filter(category_id=category_id)
+        # Ensure we only filter by active categories
+        products = products.filter(category_id=category_id, category__is_active=True)
     
     if min_price and max_price:
         products = products.filter(lowest_price__gte=min_price, lowest_price__lte=max_price)
@@ -262,7 +268,8 @@ def user_home(request):
         products = products.filter(lowest_price__lte=max_price)
     
     if brand:
-        products = products.filter(brand=brand)
+        # Ensure we only filter by active brands
+        products = products.filter(brand=brand, brand__is_active=True)
     
     if search_query:
         products = products.filter(
@@ -274,9 +281,9 @@ def user_home(request):
     
     if availability:
         if availability == 'in_stock':
-            products = products.filter(variants__stock__gt=0)  # Use 'variants'
+            products = products.filter(variants__stock__gt=0)
         elif availability == 'out_of_stock':
-            products = products.filter(variants__stock=0)  # Use 'variants'
+            products = products.filter(variants__stock=0)
     
     if rating:
         try:
@@ -303,20 +310,49 @@ def user_home(request):
     else:
         products = products.order_by('-created_at')
 
-    # Specific product sections
-    featured_products = products.annotate(
+    # Specific product sections - update to include category and brand active status
+    featured_products = Product.objects.filter(
+        is_active=True,
+        category__is_active=True,
+        variants__is_active=True
+    ).filter(
+        Q(brand__isnull=True) | Q(brand__is_active=True)
+    ).annotate(
         avg_rating=Avg('reviews__rating')
-    ).filter(is_active=True).order_by('-avg_rating')[:8]
-    new_arrivals = products.order_by('-created_at')[:8]
-    top_rated = products.annotate(
+    ).order_by('-avg_rating')[:8]
+    
+    new_arrivals = Product.objects.filter(
+        is_active=True,
+        category__is_active=True,
+        variants__is_active=True
+    ).filter(
+        Q(brand__isnull=True) | Q(brand__is_active=True)
+    ).order_by('-created_at')[:8]
+    
+    top_rated = Product.objects.filter(
+        is_active=True,
+        category__is_active=True,
+        variants__is_active=True
+    ).filter(
+        Q(brand__isnull=True) | Q(brand__is_active=True)
+    ).annotate(
         avg_rating=Avg('reviews__rating')
     ).filter(avg_rating__gte=4.0).order_by('-avg_rating')[:8]
-    recent_reviews = Review.objects.filter(is_approved=True).order_by('-created_at')[:3]
+    
+    recent_reviews = Review.objects.filter(
+        is_approved=True,
+        product__is_active=True,
+        product__category__is_active=True,
+    ).filter(
+        Q(product__brand__isnull=True) | Q(product__brand__is_active=True)
+    ).order_by('-created_at')[:3]
 
     categories = Category.objects.filter(is_active=True)
     brands = Product.objects.filter(
         is_active=True,
-        variants__is_active=True  # Use 'variants'
+        category__is_active=True,
+        variants__is_active=True,
+        brand__is_active=True
     ).values_list('brand', flat=True).distinct()
 
     context = {

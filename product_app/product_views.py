@@ -34,6 +34,9 @@ def is_admin(user):
 
 @login_required
 def admin_product_list(request):
+    if not is_admin(request.user):
+        return redirect('user_app:user_home')
+
     products = Product.objects.all().select_related('category', 'brand').prefetch_related(
         'variants', 'variants__variant_images', 'reviews', 'product_offers'
     )
@@ -85,50 +88,12 @@ def admin_product_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Final debug (optional, can be removed if no longer needed)
-    for product in page_obj:
-        logger.debug(f"Context Product: {product.product_name}, Total Stock: {product.calculated_total_stock}, Avg Rating: {product.avg_rating}")
-
     context = {
         'products': page_obj,
-        'filter_form': {'brand': Brand.objects.filter(is_active=True, is_deleted=False)},
+        'filter_form': {'brand': Brand.objects.filter(is_active=True)}, 
         'sort_by': sort_by,
     }
     return render(request, 'product_app/admin_product_list.html', context)
-
-@login_required
-def admin_toggle_product_status(request, product_id):
-    from django.http import JsonResponse
-    product = Product.objects.get(id=product_id)
-    product.is_active = not product.is_active
-    product.save()
-    return JsonResponse({'success': True, 'message': f'Product {"activated" if product.is_active else "deactivated"} successfully!'})
-
-@login_required
-def admin_permanent_delete_product(request, product_id):
-    from django.http import JsonResponse
-    product = Product.objects.get(id=product_id)
-    product.delete()
-    return JsonResponse({'success': True, 'message': 'Product permanently deleted!'})
-
-@login_required
-def admin_product_variants(request, product_id):
-    from django.http import JsonResponse
-    variants = ProductVariant.objects.filter(product_id=product_id).select_related('primary_image')
-    variants_data = [
-        {
-            'id': variant.id,
-            'flavor': variant.flavor,
-            'size_weight': variant.size_weight,
-            'original_price': float(variant.original_price),
-            'discount_percentage': float(variant.discount_percentage),
-            'stock': variant.stock,
-            'is_active': variant.is_active,
-            'image_url': variant.primary_image.image.url if variant.primary_image else None
-        }
-        for variant in variants
-    ]
-    return JsonResponse({'variants': variants_data})
 
 @login_required
 def admin_product_form(request, slug=None):
@@ -159,14 +124,6 @@ def admin_product_form(request, slug=None):
                     product = Product(**product_data)
                     product.save()
                 
-                # Handle variant deletions
-                delete_variant_ids = request.POST.getlist('delete_variant_ids')
-                if delete_variant_ids:
-                    remaining_count = product.variants.exclude(id__in=delete_variant_ids).count()
-                    if remaining_count == 0:
-                        raise ValidationError("Cannot delete all variants. Product must have at least one variant.")
-                    ProductVariant.objects.filter(id__in=delete_variant_ids).delete()
-                
                 # Handle image deletions
                 delete_image_ids = request.POST.getlist('delete_image_ids')
                 if delete_image_ids:
@@ -176,6 +133,7 @@ def admin_product_form(request, slug=None):
                 variant_count = int(request.POST.get('variant_count', 0))
                 for i in range(variant_count):
                     variant_id = request.POST.get(f'variant_id_{i}')
+                    is_active = request.POST.get(f'is_active_{i}') == 'on'  # Checkbox returns 'on' when checked
                     if variant_id:
                         variant = ProductVariant.objects.get(id=variant_id)
                         variant.flavor = request.POST.get(f'flavor_{i}')
@@ -183,6 +141,7 @@ def admin_product_form(request, slug=None):
                         variant.original_price = request.POST.get(f'original_price_{i}')
                         variant.discount_percentage = request.POST.get(f'discount_percentage_{i}', 0)
                         variant.stock = request.POST.get(f'stock_{i}')
+                        variant.is_active = is_active
                         variant.save()
                     else:
                         variant_data = {
@@ -192,6 +151,7 @@ def admin_product_form(request, slug=None):
                             'original_price': request.POST.get(f'original_price_{i}'),
                             'discount_percentage': request.POST.get(f'discount_percentage_{i}', 0),
                             'stock': request.POST.get(f'stock_{i}'),
+                            'is_active': is_active
                         }
                         variant = ProductVariant(**variant_data)
                         variant.save()
@@ -243,7 +203,7 @@ def admin_product_form(request, slug=None):
     context = {
         'product': product,
         'categories': Category.objects.filter(is_active=True),
-        'brands': Brand.objects.filter(is_active=True, is_deleted=False),
+        'brands': Brand.objects.filter(is_active=True),
         'flavor_choices': ProductVariant.FLAVOR_CHOICES,
     }
     return render(request, 'product_app/admin_add_product.html', context)
@@ -291,7 +251,7 @@ def admin_product_detail(request, slug):
     context = {
         'product': product,
         'variants': variants,
-        'reviews': reviews[:10], 
+        'reviews': reviews[:10],
         'wishlist_count': wishlist_count,
         'stats': stats,
         'sales_stats': sales_stats,
@@ -302,185 +262,135 @@ def admin_product_detail(request, slug):
 
 @login_required
 @require_POST
-def admin_deactivate_variant(request, variant_id):
-    variant = get_object_or_404(ProductVariant, id=variant_id)
-    product = variant.product
+def admin_toggle_product_status(request, product_id):
+    if not request.user.is_admin:  # Assuming is_admin is a custom check
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
 
-    if product.variants.filter(is_active=True).count() <= 1 and variant.is_active:
-        return JsonResponse({'success': False, 'message': 'Cannot deactivate the last active variant'}, status=400)
-
-    variant.is_active = False
-    variant.save()
-
-    if not product.variants.filter(is_active=True).exists():
-        product.is_active = False
-        product.save()
-
-    return JsonResponse({'success': True, 'message': f'Variant {variant.flavor or "Standard"} deactivated'})
-
-@login_required
-@require_POST
-def admin_activate_variant(request, variant_id):
-    variant = get_object_or_404(ProductVariant, id=variant_id)
-    variant.is_active = True
-    variant.save()
-
-    product = variant.product
-    if not product.is_active:
-        product.is_active = True
-        product.save()
-
-    return JsonResponse({'success': True, 'message': f'Variant {variant.flavor or "Standard"} activated'})
-
-@login_required
-@require_POST
-def admin_delete_variant(request, variant_id):
-    variant = get_object_or_404(ProductVariant, id=variant_id)
-    product = variant.product
-    if product.variants.count() <= 1:
-        messages.error(request, "Cannot delete the last variant. Product must have at least one variant.")
-        return redirect('product_app:admin_product_detail', slug=product.slug)
-
-    variant_name = f"{variant.flavor or 'N/A'} {variant.size_weight or ''}".strip()
-    variant.delete()
-    if product.is_active and not product.variants.filter(is_active=True).exists():
-        product.is_active = False
-        product.save()
-        messages.warning(request, f"Product '{product.product_name}' set to inactive because no active variants remain.")
-
-    messages.success(request, f"Variant '{variant_name}' for product '{product.product_name}' deleted.")
-    return redirect('product_app:admin_product_detail', slug=product.slug)
-
-@login_required
-@require_POST
-def admin_delete_product(request, slug):
-    product = get_object_or_404(Product, slug=slug)
-    product.is_active = False
-    product.save()
-    messages.success(request, f"Product '{product.product_name}' deactivated.")
-    return redirect('product_app:admin_product_list')
-
-@login_required
-@require_POST
-def admin_permanent_delete_product(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    if OrderItem.objects.filter(variant__product=product).exists():
-        return JsonResponse({
-            'success': False,
-            'message': f"Cannot permanently delete '{product.product_name}' due to associated orders."
-        }, status=400)
-
-    product_name = product.product_name
     try:
         with transaction.atomic():
-            for image in product.all_variant_images:  
-                image.delete()
-            product.delete()
+            product = get_object_or_404(Product, id=product_id)
+            is_active = request.POST.get('is_active') == 'true'
+
+            if is_active:
+                # Unblock: Ensure at least one variant exists
+                if not product.variants.exists():
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Cannot unblock product without variants.'
+                    }, status=400)
+                # Activate product and ensure at least one variant is active
+                product.is_active = True
+                if not product.variants.filter(is_active=True).exists():
+                    first_variant = product.variants.first()
+                    first_variant.is_active = True
+                    first_variant.save()
+            else:
+                # Block: Set product and all variants to inactive
+                product.is_active = False
+                product.variants.update(is_active=False)
+
+            product.save()
             return JsonResponse({
                 'success': True,
-                'message': f"Product '{product_name}' permanently deleted."
+                'message': f'Product {product.product_name} has been {"unblocked" if is_active else "blocked"}.'
             })
-    except Exception as e:
-        logger.error(f"Error permanently deleting product: {str(e)}")
-        return JsonResponse({
-            'success': False,
-            'message': f"Error deleting product: {str(e)}"
-        }, status=500)
-
-@login_required
-@require_POST
-def admin_restore_product(request, slug):
-    product = get_object_or_404(Product, slug=slug)
-    if not product.variants.filter(is_active=True).exists():
-        return JsonResponse({
-            'success': False,
-            'message': f"Cannot restore '{product.product_name}' because it has no active variants."
-        }, status=400)
-    product.is_active = True
-    product.save()
-    return JsonResponse({
-        'success': True,
-        'message': f"Product '{product.product_name}' restored."
-    })
-
-@login_required
-def admin_toggle_product_status(request, product_id):
-    try:
-        product = Product.objects.get(id=product_id)
-        product.is_active = not product.is_active
-        product.save()
-        
-        status = "activated" if product.is_active else "deactivated"
-        return JsonResponse({
-            'success': True,
-            'message': f"Product {status} successfully!",
-            'is_active': product.is_active
-        })
-    except Product.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': "Product not found"
-        }, status=404)
     except Exception as e:
         return JsonResponse({
             'success': False,
             'message': str(e)
         }, status=500)
-
+    
+    
 @login_required
-@require_GET
 def get_product_variants(request, product_id):
     try:
+        if not is_admin(request.user):
+            return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
+
         product = get_object_or_404(Product, id=product_id)
-        variants = product.variants.all().prefetch_related('variant_images')
+        variants = ProductVariant.objects.filter(product_id=product_id).select_related('product')
         
-        variant_data = []
+        variants_data = []
         for variant in variants:
-            # Get the first image for each variant
-            primary_image = variant.variant_images.filter(is_primary=True).first()
-            image_url = None
-            if primary_image:
-                image_url = primary_image.image.url
-            
-            # Calculate sales price
-            original_price = float(variant.original_price)
-            discount_percentage = float(variant.discount_percentage)
-            
-            variant_data.append({
+            try:
+                image_url = variant.primary_image.image.url if variant.primary_image else None
+            except Exception as e:
+                image_url = None
+
+            # Calculate discounted price
+            discounted_price = variant.original_price * (1 - variant.discount_percentage / 100) if variant.discount_percentage else variant.original_price
+
+            variant_data = {
                 'id': variant.id,
-                'flavor': variant.flavor,
-                'size_weight': variant.size_weight,
-                'original_price': int(float(variant.original_price)),
-                'discount_percentage': int(float(variant.discount_percentage)),
+                'flavor': variant.flavor or 'Standard',
+                'size_weight': variant.size_weight or 'N/A',
+                'original_price': float(variant.original_price),
+                'discount_percentage': float(variant.discount_percentage),
+                'discounted_price': float(discounted_price),
                 'stock': variant.stock,
                 'is_active': variant.is_active,
                 'image_url': image_url
-            })
-        
-        return JsonResponse({
+            }
+            variants_data.append(variant_data)
+
+        response_data = {
             'success': True,
-            'variants': variant_data,
-            'product_name': product.product_name
-        })
+            'variants': variants_data,
+            'product_name': product.product_name,
+            'product_is_active': product.is_active
+        }
+        return JsonResponse(response_data)
     except Exception as e:
-        logger.error(f"Error fetching variants: {str(e)}")
-        return JsonResponse({
-            'success': False,
-            'message': str(e)
-        }, status=400)
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
     
+
 @login_required
+@require_POST
 def admin_toggle_variant_status(request, variant_id):
     try:
+        if not is_admin(request.user):
+            return JsonResponse({
+                'success': False,
+                'message': "Unauthorized access"
+            }, status=403)
+
         variant = ProductVariant.objects.get(id=variant_id)
-        variant.is_active = not variant.is_active
+        product = variant.product
+
+        if not product.is_active and variant.is_active:
+            return JsonResponse({
+                'success': False,
+                'message': "Cannot activate variant for an inactive product"
+            }, status=400)
+
+        new_status = not variant.is_active
+
+        # Prevent deactivating the last active variant
+        if not new_status and product.variants.filter(is_active=True).count() <= 1 and variant.is_active:
+            return JsonResponse({
+                'success': False,
+                'message': "Cannot deactivate the last active variant. Product must have at least one active variant."
+            }, status=400)
+
+        variant.is_active = new_status
         variant.save()
-        
+
+        # If activating a variant and product is inactive, activate the product
+        if new_status and not product.is_active:
+            product.is_active = True
+            product.save()
+
+        # If no variants are active, deactivate the product
+        if not product.variants.filter(is_active=True).exists():
+            product.is_active = False
+            product.save()
+
         status = "activated" if variant.is_active else "deactivated"
         return JsonResponse({
             'success': True,
             'message': f"Variant {status} successfully!",
-            'is_active': variant.is_active
+            'is_active': variant.is_active,
+            'product_is_active': product.is_active
         })
     except ProductVariant.DoesNotExist:
         return JsonResponse({
@@ -492,7 +402,6 @@ def admin_toggle_variant_status(request, variant_id):
             'success': False,
             'message': str(e)
         }, status=500)
-    
 
 @csrf_exempt
 @login_required
@@ -558,7 +467,36 @@ def add_review(request):
         logger.error(f"Error adding review: {str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
     
+@login_required
+@require_POST
+def approve_review(request, review_id):
+    if not is_admin(request.user):
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
+    try:
+        review = Review.objects.get(id=review_id)
+        review.is_approved = True
+        review.save()
+        review.product.update_average_rating()
+        return JsonResponse({'success': True, 'message': 'Review approved'})
+    except Review.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Review not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
+@login_required
+@require_POST
+def delete_review(request, review_id):
+    if not is_admin(request.user):
+        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
+    try:
+        review = Review.objects.get(id=review_id)
+        review.delete()
+        review.product.update_average_rating()
+        return JsonResponse({'success': True, 'message': 'Review deleted'})
+    except Review.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Review not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @require_GET
 def autocomplete(request):
@@ -584,10 +522,11 @@ def autocomplete(request):
 ###################################################### User Views ###########################################################
 
 def user_product_list(request):
-    """User view to list products with filtering, sorting, and pagination"""
     products = Product.objects.filter(
         is_active=True,
-        variants__is_active=True
+        variants__is_active=True,
+        category__is_active=True,  
+        brand__is_active=True 
     ).select_related('category', 'brand').prefetch_related(
         'variants', 'variants__variant_images', 'reviews'
     ).distinct()  
@@ -659,10 +598,11 @@ def user_product_list(request):
                 'variant': primary_variant,
                 'primary_image': primary_image,
                 'discounted_price': int(primary_variant.discounted_price()),
-                'best_price': int(primary_variant.best_price['price']),  # Use 'price' key from dictionary
+                'best_price': int(primary_variant.best_price['price']),
                 'has_offer': primary_variant.has_offer,
                 'best_offer_percentage': primary_variant.best_offer_percentage,
-                'avg_rating': product.average_rating
+                'avg_rating': product.average_rating,
+                'review_count': product.reviews.filter(is_approved=True).count()
             })
 
     # Pagination
@@ -676,13 +616,13 @@ def user_product_list(request):
     # Create filter form
     filter_form = ProductFilterForm(request.GET)
     filter_form.fields['category'].queryset = Category.objects.filter(is_active=True)
-    filter_form.fields['brand'].queryset = Brand.objects.filter(is_active=True)
-    
+    filter_form.fields['brand'].queryset = Brand.objects.filter(is_active=True) 
+
     context = {
         'products': page_obj,
         'filter_form': filter_form,
         'categories': Category.objects.filter(is_active=True),
-        'brands': Brand.objects.filter(is_active=True, is_deleted=False),
+        'brands': Brand.objects.filter(is_active=True), 
         'sort_by': sort_by,
         'search_query': search_query,
         'max_price': max_price_range,
@@ -698,7 +638,9 @@ def user_product_detail(request, slug):
         Product.objects.select_related('category', 'brand')
         .prefetch_related('variants', 'variants__variant_images', 'reviews'),
         slug=slug,
-        is_active=True
+        is_active=True,
+        category__is_active=True,  
+        brand__is_active=True
     )
     
     variants = product.variants.filter(is_active=True).prefetch_related('variant_images')
@@ -719,7 +661,8 @@ def user_product_detail(request, slug):
     total_stock = product.total_stock() 
     related_products = Product.objects.filter(
         category=product.category,
-        is_active=True
+        is_active=True,
+        brand__is_active=True
     ).exclude(id=product.id).select_related('category', 'brand').prefetch_related('variants')[:4]
     
     wishlist_variant_ids = set(Wishlist.objects.filter(user=request.user).values_list('variant_id', flat=True)) if request.user.is_authenticated else set()
@@ -757,3 +700,17 @@ def user_product_detail(request, slug):
         'related_products': related_products,  
     }
     return render(request, 'product_app/user_product_detail.html', context)
+
+@require_GET
+def get_variant_images(request, variant_id):
+    try:
+        variant = get_object_or_404(ProductVariant, id=variant_id, is_active=True)
+        images = variant.variant_images.all()
+        image_data = [{'url': img.image.url, 'alt': img.alt_text} for img in images]
+        return JsonResponse({
+            'success': True,
+            'images': image_data,
+            'variant_name': f"{variant.product.product_name} - {variant.flavor or 'Standard'}"
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)

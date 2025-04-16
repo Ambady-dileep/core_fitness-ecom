@@ -73,12 +73,13 @@ class ProductOffer(Offer):
     )
     
     def apply_to_product(self, product, price):
-        if price < self.min_purchase_amount:
-            return price 
+        if not self.is_valid() or product not in self.products.all() or price < self.min_purchase_amount:
+            return price, Decimal('0.00')
         discount = price * (self.discount_value / 100)
         if self.max_discount_amount:
             discount = min(discount, self.max_discount_amount)
-        return max(price - discount, Decimal('0.00'))
+        discounted_price = max(price - discount, Decimal('0.00'))
+        return discounted_price, discount
     
     class Meta:
         verbose_name = "Product Offer"
@@ -98,41 +99,54 @@ class CategoryOffer(Offer):
     def get_all_categories(self):
         if not self.apply_to_subcategories:
             return self.categories.all()
-            
         all_categories = set(self.categories.all())
         for category in self.categories.all():
-            all_categories.update(category.subcategories.all())
+            all_categories.update(category.get_descendants(include_self=False))
         return all_categories
     
     def apply_to_product(self, product, price):
+        if not self.is_valid() or price < self.min_purchase_amount:
+            return price, Decimal('0.00')
+        product_categories = set(product.categories.all())
+        offer_categories = set(self.get_all_categories())
+        if not (product_categories & offer_categories):  
+            return price, Decimal('0.00')
         discount = price * (self.discount_value / 100)
         if self.max_discount_amount:
             discount = min(discount, self.max_discount_amount)
-        return max(price - discount, Decimal('0.00'))
+        discounted_price = max(price - discount, Decimal('0.00'))
+        return discounted_price, discount
     
     class Meta:
         verbose_name = "Category Offer"
         verbose_name_plural = "Category Offers"
 
 class Coupon(models.Model):
-    code = models.CharField(max_length=20, unique=True)
-    is_active = models.BooleanField(default=True)
+    code = models.CharField(max_length=50, unique=True)
+    discount_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        validators=[MinValueValidator(0.01), MaxValueValidator(100.00)],
+        help_text="Discount percentage (0.01-100)"
+    )
+    minimum_order_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00, 
+        validators=[MinValueValidator(0.00)]
+    )
     valid_from = models.DateTimeField(default=timezone.now)
-    valid_to = models.DateTimeField()
+    valid_to = models.DateTimeField(default=timezone.now() + timezone.timedelta(days=30))
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
-    minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
-    applicable_products = models.ManyToManyField(ProductVariant, blank=True)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
-        if self.valid_from and self.valid_to:
-            if self.valid_from >= self.valid_to:
-                raise ValidationError("Valid from date must be earlier than valid to date")
-        if self.minimum_order_amount < 0:
-            raise ValidationError("Minimum order amount cannot be negative")
+        if self.valid_to <= self.valid_from:
+            raise ValidationError("Valid to date must be after valid from date")
+        if self.discount_percentage <= 0:
+            raise ValidationError("Discount percentage must be greater than 0")
 
     def is_valid(self):
         now = timezone.now()
@@ -141,22 +155,6 @@ class Coupon(models.Model):
             self.valid_from <= now <= self.valid_to and
             (self.usage_limit == 0 or self.usage_count < self.usage_limit)
         )
-
-    def get_discount_amount(self, total_price, cart_items):
-        if total_price < self.minimum_order_amount or not self.is_valid():
-            return Decimal('0.00')
-        if self.applicable_products.exists():
-            applicable_total = sum(
-                Decimal(str(item.quantity)) * Decimal(str(item.price if item.price else item.variant.best_price['price']))
-                for item in cart_items if item.variant in self.applicable_products.all()
-            )
-            return min(self.discount_amount, applicable_total)
-        return min(self.discount_amount, total_price)
-
-    def save(self, *args, **kwargs):
-        self.code = self.code.upper()
-        self.full_clean()
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.code
