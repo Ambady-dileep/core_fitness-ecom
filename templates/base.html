@@ -396,8 +396,8 @@
         }
     </style>
     
-    {% block extra_css %}
-    {% endblock %}
+{% block extra_css %}
+{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
@@ -531,6 +531,18 @@
                 localStorage.setItem('wishlistCount', serverWishlistCount);
             }
             
+            // Initialize cart count from localStorage or from server
+            const storedCartCount = localStorage.getItem('cartCount');
+            const serverCartCount = {{ request.user.cart.items.count|default:0 }};
+            
+            // Use localStorage value if exists, otherwise use server count and update localStorage
+            if (storedCartCount !== null) {
+                updateCartCount(parseInt(storedCartCount));
+            } else {
+                updateCartCount(serverCartCount);
+                localStorage.setItem('cartCount', serverCartCount);
+            }
+            
             console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
             
             // Auto-dismiss alerts after 5 seconds
@@ -556,9 +568,10 @@
             function updateCartCount(count) {
                 const cartCountBadge = document.getElementById('cart-count');
                 if (cartCountBadge) {
-                  cartCountBadge.textContent = count;
-                  cartCountBadge.style.display = count > 0 ? 'flex' : 'none';
+                    cartCountBadge.textContent = count;
+                    cartCountBadge.style.display = count > 0 ? 'flex' : 'none';
                 }
+                localStorage.setItem('cartCount', count);
             }
         
             // Listen for wishlist-updated events
@@ -594,6 +607,3 @@
 {% endblock %}
 </body>
 </html>
-
-
-

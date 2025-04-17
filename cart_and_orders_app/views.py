@@ -1,4 +1,3 @@
-import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -6,7 +5,7 @@ from django.core.paginator import Paginator
 from offer_and_coupon_app.user_views import available_coupons
 from decimal import Decimal
 from django.contrib.admin.views.decorators import staff_member_required
-from offer_and_coupon_app.utils import apply_offers_to_cart, get_best_coupon
+from offer_and_coupon_app.utils import apply_offers_to_cart
 from django.db.models import Sum, Count, F, Q
 from .models import Order, SalesReport
 from .forms import SalesReportForm, OrderCreateForm
@@ -15,7 +14,7 @@ import csv
 from django.http import HttpResponse
 from django.utils import timezone
 from user_app.models import Address
-from .forms import OrderStatusForm,ReturnRequestForm
+from .forms import OrderStatusForm, ReturnRequestForm
 import razorpay
 from .models import Cart, CartItem, Wishlist, Order, OrderItem, ReturnRequest
 from product_app.models import ProductVariant
@@ -25,12 +24,13 @@ from offer_and_coupon_app.models import Coupon, UserCoupon, Wallet, WalletTransa
 from xhtml2pdf import pisa
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.template.loader import get_template
 from io import BytesIO
 import json
+import logging
 
 def is_admin(user):
     return user.is_staff or user.is_superuser
@@ -132,7 +132,6 @@ def admin_mark_shipped(request, order_id):
     messages.success(request, f"Order {order.order_id} marked as shipped.")
     return redirect('cart_and_orders_app:admin_orders_list')
 
-
 @login_required
 @user_passes_test(is_admin)
 def admin_cancel_order(request, order_id):
@@ -145,7 +144,6 @@ def admin_cancel_order(request, order_id):
         return redirect('cart_and_orders_app:admin_orders_list')
     context = {'order': order}
     return render(request, 'admin_cancel_order.html', context)
-
 
 @login_required
 @user_passes_test(is_admin)
@@ -218,19 +216,13 @@ def user_cart_list(request):
         cart_items = cart.items.select_related('variant__product').all()
         cart_total_items = sum(item.quantity for item in cart_items)
         
-        # Check for out-of-stock items
         has_out_of_stock = any(item.variant.stock <= 0 for item in cart_items)
         
-        # Calculate totals using apply_offers_to_cart
         total_price, discount_info = apply_offers_to_cart(cart_items, None, request.user)
         
-        # Extract values from discount_info
         cart_subtotal = Decimal(str(discount_info['subtotal']))
         offer_discount = Decimal(str(discount_info['offer_discount']))
         shipping_cost = Decimal(str(discount_info['shipping_cost']))
-        
-        # Log cart details
-        logger.info(f"Cart viewed by user {request.user.username}. Subtotal: {cart_subtotal}, Offer Discount: {offer_discount}, Shipping: {shipping_cost}, Total: {total_price}")
         
         context = {
             'cart_items': cart_items,
@@ -244,7 +236,6 @@ def user_cart_list(request):
         return render(request, 'cart_and_orders_app/user_cart_list.html', context)
     
     except Cart.DoesNotExist:
-        logger.warning(f"No cart found for user {request.user.username}")
         messages.info(request, "Your cart is empty.")
         return render(request, 'cart_and_orders_app/user_cart_list.html', {
             'cart_items': [],
@@ -255,8 +246,7 @@ def user_cart_list(request):
             'cart_total': 0.0,
             'has_out_of_stock': False,
         })
-    except Exception as e:
-        logger.error(f"Error displaying cart for user {request.user.username}: {str(e)}")
+    except Exception:
         messages.error(request, "An error occurred while loading your cart.")
         return render(request, 'cart_and_orders_app/user_cart_list.html', {
             'cart_items': [],
@@ -272,65 +262,47 @@ def user_cart_list(request):
 @require_POST
 def user_add_to_cart(request, variant_id=None):
     try:
-        # Log the full request data for debugging
         request_data = json.loads(request.body) if request.body else {}
-        logger.info(f"Received add-to-cart request for user {request.user.username}: {request_data}")
-
-        # Parse variant_id from URL or request body
+        
         if variant_id is None:
             variant_id = request_data.get('variant_id')
         if not variant_id:
-            logger.warning(f"User {request.user.username} provided no variant_id")
             return JsonResponse({'success': False, 'message': 'Variant ID is required.'}, status=400)
 
-        # Fetch variant
         variant = get_object_or_404(ProductVariant, id=variant_id)
         if not variant.is_active or not variant.product.is_active or not variant.product.category.is_active:
-            logger.warning(f"User {request.user.username} attempted to add inactive variant {variant_id}")
             return JsonResponse({'success': False, 'message': 'This product is not available.'}, status=400)
 
-        # Get quantity from request body
         quantity = request_data.get('quantity', 1)
         try:
             quantity = int(quantity)
         except (ValueError, TypeError):
-            logger.warning(f"User {request.user.username} provided invalid quantity {quantity} for variant {variant_id}")
             return JsonResponse({'success': False, 'message': 'Invalid quantity provided.'}, status=400)
 
         if quantity <= 0:
-            logger.warning(f"User {request.user.username} requested invalid quantity {quantity} for variant {variant_id}")
             return JsonResponse({'success': False, 'message': 'Quantity must be at least 1.'}, status=400)
 
-        # Validate stock
         if variant.stock < quantity:
-            logger.warning(f"User {request.user.username} requested {quantity} of variant {variant_id}, stock {variant.stock}")
             return JsonResponse({'success': False, 'message': f'Only {variant.stock} items left in stock.'}, status=400)
 
-        # Validate max quantity
         MAX_QUANTITY = 10
         if quantity > MAX_QUANTITY:
-            logger.warning(f"User {request.user.username} exceeded max quantity {MAX_QUANTITY} for variant {variant_id}")
             return JsonResponse({'success': False, 'message': f'Maximum limit of {MAX_QUANTITY} reached.'}, status=400)
 
-        # Get or create cart
         cart, created = Cart.objects.get_or_create(user=request.user)
 
-        # Get or create cart item, then set quantity explicitly
         cart_item, item_created = CartItem.objects.get_or_create(cart=cart, variant=variant)
-        cart_item.quantity = quantity  # Override with requested quantity
+        cart_item.quantity = quantity
         best_price_info = variant.best_price
         cart_item.price = best_price_info['price']
         cart_item.applied_offer = best_price_info['applied_offer_type']
         cart_item.save()
 
-        # Remove from wishlist if exists
         Wishlist.objects.filter(user=request.user, variant=variant).delete()
 
-        # Calculate cart totals
         cart_total_items = cart.items.count()
         cart_subtotal = cart.get_subtotal()
 
-        # Update session with offer details
         offer_details = request.session.get('applied_offers', [])
         existing_offer = next((o for o in offer_details if o['variant_id'] == variant.id), None)
         discount = (best_price_info['original_price'] - best_price_info['price']) * Decimal(str(cart_item.quantity))
@@ -349,7 +321,6 @@ def user_add_to_cart(request, variant_id=None):
         request.session['applied_offers'] = offer_details
         request.session.modified = True
 
-        # Get variant image
         variant_image = None
         primary_image = cart_item.variant.primary_image
         if primary_image and primary_image.image:
@@ -358,9 +329,6 @@ def user_add_to_cart(request, variant_id=None):
             variant_image = variant.product.primary_image.image.url
         else:
             variant_image = "https://via.placeholder.com/50?text=No+Image"
-
-        logger.info(f"User {request.user.username} added {cart_item.quantity} x {variant.product.product_name} to cart. "
-                    f"Price: {best_price_info['price']}, Offer: {best_price_info['applied_offer_type'] or 'none'}")
 
         return JsonResponse({
             'success': True,
@@ -374,48 +342,11 @@ def user_add_to_cart(request, variant_id=None):
             'quantity': cart_item.quantity
         })
     except ProductVariant.DoesNotExist:
-        logger.error(f"User {request.user.username} attempted to add non-existent variant {variant_id}")
         return JsonResponse({'success': False, 'message': 'Variant not found.'}, status=404)
     except json.JSONDecodeError:
-        logger.error(f"Invalid JSON in user_add_to_cart for user {request.user.username}: {request.body}")
         return JsonResponse({'success': False, 'message': 'Invalid JSON data.'}, status=400)
     except Exception as e:
-        logger.error(f"Exception in user_add_to_cart for user {request.user.username}: {str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
-
-@login_required
-@require_POST
-def user_remove_from_wishlist_by_variant(request, variant_id=None):
-    try:
-        if variant_id is None:
-            data = json.loads(request.body) if request.body else {}
-            variant_id = data.get('variant_id')
-        if not variant_id:
-            return JsonResponse({'success': False, 'message': 'Variant ID is required.'}, status=400)
-
-        wishlist_item = Wishlist.objects.filter(user=request.user, variant_id=variant_id).first()
-        if not wishlist_item:
-            return JsonResponse({
-                'success': False,
-                'message': 'Item not found in your wishlist.',
-                'wishlist_count': Wishlist.objects.filter(user=request.user).count()
-            }, status=404)
-
-        product_name = wishlist_item.variant.product.product_name
-        wishlist_item.delete()
-
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({
-                'success': True,
-                'message': f"{product_name} removed from wishlist.",
-                'wishlist_count': Wishlist.objects.filter(user=request.user).count()
-            })
-
-        messages.success(request, f"{product_name} removed from wishlist.")
-        return redirect('cart_and_orders_app:user_wishlist')
-    except Exception as e:
-        logger.error(f"Error in user_remove_from_wishlist_by_variant for user {request.user.username}: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': 'An error occurred. Please try again.'}, status=500)
 
 @login_required
 def check_wishlist(request):
@@ -449,6 +380,22 @@ def check_wishlist(request):
 
 @login_required
 @require_POST
+def check_wishlist_variant(request):
+    try:
+        data = json.loads(request.body) if request.body else {}
+        variant_id = data.get('variant_id')
+        if not variant_id:
+            return JsonResponse({'success': False, 'message': 'Variant ID is required.'}, status=400)
+
+        is_in_wishlist = Wishlist.objects.filter(user=request.user, variant_id=variant_id).exists()
+        return JsonResponse({'success': True, 'is_in_wishlist': is_in_wishlist})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON data.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+@login_required
+@require_POST
 def user_update_cart_quantity(request, item_id):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
@@ -472,7 +419,7 @@ def user_update_cart_quantity(request, item_id):
             'message': f'Quantity updated to {item.quantity}',
             'quantity': item.quantity,
             'subtotal': float(item.get_subtotal()),
-            'cart_count': cart.items.count(),  # Number of CartItem instances
+            'cart_count': cart.items.count(),
             'cart_subtotal': float(cart.get_subtotal())
         })
     elif action == 'decrement' and item.quantity > 1:
@@ -483,7 +430,7 @@ def user_update_cart_quantity(request, item_id):
             'message': f'Quantity updated to {item.quantity}',
             'quantity': item.quantity,
             'subtotal': float(item.get_subtotal()),
-            'cart_count': cart.items.count(),  # Number of CartItem instances
+            'cart_count': cart.items.count(),
             'cart_subtotal': float(cart.get_subtotal())
         })
     elif action == 'remove':
@@ -491,13 +438,11 @@ def user_update_cart_quantity(request, item_id):
         return JsonResponse({
             'success': True,
             'message': 'Item removed from cart',
-            'cart_count': cart.items.count(),  # Number of CartItem instances
+            'cart_count': cart.items.count(),
             'cart_subtotal': float(cart.get_subtotal())
         })
     else:
         return JsonResponse({'success': False, 'message': f'Invalid action: {action}'}, status=400)
-    
-
 
 @login_required
 def clear_cart(request):
@@ -508,7 +453,6 @@ def clear_cart(request):
     request.session.modified = True
     messages.success(request, "Cart cleared successfully.")
     return redirect('cart_and_orders_app:user_cart_list')
-
 
 @login_required
 @require_POST
@@ -526,7 +470,7 @@ def buy_now(request):
         if quantity > MAX_QUANTITY:
             return JsonResponse({'success': False, 'message': f'Maximum limit of {MAX_QUANTITY} reached.'}, status=400)
         cart, created = Cart.objects.get_or_create(user=request.user)
-        cart.items.all().delete()  
+        cart.items.all().delete()
         cart_item = CartItem.objects.create(cart=cart, variant=variant, quantity=quantity)
         primary_image = variant.primary_image
         if primary_image and hasattr(primary_image, 'image') and primary_image.image:
@@ -534,7 +478,7 @@ def buy_now(request):
         elif variant.product.primary_image and hasattr(variant.product.primary_image, 'image') and variant.product.primary_image.image:
             variant_image = variant.product.primary_image.image.url
         else:
-            variant_image = None  
+            variant_image = None
         request.session['from_buy_now'] = True
         return JsonResponse({
             'success': True,
@@ -544,7 +488,6 @@ def buy_now(request):
             'variant_image': variant_image
         })
     except Exception as e:
-        logger.error(f"Buy now error: {str(e)}", exc_info=True)  # Add proper logging
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @require_POST
@@ -595,7 +538,7 @@ def user_add_to_wishlist(request, variant_id=None):
                     'product_slug': variant.product.slug,
                     'flavor': variant.flavor or 'Standard',
                     'size_weight': variant.size_weight or 'N/A',
-                    'price': str(variant.best_price),  # Updated to best_price
+                    'price': str(variant.best_price),
                     'stock': variant.stock,
                     'image': variant_image
                 } if created else None
@@ -609,98 +552,99 @@ def user_add_to_wishlist(request, variant_id=None):
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
-
-
 @login_required
-@require_POST 
-def user_remove_from_wishlist(request, wishlist_id=None):
+@require_POST
+def user_remove_from_wishlist_by_variant(request, variant_id=None):
     try:
-        if wishlist_id is None:
+        if variant_id is None:
             data = json.loads(request.body) if request.body else {}
-            wishlist_id = data.get('wishlist_id')
-        if not wishlist_id:
-            return JsonResponse({'success': False, 'message': 'Wishlist ID is required.'}, status=400)
-        
-        wishlist_item = get_object_or_404(Wishlist, id=wishlist_id, user=request.user)
+            variant_id = data.get('variant_id')
+        if not variant_id:
+            return JsonResponse({'success': False, 'message': 'Variant ID is required.'}, status=400)
+
+        wishlist_item = Wishlist.objects.filter(user=request.user, variant_id=variant_id).first()
+        if not wishlist_item:
+            return JsonResponse({
+                'success': False,
+                'message': 'Item not found in your wishlist.',
+                'wishlist_count': Wishlist.objects.filter(user=request.user).count()
+            }, status=404)
+
         product_name = wishlist_item.variant.product.product_name
         wishlist_item.delete()
-        
+
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
                 'success': True,
                 'message': f"{product_name} removed from wishlist.",
                 'wishlist_count': Wishlist.objects.filter(user=request.user).count()
             })
+
         messages.success(request, f"{product_name} removed from wishlist.")
         return redirect('cart_and_orders_app:user_wishlist')
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+        return JsonResponse({'success': False, 'message': 'An error occurred. Please try again.'}, status=500)
 
+
+import logging
+logger = logging.getLogger(__name__)
 @login_required
 @never_cache
 def user_checkout(request):
     cart = get_object_or_404(Cart, user=request.user)
     cart_items = cart.items.all().select_related('variant__product')
     if not cart_items:
-        logger.warning(f"User {request.user.username} attempted checkout with empty cart.")
-        messages.warning(request, "Your cart is empty.")
+        messages.error(request, "Your cart is empty.")
         return redirect('cart_and_orders_app:user_cart_list')
 
-    # Check stock
     out_of_stock_items = [item for item in cart_items if item.quantity > item.variant.stock]
     if out_of_stock_items:
-        logger.error(f"User {request.user.username} has out_of_stock_items: {[item.variant.id for item in out_of_stock_items]}")
         messages.error(request, "Some items are out of stock. Please update your cart.")
         return redirect('cart_and_orders_app:user_cart_list')
 
-    # Fetch addresses
     addresses = Address.objects.filter(user=request.user)
     default_address = addresses.filter(is_default=True).first()
     if not addresses:
-        logger.warning(f"User {request.user.username} has no addresses for checkout.")
         messages.warning(request, "Please add a shipping address.")
         return redirect('user_app:user_address_list')
 
-    # Initialize coupon and totals
     coupon = None
     applied_coupon = request.session.get('applied_coupon')
     if applied_coupon:
         try:
             coupon = Coupon.objects.get(id=applied_coupon['coupon_id'], code=applied_coupon['code'])
             if not coupon.is_valid():
-                logger.warning(f"Coupon {coupon.code} is no longer valid for user {request.user.username}")
                 del request.session['applied_coupon']
                 request.session.modified = True
                 coupon = None
+                messages.warning(request, "The applied coupon is no longer valid and has been removed.")
         except Coupon.DoesNotExist:
-            logger.warning(f"Invalid coupon in session for user {request.user.username}: {applied_coupon}")
             del request.session['applied_coupon']
             request.session.modified = True
             coupon = None
+            messages.warning(request, "The applied coupon is invalid and has been removed.")
 
-    # Calculate totals with apply_offers_to_cart
     try:
         total, discount_info = apply_offers_to_cart(cart_items, coupon, user=request.user)
         subtotal = Decimal(str(discount_info['subtotal']))
         if subtotal <= 0 and cart_items.exists():
-            logger.error(f"Cart {cart.id} for user {request.user.username} has invalid subtotal: {subtotal}")
             messages.error(request, "Cart calculation error. Please check your cart items.")
             return redirect('cart_and_orders_app:user_cart_list')
     except Exception as e:
-        logger.error(f"Error calculating totals for cart {cart.id} of user {request.user.username}: {str(e)}", exc_info=True)
+        logger.error(f"Error calculating cart totals for user {request.user.username}: {str(e)}")
         messages.error(request, "Unable to process cart due to invalid product data.")
         return redirect('cart_and_orders_app:user_cart_list')
 
     offer_discount = Decimal(str(discount_info['offer_discount']))
     coupon_discount = Decimal(str(discount_info.get('coupon_discount', 0.00)))
+    shipping_cost = Decimal(str(discount_info['shipping_cost']))
     coupon_code = applied_coupon['code'] if applied_coupon else None
 
-    # Update session with offer details
     offer_details = []
     for item in cart_items:
         best_price_info = item.variant.best_price
         discount = (best_price_info['original_price'] - best_price_info['price']) * Decimal(str(item.quantity))
-        if best_price_info['applied_offer_type'] in ['product', 'category']:
+        if best_price_info.get('applied_offer_type') in ['product', 'category']:
             offer_details.append({
                 'variant_id': item.variant.id,
                 'product': item.variant.product.product_name,
@@ -712,55 +656,9 @@ def user_checkout(request):
     request.session['applied_offers'] = offer_details
     request.session.modified = True
 
-    # Dynamic shipping and tax
-    shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
     tax = subtotal * Decimal('0.05')
-    total = subtotal + shipping_cost + tax - coupon_discount  # Apply coupon discount to total
+    total = subtotal - offer_discount - coupon_discount + shipping_cost + tax
 
-    # Handle coupon application
-    if request.method == 'POST' and 'apply_coupon' in request.POST:
-        coupon_code = request.POST.get('coupon_code', '').strip().upper()
-        if not coupon_code:
-            messages.error(request, "Coupon code is required.")
-        else:
-            try:
-                coupon = Coupon.objects.get(code=coupon_code)
-                if not coupon.is_valid():
-                    messages.error(request, f"Coupon '{coupon_code}' is not valid.")
-                elif coupon.minimum_order_amount > subtotal:
-                    messages.error(request, f"Coupon '{coupon_code}' requires a minimum order of ₹{coupon.minimum_order_amount}.")
-                elif 'applied_coupon' in request.session and request.session['applied_coupon']['code'] == coupon_code:
-                    messages.error(request, f"Coupon '{coupon_code}' is already applied.")
-                else:
-                    # Check for better coupon
-                    best_coupon, best_discount = get_best_coupon(subtotal, request.user)
-                    current_discount = (coupon.discount_percentage / 100) * subtotal
-                    if best_coupon and best_coupon != coupon and best_discount > current_discount:
-                        messages.warning(f"A better coupon '{best_coupon.code}' offers {best_coupon.discount_percentage}% off. Apply it instead?")
-                    else:
-                        request.session['applied_coupon'] = {
-                            'code': coupon.code,
-                            'discount': float(coupon_discount),
-                            'coupon_id': coupon.id
-                        }
-                        request.session.modified = True
-                        messages.success(request, f"Coupon '{coupon_code}' applied successfully! You saved ₹{coupon_discount:.2f}.")
-                        return redirect('cart_and_orders_app:user_checkout')
-            except Coupon.DoesNotExist:
-                messages.error(request, f"Coupon '{coupon_code}' does not exist.")
-            return redirect('cart_and_orders_app:user_checkout')
-
-    # Handle coupon removal
-    if request.method == 'POST' and 'remove_coupon' in request.POST:
-        if 'applied_coupon' in request.session:
-            del request.session['applied_coupon']
-            request.session.modified = True
-            messages.success(request, f"Coupon '{coupon_code}' removed successfully.")
-        else:
-            messages.info(request, "No coupon is applied.")
-        return redirect('cart_and_orders_app:user_checkout')
-
-    # Handle form
     if request.method == 'POST' and 'checkout_form' in request.POST:
         form = OrderCreateForm(request.POST, user=request.user)
         if form.is_valid():
@@ -768,7 +666,6 @@ def user_checkout(request):
                 'shipping_address_id': form.cleaned_data['shipping_address'].id,
                 'payment_method': form.cleaned_data['payment_method'],
             }
-            logger.info(f"User {request.user.username} submitted checkout form successfully.")
             return redirect('cart_and_orders_app:place_order')
     else:
         initial_data = {
@@ -777,7 +674,6 @@ def user_checkout(request):
         }
         form = OrderCreateForm(user=request.user, initial=initial_data)
 
-    # Wallet balance
     try:
         wallet = Wallet.objects.get(user=request.user)
         wallet_balance = wallet.balance
@@ -804,68 +700,57 @@ def user_checkout(request):
         del request.session['from_buy_now']
         request.session.modified = True
 
-    logger.debug(f"Rendering checkout for user {request.user.username} with total ₹{total:.2f}, offers: {offer_details}")
+    logger.info(f"User {request.user.username} accessed checkout with subtotal INR {subtotal:.2f}, coupon: {coupon_code or 'None'}")
     return render(request, 'cart_and_orders_app/checkout.html', context)
 
-logger = logging.getLogger(__name__)
 @login_required
 @require_POST
 @never_cache
 def place_order(request):
-    logger.info(f"Received place_order request for user {request.user.username}: {request.POST}")
     if request.method != 'POST':
-        logger.error(f"Invalid request method for place_order: {request.method}")
         return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
 
     try:
         cart = get_object_or_404(Cart, user=request.user)
         cart_items = cart.items.all().select_related('variant__product')
         if not cart_items:
-            logger.warning(f"Cart is empty for user: {request.user.username}")
             return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=400)
 
         out_of_stock_items = [item for item in cart_items if item.quantity > item.variant.stock]
         if out_of_stock_items:
-            logger.warning(f"Out of stock items for user {request.user.username}: {[item.variant.id for item in out_of_stock_items]}")
             return JsonResponse({'success': False, 'message': 'Some items are out of stock.'}, status=400)
 
         shipping_address_id = request.POST.get('selected_address')
         payment_method = request.POST.get('payment_method')
         shipping_address = get_object_or_404(Address, id=shipping_address_id, user=request.user)
         if not shipping_address:
-            logger.error(f"Invalid shipping address {shipping_address_id} for user {request.user.username}")
             return JsonResponse({'success': False, 'message': 'Invalid shipping address.'}, status=400)
 
         if payment_method not in ['COD', 'CARD', 'WALLET']:
-            logger.error(f"Invalid payment method {payment_method} for user {request.user.username}")
             return JsonResponse({'success': False, 'message': 'Invalid payment method.'}, status=400)
 
-        # Calculate totals with apply_offers_to_cart
         coupon = None
         applied_coupon = request.session.get('applied_coupon')
         if applied_coupon:
             try:
                 coupon = Coupon.objects.get(id=applied_coupon['coupon_id'], code=applied_coupon['code'])
             except Coupon.DoesNotExist:
-                logger.warning(f"Invalid coupon in session for user {request.user.username}: {applied_coupon}")
                 coupon = None
 
+        # Calculate totals using apply_offers_to_cart for consistency
         total, discount_info = apply_offers_to_cart(cart_items, coupon, user=request.user)
         subtotal = Decimal(str(discount_info['subtotal']))
         offer_discount = Decimal(str(discount_info['offer_discount']))
-        coupon_discount = Decimal(str(discount_info.get('coupon_discount', 0.00)))
-
-        # Dynamic shipping and tax
-        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
+        coupon_discount = Decimal(str(discount_info['coupon_discount']))
+        shipping_cost = Decimal(str(discount_info['shipping_cost']))
         tax = subtotal * Decimal('0.05')
-        total = subtotal + shipping_cost + tax - coupon_discount
+        total = subtotal - offer_discount - coupon_discount + shipping_cost + tax
 
-        # Store offer details
         offer_details = []
         for item in cart_items:
             best_price_info = item.variant.best_price
             discount = (best_price_info['original_price'] - best_price_info['price']) * Decimal(str(item.quantity))
-            if best_price_info['applied_offer_type'] in ['product', 'category']:
+            if best_price_info.get('applied_offer_type') in ['product', 'category']:
                 offer_details.append({
                     'variant_id': item.variant.id,
                     'product': item.variant.product.product_name,
@@ -877,7 +762,6 @@ def place_order(request):
 
         if payment_method == 'COD':
             if total > Decimal('1000.0'):
-                logger.warning(f"User {request.user.username} attempted COD for total {total}")
                 return JsonResponse({
                     'success': False,
                     'message': 'Cash on Delivery is not available for orders above Rs 1000.'
@@ -914,7 +798,7 @@ def place_order(request):
                     del request.session['applied_coupon']
                 request.session['applied_offers'] = []
                 request.session.modified = True
-                logger.info(f"Order {order.order_id} placed via COD for user {request.user.username}. Total: {total}, Offers: {offer_details}")
+                logger.info(f"User {request.user.username} placed COD order {order.order_id} for INR {total:.2f}")
                 return JsonResponse({
                     'success': True,
                     'message': 'Order placed successfully!',
@@ -924,7 +808,6 @@ def place_order(request):
         elif payment_method == 'WALLET':
             wallet = Wallet.objects.get(user=request.user)
             if wallet.balance < total:
-                logger.warning(f"Insufficient wallet balance {wallet.balance} for total {total} for user {request.user.username}")
                 return JsonResponse({'success': False, 'message': 'Insufficient wallet balance.'}, status=400)
             with transaction.atomic():
                 wallet.deduct_funds(total)
@@ -965,7 +848,7 @@ def place_order(request):
                     del request.session['applied_coupon']
                 request.session['applied_offers'] = []
                 request.session.modified = True
-                logger.info(f"Order {order.order_id} placed via Wallet for user {request.user.username}. Total: {total}, Offers: {offer_details}")
+                logger.info(f"User {request.user.username} placed Wallet order {order.order_id} for INR {total:.2f}")
                 return JsonResponse({
                     'success': True,
                     'message': 'Order placed successfully using Wallet!',
@@ -1001,7 +884,7 @@ def place_order(request):
             order.save()
             request.session['applied_offers'] = offer_details
             request.session.modified = True
-            logger.info(f"Order {order.order_id} initiated via Card for user {request.user.username}. Total: {total}, Offers: {offer_details}")
+            logger.info(f"User {request.user.username} initiated Razorpay order {order.order_id} for INR {total:.2f}")
             return JsonResponse({
                 'success': True,
                 'razorpay_order': razorpay_order,
@@ -1019,8 +902,8 @@ def place_order(request):
             })
 
     except Exception as e:
-        logger.error(f"Unexpected error in place_order for user {request.user.username}: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': 'An error occurred. Please try again.'}, status=500)
+        logger.error(f"Error placing order for user {request.user.username}: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'message': f'An error occurred: {str(e)}'}, status=500)
 
 @login_required
 @never_cache
@@ -1052,14 +935,12 @@ def user_order_list(request):
     }
     return render(request, 'user_order_list.html', context)
 
-
 @login_required
 def user_order_detail(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
     return_form = ReturnRequestForm(order=order)
     subtotal = sum(item.price * item.quantity for item in order.items.all())
     
-    # Calculate offer discount using best_price
     total_offer_discount = Decimal('0.00')
     offer_details = []
     for item in order.items.all():
@@ -1085,7 +966,6 @@ def user_order_detail(request, order_id):
         'shipping_cost': shipping_cost,
         'offer_details': offer_details
     }
-    logger.debug(f"User {request.user.username} viewed order {order_id}. Subtotal: {subtotal}, Offer Discount: {total_offer_discount}")
     return render(request, 'cart_and_orders_app/user_order_detail.html', context)
 
 @login_required
@@ -1122,7 +1002,6 @@ def user_return_order(request, order_id):
             messages.error(request, "Invalid return request. Please provide a valid reason.")
         return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
     return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-
 
 def generate_pdf(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
@@ -1187,17 +1066,14 @@ def admin_bulk_actions(request):
 @csrf_exempt
 def razorpay_callback(request):
     if request.method != 'POST':
-        logger.warning("Invalid request method for razorpay_callback: %s", request.method)
         return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
     
     try:
-        # Parse form data instead of JSON
         payment_id = request.POST.get('razorpay_payment_id')
         razorpay_order_id = request.POST.get('razorpay_order_id')
         signature = request.POST.get('razorpay_signature')
         
         if not all([payment_id, razorpay_order_id, signature]):
-            logger.error("Missing Razorpay parameters: payment_id=%s, order_id=%s, signature=%s", payment_id, razorpay_order_id, signature)
             return JsonResponse({'success': False, 'message': 'Missing payment details'}, status=400)
 
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -1208,8 +1084,7 @@ def razorpay_callback(request):
         }
         try:
             client.utility.verify_payment_signature(params_dict)
-        except Exception as e:
-            logger.error("Payment verification failed: %s", str(e))
+        except Exception:
             return JsonResponse({'success': False, 'message': 'Payment verification failed'}, status=400)
         
         try:
@@ -1218,9 +1093,8 @@ def razorpay_callback(request):
                 order.status = 'Completed'
                 order.payment_id = payment_id
                 order.save()
-                order.decrease_stock()  # Ensure stock is updated here if not done in place_order
+                order.decrease_stock()
 
-                # Handle coupon usage
                 if order.coupon:
                     user_coupon = UserCoupon.objects.filter(user=request.user, coupon=order.coupon, is_used=False).first()
                     if user_coupon:
@@ -1234,24 +1108,19 @@ def razorpay_callback(request):
                         del request.session['applied_coupon']
                         request.session.modified = True
 
-                logger.info("Order %s completed successfully for user %s", razorpay_order_id, request.user.username)
                 return JsonResponse({
                     'success': True,
                     'message': 'Payment successful!',
                     'redirect': reverse('cart_and_orders_app:order_success', kwargs={'order_id': order.order_id})
                 })
         except Order.DoesNotExist:
-            logger.error("Order not found for razorpay_order_id: %s", razorpay_order_id)
             return JsonResponse({'success': False, 'message': 'Order not found.'}, status=400)
-        except Exception as e:
-            logger.error("Failed to process payment: %s", str(e))
+        except Exception:
             return JsonResponse({'success': False, 'message': 'Failed to process payment.'}, status=500)
     
-    except Exception as e:
-        logger.error("Unexpected error in razorpay_callback: %s", str(e), exc_info=True)
+    except Exception:
         return JsonResponse({'success': False, 'message': 'An error occurred during callback processing.'}, status=400)
-    
-    
+
 @login_required
 def initiate_payment(request):
     if request.method != 'POST':
@@ -1263,19 +1132,18 @@ def initiate_payment(request):
         return JsonResponse({'success': False, 'message': 'Cart is empty'}, status=400)
 
     subtotal = sum(Decimal(str(item.variant.best_price)) * item.quantity for item in cart_items)
-    shipping_cost = Decimal('50.00')  
-    tax = subtotal * Decimal('0.05') 
+    shipping_cost = Decimal('50.00')
+    tax = subtotal * Decimal('0.05')
     discount = Decimal(request.session.get('applied_coupon', {}).get('discount', 0))
     total = subtotal + shipping_cost + tax - discount
 
-    # Initialize Razorpay client
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
     
     try:
         razorpay_order = client.order.create({
-            'amount': int(total * 100),  
+            'amount': int(total * 100),
             'currency': 'INR',
-            'payment_capture': 1  
+            'payment_capture': 1
         })
 
         return JsonResponse({
@@ -1289,7 +1157,7 @@ def initiate_payment(request):
             'prefill': {
                 'name': request.user.get_full_name() or request.user.username,
                 'email': request.user.email,
-                'contact': '' 
+                'contact': ''
             }
         })
     except Exception as e:
@@ -1306,7 +1174,6 @@ def retry_payment(request, order_id):
     })
     order.razorpay_order_id = razorpay_order['id']
     order.save()
-    logger.info("Retry payment initiated for order: %s, new Razorpay order: %s", order.order_id, razorpay_order['id'])
     return JsonResponse({
         'success': True,
         'razorpay_order': razorpay_order,
@@ -1323,7 +1190,6 @@ def retry_payment(request, order_id):
         }
     })
 
-
 def download_invoice(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
     template = get_template('invoice.html')
@@ -1338,15 +1204,11 @@ def download_invoice(request, order_id):
     response['Content-Disposition'] = f'attachment; filename=invoice_{order.order_id}.pdf'
     return response
 
-
 @staff_member_required
 def sales_dashboard(request):
-    """Dashboard showing sales statistics."""
-    # Get today's orders
     today = timezone.now().date()
     today_orders = Order.objects.filter(order_date__date=today)
     
-    # Calculate statistics
     total_orders = Order.objects.count()
     total_revenue = Order.objects.filter(status='Delivered').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     average_order_value = total_revenue / total_orders if total_orders > 0 else 0
@@ -1362,13 +1224,11 @@ def sales_dashboard(request):
 
 @staff_member_required
 def generate_sales_report(request):
-    """Generate sales report based on date range."""
     if request.method == 'POST':
         form = SalesReportForm(request.POST)
         if form.is_valid():
             report_type = form.cleaned_data['report_type']
             
-            # Set date range based on report type
             today = timezone.now().date()
             
             if report_type == 'DAILY':
@@ -1386,22 +1246,19 @@ def generate_sales_report(request):
             elif report_type == 'YEARLY':
                 start_date = today.replace(month=1, day=1)
                 end_date = today.replace(month=12, day=31)
-            else:  # CUSTOM
+            else:
                 start_date = form.cleaned_data['start_date']
                 end_date = form.cleaned_data['end_date']
             
-            # Get orders in the date range
             orders = Order.objects.filter(
                 order_date__date__gte=start_date,
                 order_date__date__lte=end_date
             )
             
-            # Calculate statistics
             total_orders = orders.count()
             total_sales = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
             total_discount = orders.aggregate(Sum('discount_amount'))['discount_amount__sum'] or 0
             
-            # Create report record
             report = SalesReport.objects.create(
                 report_type=report_type,
                 start_date=start_date,
@@ -1411,7 +1268,6 @@ def generate_sales_report(request):
                 total_discount=total_discount
             )
             
-            # Prepare context
             context = {
                 'form': form,
                 'report': report,
@@ -1421,7 +1277,6 @@ def generate_sales_report(request):
             }
             
             if 'export' in request.POST:
-                # Export to CSV
                 response = HttpResponse(content_type='text/csv')
                 response['Content-Disposition'] = f'attachment; filename="sales_report_{start_date}_to_{end_date}.csv"'
                 
@@ -1449,7 +1304,6 @@ def generate_sales_report(request):
 
 @staff_member_required
 def sales_report_detail(request, report_id):
-    """View details of a previously generated sales report."""
     report = SalesReport.objects.get(id=report_id)
     orders = Order.objects.filter(
         order_date__date__gte=report.start_date,

@@ -27,7 +27,7 @@ urlpatterns = [
     path('add-to-wishlist/<int:variant_id>/', views.user_add_to_wishlist, name='user_add_to_wishlist'),
     path('wishlist/remove-by-variant/<int:variant_id>/', views.user_remove_from_wishlist_by_variant, name='remove_from_wishlist_by_variant'),
     path('wishlist/check/', views.check_wishlist, name='check_wishlist'),
-    path('wishlist/remove/<int:variant_id>/', views.user_remove_from_wishlist_by_variant, name='user_remove_from_wishlist_by_variant'),
+    path('wishlist/check-variant/', views.check_wishlist_variant, name='check_wishlist_variant'),
 
     # Checkout URLs
     path('checkout/', views.user_checkout, name='user_checkout'),
