@@ -7,7 +7,7 @@ from offer_and_coupon_app.utils import get_best_offer_for_product
 from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
-from offer_and_coupon_app.models import Coupon, Wallet
+from offer_and_coupon_app.models import Coupon, Wallet, WalletTransaction
 import logging
 
 logger = logging.getLogger(__name__)
@@ -115,11 +115,21 @@ class Order(models.Model):
         ('CARD', 'Credit/Debit Card'),
         ('WALLET', 'Wallet'),
     )
+    PAYMENT_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('PAID', 'Paid'),
+        ('FAILED', 'Failed'),
+    )
     
     order_id = models.CharField(max_length=30, unique=True, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='orders')
     order_date = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    payment_status = models.CharField(
+        max_length=20, 
+        choices=PAYMENT_STATUS_CHOICES, 
+        default='PENDING'
+    )
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     shipping_address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default='COD')
@@ -131,18 +141,83 @@ class Order(models.Model):
     razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)
     razorpay_signature = models.CharField(max_length=200, blank=True, null=True)
 
+    def cancel_item(self, order_item, reason=None):
+        if self.status in ['Shipped', 'Out for Delivery', 'Delivered', 'Cancelled']:
+            raise ValueError("Order cannot be cancelled in its current status.")
+
+        with transaction.atomic():
+            variant = order_item.variant
+            variant.stock += order_item.quantity
+            variant.save()
+            refund_amount = order_item.price * Decimal(str(order_item.quantity))
+
+            # Refund to wallet
+            wallet, created = Wallet.objects.get_or_create(user=self.user)
+            wallet.add_funds(refund_amount)
+            WalletTransaction.objects.create(
+                wallet=wallet,
+                amount=refund_amount,
+                transaction_type='REFUND',
+                description=f"Refund for cancelled item in order {self.order_id}"
+            )
+
+            # Record cancellation
+            OrderCancellation.objects.create(
+                order=self,
+                item=order_item,
+                reason=reason,
+                refunded_amount=refund_amount
+            )
+
+            # Remove the item from the order
+            order_item.delete()
+
+            # Update order status if no items remain
+            if not self.items.exists():
+                self.status = 'Cancelled'
+                self.save()
+
+            logger.info(f"Item {order_item} cancelled for order {self.order_id}, refunded {refund_amount}")
+
+    def cancel_order(self, reason=None):
+        if self.status in ['Shipped', 'Out for Delivery', 'Delivered', 'Cancelled']:
+            raise ValueError("Order cannot be cancelled in its current status.")
+
+        with transaction.atomic():
+            # Restore stock for all items
+            self.restore_stock()
+
+            # Refund total amount to wallet
+            wallet, created = Wallet.objects.get_or_create(user=self.user)
+            wallet.add_funds(self.total_amount)
+            WalletTransaction.objects.create(
+                wallet=wallet,
+                amount=self.total_amount,
+                transaction_type='REFUND',
+                description=f"Refund for cancelled order {self.order_id}"
+            )
+
+            # Record cancellation
+            OrderCancellation.objects.create(
+                order=self,
+                reason=reason,
+                refunded_amount=self.total_amount
+            )
+
+            # Update order status
+            self.status = 'Cancelled'
+            self.save()
+
+            logger.info(f"Order {self.order_id} cancelled, refunded {self.total_amount}")
+
     def save(self, *args, **kwargs):
-        """
-        Set order_id if not present and calculate total_amount and discount_amount.
-        """
         if not self.order_id:
             self.order_id = f"ORD-{timezone.now().strftime('%Y%m%d%H%M%S')}-{self.user.id}"
-        
-        # Calculate totals before saving
+        super().save(*args, **kwargs)
         subtotal = Decimal('0.00')
         offer_discount = Decimal('0.00')
         coupon_discount = Decimal('0.00')
-        
+
         for item in self.cart_items.all():
             best_price_info = item.variant.best_price
             unit_price = best_price_info['price']
@@ -150,18 +225,15 @@ class Order(models.Model):
             quantity = Decimal(str(item.quantity))
             subtotal += unit_price * quantity
             offer_discount += (original_price - unit_price) * quantity
-        
+
         if self.coupon and self.coupon.is_valid():
             coupon_discount = (self.coupon.discount_percentage / 100) * subtotal
             if coupon_discount > subtotal:
-                coupon_discount = subtotal  # Prevent negative total
-        
+                coupon_discount = subtotal 
+
         self.total_amount = subtotal - offer_discount - coupon_discount
         self.discount_amount = offer_discount + coupon_discount
-        
-        super().save(*args, **kwargs)
-        
-        # Create OrderItems after saving
+        super().save(update_fields=['total_amount', 'discount_amount'])
         if not self.items.exists():
             for cart_item in self.cart_items.all():
                 OrderItem.objects.create(
@@ -196,15 +268,17 @@ class Order(models.Model):
                     raise ValueError(f"Insufficient stock for {variant.product.product_name}")
 
     def restore_stock(self):
-        """
-        Restore stock if order is cancelled.
-        """
-        if self.status == 'Cancelled':
-            for item in self.items.all():
-                variant = item.variant
-                variant.stock += item.quantity
-                variant.save()
-                logger.info(f"Restored {item.quantity} stock for {variant.product.product_name}")
+        for item in self.items.all():
+            variant = item.variant
+            variant.stock += item.quantity
+            variant.save()
+            logger.info(f"Restored {item.quantity} stock for {variant.product.product_name}")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['order_id']),
+            models.Index(fields=['user']),
+        ]
 
     def __str__(self):
         return f"Order {self.order_id} - {self.user.username}"  
@@ -219,6 +293,23 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.variant.product.product_name} ({self.quantity})"
 
+
+class OrderCancellation(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='cancellations')
+    item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, null=True, blank=True, related_name='cancellations')  # Null for entire order cancellation
+    reason = models.TextField(blank=True, null=True)  # Optional reason
+    cancelled_at = models.DateTimeField(default=timezone.now)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['order']),
+        ]
+
+    def __str__(self):
+        return f"Cancellation for Order {self.order.order_id} - Item: {self.item or 'Entire Order'}"
+
+
 class ReturnRequest(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='return_requests')
     reason = models.TextField()
@@ -227,13 +318,16 @@ class ReturnRequest(models.Model):
     refund_processed = models.BooleanField(default=False)
 
     def process_refund(self):
-        """
-        Process refund to wallet and restore stock.
-        """
         if self.is_verified and not self.refund_processed:
             with transaction.atomic():
                 wallet, created = Wallet.objects.get_or_create(user=self.order.user)
                 wallet.add_funds(self.order.total_amount)
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    amount=self.order.total_amount,
+                    transaction_type='REFUND',
+                    description=f"Refund for returned order {self.order.order_id}"
+                )
                 self.refund_processed = True
                 self.save()
                 self.order.restore_stock()

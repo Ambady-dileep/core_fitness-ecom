@@ -1,4 +1,3 @@
-# offer_and_coupon_app/admin_views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -7,7 +6,7 @@ from django.db.models import Q, F
 from django.views.decorators.http import require_http_methods
 from django.contrib.admin.views.decorators import staff_member_required as admin_required
 from django.http import JsonResponse
-from .models import ProductOffer
+from .models import ProductOffer, WalletTransaction, Wallet
 from product_app.models import Product
 from django.utils import timezone
 from .forms import CouponForm, ProductOfferForm, CategoryOfferForm
@@ -15,6 +14,7 @@ from .models import Coupon, ProductOffer, CategoryOffer
 from product_app.models import Category
 import logging
 from django.db import models
+from cart_and_orders_app.models import Order
 
 logger = logging.getLogger(__name__)
 
@@ -515,5 +515,70 @@ def admin_add_category_offer(request, category_id):
     }
     return render(request, 'offer_and_coupon_app/admin_category_offer_add.html', context)
 
+@login_required
+@user_passes_test(is_admin)
+def admin_wallet_transactions(request):
+    transactions = WalletTransaction.objects.all().select_related('wallet__user')
+    
+    # Search filter
+    search_query = request.GET.get('search', '')
+    if search_query:
+        transactions = transactions.filter(
+            Q(wallet__user__username__icontains=search_query) |
+            Q(wallet__user__email__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+    
+    # Transaction type filter
+    transaction_type = request.GET.get('type', '')
+    if transaction_type:
+        transactions = transactions.filter(transaction_type=transaction_type)
+    
+    # Sorting
+    sort_by = request.GET.get('sort', '-created_at')
+    allowed_sorts = [
+        'created_at', '-created_at',
+        'amount', '-amount',
+        'transaction_type', '-transaction_type'
+    ]
+    if sort_by in allowed_sorts:
+        transactions = transactions.order_by(sort_by)
+    else:
+        transactions = transactions.order_by('-created_at')
+    
+    # Pagination
+    paginator = Paginator(transactions, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'transaction_type': transaction_type,
+        'sort_by': sort_by,
+        'title': 'Wallet Transactions',
+        'transaction_types': WalletTransaction.TRANSACTION_TYPES,
+    }
+    logger.info(f"Admin {request.user.username} accessed wallet transactions with search='{search_query}', type='{transaction_type}', sort='{sort_by}'")
+    return render(request, 'offer_and_coupon_app/admin_wallet_transactions.html', context)
 
-
+@login_required
+@user_passes_test(is_admin)
+def admin_wallet_transaction_detail(request, transaction_id):
+    transaction = get_object_or_404(WalletTransaction, id=transaction_id)
+    order = None
+    if transaction.transaction_type in ['REFunded', 'CANCELLATION'] and transaction.description:
+        # Assuming description contains order_id for refunds/cancellations
+        try:
+            order_id = transaction.description.split('Order ')[1].split(' ')[0]
+            order = Order.objects.filter(order_id=order_id).first()
+        except IndexError:
+            pass
+    
+    context = {
+        'transaction': transaction,
+        'order': order,
+        'title': f'Transaction {transaction.id}',
+    }
+    logger.info(f"Admin {request.user.username} viewed details for transaction {transaction_id}")
+    return render(request, 'offer_and_coupon_app/admin_wallet_transaction_detail.html', context)

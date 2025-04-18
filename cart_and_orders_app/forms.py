@@ -1,10 +1,9 @@
 from django import forms
 from django.db import models
 from django.utils import timezone
-from .models import Order, ReturnRequest
 from offer_and_coupon_app.models import Coupon
 from user_app.models import Address
-from .models import SalesReport
+from .models import Order, OrderItem, ReturnRequest, SalesReport
 
 class OrderStatusForm(forms.ModelForm):
     class Meta:
@@ -42,9 +41,34 @@ class OrderCreateForm(forms.ModelForm):
         
         if not shipping_address:
             raise forms.ValidationError("Please select a shipping address.")
-        if payment_method not in dict(Order.PAYMENT_CHOICES):
+        if payment_method not in [choice[0] for choice in Order.PAYMENT_CHOICES]:
             raise forms.ValidationError("Invalid payment method selected.")
         return cleaned_data
+
+class OrderCancellationForm(forms.Form):
+    reason = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        required=False,
+        label="Reason for Cancellation (Optional)"
+    )
+
+
+class OrderItemCancellationForm(forms.Form):
+    reason = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+        required=False,
+        label="Reason for Cancellation (Optional)"
+    )
+    order_item = forms.ModelChoiceField(
+        queryset=OrderItem.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Select Item to Cancel"
+    )
+
+    def __init__(self, *args, order=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if order:
+            self.fields['order_item'].queryset = order.items.all()
 
 class ReturnRequestForm(forms.ModelForm):
     class Meta:
@@ -86,7 +110,7 @@ class CouponApplyForm(forms.Form):
         code = self.cleaned_data['coupon_code'].upper()
         try:
             coupon = Coupon.objects.get(code=code)
-            if not coupon.is_valid:
+            if not coupon.is_valid():
                 raise forms.ValidationError("This coupon is not valid or has expired")
             # Store the coupon object for use in views
             self.cleaned_data['coupon'] = coupon

@@ -91,7 +91,7 @@ class ProfileForm(forms.ModelForm):
 class AddressForm(forms.ModelForm):
     class Meta:
         model = Address
-        fields = ['full_name','address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country', 'is_default']
+        fields = ['full_name','address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country','phone', 'is_default']
         widgets = {
             'full_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Full Name'}),
             'address_line1': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Street address, P.O. box, company name'}),
@@ -100,11 +100,20 @@ class AddressForm(forms.ModelForm):
             'state': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'State/Province/Region'}),
             'postal_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ZIP / Postal code'}),
             'country': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Country'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone Number (e.g., 9876543210)'}),
             'is_default': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'is_default': 'Set as default address',
         }
+
+        def clean_phone(self):
+            phone = self.cleaned_data.get('phone')
+            if phone and not Address.objects.filter(phone=phone).exclude(id=self.instance.id).exists():
+                return phone
+            elif phone and Address.objects.filter(phone=phone).exclude(id=self.instance.id).exists():
+                raise forms.ValidationError("This phone number is already in use.")
+            return phone
 
 
 class CustomPasswordChangeForm(PasswordChangeForm):

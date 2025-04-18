@@ -15,6 +15,7 @@ urlpatterns = [
     path('view-coupons/', user_views.view_coupons, name='view_coupons'),
     path('cancel-cart-item/<int:item_id>/', user_views.cancel_cart_item, name='cancel_cart_item'),
     path('wallet/', user_views.wallet_dashboard, name='wallet_dashboard'),
+    path('wallet/balance/', user_views.wallet_balance, name='wallet_balance'),
     path('add-funds/', user_views.add_funds, name='add_funds'),
     path('add-funds-callback/', user_views.add_funds_callback, name='add_funds_callback'),
     path('referral/dashboard/', user_views.referral_dashboard, name='referral_dashboard'),
@@ -28,6 +29,10 @@ urlpatterns = [
     path('admin/coupons/delete/<int:coupon_id>/', admin_views.admin_coupon_delete, name='admin_coupon_delete'),
     path('admin/coupons/toggle/<int:coupon_id>/', admin_views.admin_coupon_toggle, name='admin_coupon_toggle'),
     path('admin/coupons/report/', admin_views.coupon_usage_report, name='coupon_usage_report'),
+
+    # Wallet Management
+    path('admin/wallet/', admin_views.admin_wallet_transactions, name='admin_wallet_transactions'),
+    path('admin/wallet/transactions/<int:transaction_id>/', admin_views.admin_wallet_transaction_detail, name='admin_wallet_transaction_detail'),
 
     # Unified Offer Management
     path('admin/offers/', admin_views.admin_offer_list, name='admin_offer_list'),

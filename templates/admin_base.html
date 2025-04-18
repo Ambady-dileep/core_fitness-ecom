@@ -498,6 +498,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if 'admin/wallet' in request.path %}active{% endif %}" href="{% url 'offer_and_coupon_app:admin_wallet_transactions' %}">
+                    <i class="fas fa-wallet"></i> <span>Wallet Management</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if 'sales/report' in request.path %}active{% endif %}" href="{% url 'cart_and_orders_app:generate_sales_report' %}">
                     <i class="fas fa-chart-pie"></i> <span>Sales Reports</span>
                 </a>

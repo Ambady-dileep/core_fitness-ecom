@@ -377,6 +377,18 @@ def wallet_dashboard(request):
         'transactions': transactions
     })
 
+@login_required
+@require_GET
+def wallet_balance(request):
+    try:
+        wallet = Wallet.objects.get(user=request.user)
+        return JsonResponse({'success': True, 'balance': float(wallet.balance)})
+    except Wallet.DoesNotExist:
+        return JsonResponse({'success': True, 'balance': 0.0})
+    except Exception as e:
+        logger.error(f"Error fetching wallet balance for user {request.user.username}: {str(e)}")
+        return JsonResponse({'success': False, 'message': 'Unable to fetch wallet balance'}, status=500)
+
 def coupon_usage_report(request):
     coupons = Coupon.objects.annotate(
         total_users=models.Count('user_usages', distinct=True),

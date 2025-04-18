@@ -51,8 +51,8 @@ class CustomUser(AbstractUser):
         error_messages={
             'unique': "This phone number is already registered.",
         },
-        null=True,  # Allow null for superuser
-        blank=True,  # Allow blank in forms
+        null=True, 
+        blank=True,  
         db_index=True
     )
 
@@ -104,10 +104,8 @@ class CustomUser(AbstractUser):
         return f"{self.username} - {self.full_name or 'No name'}"
 
     def save(self, *args, **kwargs):
-        # Allow superuser to be created without phone number
         if self.is_superuser and not self.phone_number:
             self.phone_number = None
-        # Ensure email and username are lowercase
         self.email = self.email.lower()
         self.username = self.username.lower()
         super().save(*args, **kwargs)
@@ -144,6 +142,15 @@ class Address(models.Model):
     state = models.CharField(max_length=100)
     postal_code = models.CharField(max_length=20)
     country = models.CharField(max_length=100)
+    phone = models.CharField(
+        max_length=10,
+        validators=[RegexValidator(
+            regex=r'^[6-9]\d{9}$',
+            message="Phone number must be a valid 10-digit number starting with 6-9."
+        )],
+        blank=True,
+        null=True
+    )
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -151,14 +158,12 @@ class Address(models.Model):
         verbose_name_plural = "Addresses"
 
     def save(self, *args, **kwargs):
-        # If this is marked as default, unmark all other addresses
         if self.is_default:
             Address.objects.filter(user=self.user, is_default=True).update(is_default=False)
-        # If this is the first address, mark it as default
         elif not self.pk and not Address.objects.filter(user=self.user).exists():
             self.is_default = True
         super().save(*args, **kwargs)
-            
+
     def __str__(self):
         return f"{self.address_line1}, {self.city}, {self.country}"
 

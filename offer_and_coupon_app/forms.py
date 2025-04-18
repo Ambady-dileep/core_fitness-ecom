@@ -1,4 +1,3 @@
-# offer_and_coupon_app/forms.py
 from django import forms
 from .models import Coupon, UserCoupon, WalletTransaction, Wallet, ProductOffer, CategoryOffer
 from product_app.models import Product, ProductVariant, Category
@@ -6,8 +5,6 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from datetime import timedelta
-from django import forms
-from .models import Coupon
 
 class CouponForm(forms.ModelForm):
     class Meta:

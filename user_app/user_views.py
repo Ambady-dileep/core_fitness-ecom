@@ -399,11 +399,7 @@ def my_profile(request):
         'addresses': addresses,
         'address_form': address_form,
     }
-    return render(request, 'user_profile.html', context)
-
-@login_required
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-@require_http_methods(["GET", "POST"])
+    return render(request, 'user_app/user_profile.html', context)
 
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -467,6 +463,7 @@ def add_address(request):
                     'state': address.state,
                     'postal_code': address.postal_code,
                     'country': address.country,
+                    'phone': address.phone,
                     'is_default': address.is_default,
                 }
             })
@@ -480,14 +477,11 @@ def add_address(request):
 @login_required
 @csrf_protect
 def edit_address(request, address_id):
-    try:
-        address = Address.objects.get(id=address_id, user=request.user)
-    except Address.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Address not found or you don\'t have permission'}, status=404)
+    address = get_object_or_404(Address, id=address_id, user=request.user)
 
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        if request.method == 'GET':
-            return JsonResponse({
+    if request.method == 'GET' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        try:
+            response_data = {
                 'success': True,
                 'address': {
                     'full_name': address.full_name,
@@ -497,43 +491,82 @@ def edit_address(request, address_id):
                     'state': address.state,
                     'postal_code': address.postal_code,
                     'country': address.country,
+                    'phone': address.phone,
                     'is_default': address.is_default,
                 }
-            })
-        elif request.method == 'POST':
+            }
+            logger.debug(f"Retrieved address {address_id} for editing by user {request.user.username}, phone: {address.phone}")
+            return JsonResponse(response_data)
+        except Exception as e:
+            logger.error(f"Error retrieving address {address_id} for user {request.user.username}: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'success': False,
+                'message': f'Failed to load address: {str(e)}'
+            }, status=500)
+
+    elif request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        try:
             form = AddressForm(request.POST, instance=address)
+            logger.debug(f"Form data for address {address_id}: {request.POST}")
             if form.is_valid():
-                address = form.save()
+                updated_address = form.save()
+                logger.info(f"Address {address_id} updated successfully for user {request.user.username}, phone: {updated_address.phone}")
+
+                # Handle default address logic
+                if form.cleaned_data.get('is_default'):
+                    Address.objects.filter(user=request.user, is_default=True).exclude(id=address_id).update(is_default=False)
+                    updated_address.is_default = True
+                    updated_address.save()
+                    logger.info(f"Set address {address_id} as default for user {request.user.username}")
+
                 return JsonResponse({
                     'success': True,
                     'message': 'Address updated successfully!',
                     'address': {
-                        'id': address.id,
-                        'full_name': address.full_name,
-                        'address_line1': address.address_line1,
-                        'address_line2': address.address_line2 or '',
-                        'city': address.city,
-                        'state': address.state,
-                        'postal_code': address.postal_code,
-                        'country': address.country,
-                        'is_default': address.is_default,
+                        'id': updated_address.id,
+                        'full_name': updated_address.full_name,
+                        'address_line1': updated_address.address_line1,
+                        'address_line2': updated_address.address_line2 or '',
+                        'city': updated_address.city,
+                        'state': updated_address.state,
+                        'postal_code': updated_address.postal_code,
+                        'country': updated_address.country,
+                        'phone': updated_address.phone or '',
+                        'is_default': updated_address.is_default,
                     }
                 })
             else:
-                print(form.errors)  # Debug output to console
+                logger.warning(f"Invalid address form submitted by user {request.user.username} for address {address_id}: {form.errors}")
                 return JsonResponse({
                     'success': False,
                     'message': 'Invalid form data',
-                    'errors': form.errors
+                    'errors': form.errors.as_json()
                 }, status=400)
-    return JsonResponse({'success': False, 'message': 'Invalid request method or not an AJAX request'}, status=400)
+        except Exception as e:
+            logger.error(f"Error updating address {address_id} for user {request.user.username}: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'success': False,
+                'message': f'Failed to update address: {str(e)}'
+            }, status=500)
+    else:
+        logger.warning(f"Invalid request to edit_address by user {request.user.username}: method={request.method}, is_ajax={request.headers.get('x-requested-with')}")
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid request method or not an AJAX request'
+        }, status=400)
 
 @login_required
 def delete_address(request, address_id):
     if request.method == 'POST':
         address = get_object_or_404(Address, id=address_id, user=request.user)
         address.delete()
-        return JsonResponse({'success': True, 'message': 'Address deleted successfully'})
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'Address deleted successfully'})
+        else:
+            messages.success(request, "Address deleted successfully!")
+            return redirect('user_app:my_profile')
+            
     return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
 
 @login_required
@@ -543,8 +576,12 @@ def set_default_address(request, address_id):
     Address.objects.filter(user=request.user, is_default=True).update(is_default=False)
     address.is_default = True
     address.save()
-    messages.success(request, "Default address updated successfully!")
-    return redirect('user_app:my_profile')
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': True, 'message': 'Default address updated successfully!'})
+    else:
+        messages.success(request, "Default address updated successfully!")
+        return redirect('user_app:my_profile')
 
 @login_required
 def user_address_list(request):

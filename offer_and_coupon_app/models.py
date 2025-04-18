@@ -10,6 +10,9 @@ from django.dispatch import receiver
 
 User = get_user_model()
 
+def get_default_valid_to():
+    return timezone.now() + timezone.timedelta(days=30)
+
 class Offer(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -136,7 +139,7 @@ class Coupon(models.Model):
         validators=[MinValueValidator(0.00)]
     )
     valid_from = models.DateTimeField(default=timezone.now)
-    valid_to = models.DateTimeField(default=timezone.now() + timezone.timedelta(days=30))
+    valid_to = models.DateTimeField(default=get_default_valid_to)
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -182,11 +185,35 @@ class Wallet(models.Model):
     def add_funds(self, amount):
         self.balance += Decimal(str(amount))
         self.save()
+        # Create a transaction record
+        WalletTransaction.objects.create(
+            wallet=self,
+            amount=amount,
+            transaction_type='CREDIT',
+            description=f"Added funds to wallet"
+        )
+    
+    def deduct_funds(self, amount):
+        amount = Decimal(str(amount))
+        if amount <= 0:
+            raise ValueError("Amount to deduct must be positive")
+        if self.balance < amount:
+            raise ValueError("Insufficient wallet balance")
+        self.balance -= amount
+        self.save()
+        # Create a transaction record
+        WalletTransaction.objects.create(
+            wallet=self,
+            amount=amount,
+            transaction_type='DEBIT',
+            description=f"Payment for order"
+        )
 
 class WalletTransaction(models.Model):
     TRANSACTION_TYPES = (
         ('CREDIT', 'Credit'),
         ('DEBIT', 'Debit'),
+        ('REFUND', 'Refund'),
     )
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='transactions')
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
