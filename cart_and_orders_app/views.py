@@ -320,7 +320,7 @@ def user_add_to_cart(request, variant_id=None):
                 'variant_id': variant.id,
                 'product': variant.product.product_name,
                 'offer_type': best_price_info['applied_offer_type'],
-                'offer_name': best_price_info['applied_offer_name'],
+                'offer_name': best_price_info.get('applied_offer_name', 'No Offer Applied'),
                 'quantity': cart_item.quantity,
                 'discount': float(discount)
             })
@@ -846,7 +846,6 @@ def place_order(request):
                 order.decrease_stock()
                 order.payment_status = 'PAID'
                 logger.info(f"Wallet payment processed for user {user.username}, order {order.order_id}")
-
             elif payment_method == 'CARD':
                 client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
                 payment_data = {
@@ -865,9 +864,8 @@ def place_order(request):
                         'amount': int(total * 100),
                         'currency': 'INR',
                         'key': settings.RAZORPAY_KEY_ID,
-                        'name': settings.COMPANY_NAME,
                         'description': f'Payment for order {order.order_id}',
-                        'callback_url': request.build_absolute_uri(reverse('cart_and_orders_app:payment_callback')),
+                        'callback_url': request.build_absolute_uri(reverse('cart_and_orders_app:razorpay_callback')),
                         'order_id': order.order_id
                     })
                 except razorpay.errors.BadRequestError as e:
@@ -876,10 +874,7 @@ def place_order(request):
                         'success': False,
                         'message': 'Payment processing failed. Please try again.'
                     }, status=500)
-
             order.save()
-
-            # Update coupon usage
             if coupon:
                 user_coupon, created = UserCoupon.objects.get_or_create(
                     user=user, coupon=coupon, defaults={'is_used': False}
@@ -891,8 +886,6 @@ def place_order(request):
                     user_coupon.save()
                     coupon.usage_count += 1
                     coupon.save()
-
-            # Clear cart and session
             cart.items.all().delete()
             request.session.pop('applied_coupon', None)
             request.session.pop('applied_offers', None)
@@ -905,7 +898,7 @@ def place_order(request):
                 'success': True,
                 'message': 'Order placed successfully!',
                 'order_id': order.order_id,
-                'redirect': reverse('cart_and_orders_app:order_confirmation', args=[order.order_id])
+                'redirect': reverse('cart_and_orders_app:user_order_detail', args=[order.order_id])
             })
 
     except Exception as e:
@@ -943,7 +936,7 @@ def razorpay_callback(request):
         try:
             order = get_object_or_404(Order, razorpay_order_id=razorpay_order_id, user=request.user, status='Pending')
             with transaction.atomic():
-                order.status = 'Pending'  
+                order.status = 'Confirmed' 
                 order.payment_status = 'PAID'
                 order.razorpay_payment_id = payment_id
                 order.razorpay_signature = signature
@@ -1005,7 +998,6 @@ def initiate_payment(request):
             'razorpay_key': settings.RAZORPAY_KEY_ID,
             'amount': int(total * 100),
             'currency': 'INR',
-            'name': 'Core Fitness',
             'description': 'Order Payment',
             'razorpay_order': razorpay_order,
             'prefill': {
@@ -1035,7 +1027,6 @@ def retry_payment(request, order_id):
         'razorpay_key': settings.RAZORPAY_KEY_ID,
         'amount': int(order.total_amount * 100),
         'currency': 'INR',
-        'name': 'Core Fitness',
         'description': 'Order Payment',
         'callback_url': f"/cart/razorpay-callback/?address_id={order.shipping_address.id}",
         'prefill': {
@@ -1048,18 +1039,41 @@ def retry_payment(request, order_id):
 @login_required
 def download_invoice(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-    template = get_template('cart_and_orders_app/invoice.html')
-    context = {'order': order}
+    subtotal = sum(item.price * item.quantity for item in order.items.all())
+    total_offer_discount = sum(
+        (item.variant.best_price['original_price'] - item.price) * Decimal(str(item.quantity))
+        for item in order.items.all()
+    )
+    shipping_cost = Decimal('50.0') if subtotal < 2500 else Decimal('0.00')
+    tax = subtotal * Decimal('0.05')
+    total = subtotal - total_offer_discount + shipping_cost + tax
+
+    context = {
+        'order': order,
+        'items': order.items.select_related('variant__product').all(),
+        'subtotal': float(subtotal),
+        'total_offer_discount': float(total_offer_discount),
+        'shipping_cost': float(shipping_cost),
+        'tax': float(tax),
+        'total': float(total),
+        'company': {
+            'name': 'Core Fitness',
+            'address': '123 Fitness Lane, Bangalore, India',
+            'phone': '+91 123 456 7890',
+            'email': 'support@corefitness.com'
+        },
+        'date': order.order_date.strftime('%d %B %Y'),
+    }
+    template = get_template('cart_and_orders_app/invoice_pdf.html')
     html = template.render(context)
+
     buffer = BytesIO()
     pisa_status = pisa.CreatePDF(html, dest=buffer)
     if pisa_status.err:
-        logger.error(f"Error generating invoice PDF for order {order.order_id}")
         return HttpResponse('Error generating PDF', status=500)
-    buffer.seek(0)
-    response = HttpResponse(buffer, content_type='application/pdf')
+
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename=invoice_{order.order_id}.pdf'
-    logger.info(f"User {request.user.username} downloaded invoice for order {order.order_id}")
     return response
 
 @staff_member_required
@@ -1225,11 +1239,11 @@ def user_order_detail(request, order_id):
         best_price_info = item.variant.best_price
         discount = (best_price_info['original_price'] - item.price) * Decimal(str(item.quantity))
         total_offer_discount += discount
-        if item.applied_offer in ['product', 'category']:
+        if item.applied_offer in ['product', 'category'] and best_price_info.get('applied_offer_name') != 'No Offer Applied':
             offer_details.append({
                 'product': item.variant.product.product_name,
                 'offer_type': item.applied_offer,
-                'offer_name': best_price_info['applied_offer_name'],
+                'offer_name': best_price_info.get('applied_offer_name', 'No Offer Applied'),
                 'quantity': item.quantity,
                 'discount': float(discount)
             })

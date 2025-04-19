@@ -23,18 +23,14 @@ def aggregate(queryset, expression=None):
     total = Decimal('0')
     for item in queryset:
         try:
-            # Ensure item has the required attributes
             if not hasattr(item, 'quantity') or not hasattr(item, 'variant'):
                 logger.warning(f"Item missing attributes: {item}")
                 continue
 
-            # Get price: use item.price if available, otherwise item.variant.price
             price = item.price if hasattr(item, 'price') and item.price is not None else item.variant.price
             if price is None:
                 logger.warning(f"Price is None for item: {item}")
                 continue
-
-            # Convert price and quantity to Decimal for precise calculation
             price = Decimal(str(price))
             quantity = Decimal(str(item.quantity))
 

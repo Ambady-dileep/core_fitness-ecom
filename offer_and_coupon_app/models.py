@@ -10,9 +10,6 @@ from django.dispatch import receiver
 
 User = get_user_model()
 
-def get_default_valid_to():
-    return timezone.now() + timezone.timedelta(days=30)
-
 class Offer(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -90,36 +87,25 @@ class ProductOffer(Offer):
 
 class CategoryOffer(Offer):
     categories = models.ManyToManyField(
-        Category, 
+        Category,
         related_name='category_offers',
         help_text="Categories this offer applies to"
     )
-    apply_to_subcategories = models.BooleanField(
-        default=True,
-        help_text="If checked, offer applies to all subcategories as well"
-    )
-    
-    def get_all_categories(self):
-        if not self.apply_to_subcategories:
-            return self.categories.all()
-        all_categories = set(self.categories.all())
-        for category in self.categories.all():
-            all_categories.update(category.get_descendants(include_self=False))
-        return all_categories
     
     def apply_to_product(self, product, price):
         if not self.is_valid() or price < self.min_purchase_amount:
             return price, Decimal('0.00')
-        product_categories = set(product.categories.all())
-        offer_categories = set(self.get_all_categories())
-        if not (product_categories & offer_categories):  
+        if product.category not in self.categories.all():
             return price, Decimal('0.00')
         discount = price * (self.discount_value / 100)
         if self.max_discount_amount:
             discount = min(discount, self.max_discount_amount)
         discounted_price = max(price - discount, Decimal('0.00'))
         return discounted_price, discount
-    
+
+    def get_all_categories(self):
+        return self.categories.all()
+
     class Meta:
         verbose_name = "Category Offer"
         verbose_name_plural = "Category Offers"
@@ -139,7 +125,7 @@ class Coupon(models.Model):
         validators=[MinValueValidator(0.00)]
     )
     valid_from = models.DateTimeField(default=timezone.now)
-    valid_to = models.DateTimeField(default=get_default_valid_to)
+    valid_to = models.DateTimeField(default=timezone.now() + timezone.timedelta(days=30))
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -185,35 +171,11 @@ class Wallet(models.Model):
     def add_funds(self, amount):
         self.balance += Decimal(str(amount))
         self.save()
-        # Create a transaction record
-        WalletTransaction.objects.create(
-            wallet=self,
-            amount=amount,
-            transaction_type='CREDIT',
-            description=f"Added funds to wallet"
-        )
-    
-    def deduct_funds(self, amount):
-        amount = Decimal(str(amount))
-        if amount <= 0:
-            raise ValueError("Amount to deduct must be positive")
-        if self.balance < amount:
-            raise ValueError("Insufficient wallet balance")
-        self.balance -= amount
-        self.save()
-        # Create a transaction record
-        WalletTransaction.objects.create(
-            wallet=self,
-            amount=amount,
-            transaction_type='DEBIT',
-            description=f"Payment for order"
-        )
 
 class WalletTransaction(models.Model):
     TRANSACTION_TYPES = (
         ('CREDIT', 'Credit'),
         ('DEBIT', 'Debit'),
-        ('REFUND', 'Refund'),
     )
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='transactions')
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
