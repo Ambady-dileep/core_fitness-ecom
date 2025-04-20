@@ -215,54 +215,30 @@ def admin_update_stock(request, variant_id):
     context = {'variant': variant}
     return render(request, 'cart_and_orders_app/admin_update_stock.html', context)
 
-@login_required
+from decimal import Decimal
+
 def user_cart_list(request):
-    try:
-        cart = Cart.objects.get(user=request.user)
-        cart_items = cart.items.select_related('variant__product').all()
-        cart_total_items = sum(item.quantity for item in cart_items)
-        
-        has_out_of_stock = any(item.variant.stock <= 0 for item in cart_items)
-        
-        total_price, discount_info = apply_offers_to_cart(cart_items, None, request.user)
-        
-        cart_subtotal = Decimal(str(discount_info['subtotal']))
-        offer_discount = Decimal(str(discount_info['offer_discount']))
-        shipping_cost = Decimal(str(discount_info['shipping_cost']))
-        
-        context = {
-            'cart_items': cart_items,
-            'cart_total_items': cart_total_items,
-            'cart_subtotal': float(cart_subtotal),
-            'offer_discount': float(offer_discount),
-            'shipping_cost': float(shipping_cost),
-            'cart_total': float(total_price),
-            'has_out_of_stock': has_out_of_stock,
-        }
-        return render(request, 'cart_and_orders_app/user_cart_list.html', context)
-    
-    except Cart.DoesNotExist:
-        messages.info(request, "Your cart is empty.")
-        return render(request, 'cart_and_orders_app/user_cart_list.html', {
-            'cart_items': [],
-            'cart_total_items': 0,
-            'cart_subtotal': 0.0,
-            'offer_discount': 0.0,
-            'shipping_cost': 0.0,
-            'cart_total': 0.0,
-            'has_out_of_stock': False,
-        })
-    except Exception:
-        messages.error(request, "An error occurred while loading your cart.")
-        return render(request, 'cart_and_orders_app/user_cart_list.html', {
-            'cart_items': [],
-            'cart_total_items': 0,
-            'cart_subtotal': 0.0,
-            'offer_discount': 0.0,
-            'shipping_cost': 0.0,
-            'cart_total': 0.0,
-            'has_out_of_stock': False,
-        })
+    cart = Cart.objects.get(user=request.user)
+    cart_items = cart.items.select_related('variant__product').all()
+    total_price, discount_info, offer_details = apply_offers_to_cart(cart_items, None, request.user)
+    request.session['applied_offers'] = offer_details
+    request.session.modified = True
+    tax = Decimal(str(discount_info['subtotal'])) * Decimal('0.05')  
+    cart_total = (Decimal(str(discount_info['subtotal'])) 
+                  - Decimal(str(discount_info['offer_discount'])) 
+                  + Decimal(str(discount_info['shipping_cost'])) 
+                  + tax)
+    context = {
+        'cart_items': cart_items,
+        'cart_total_items': cart.items.count(),
+        'cart_subtotal': discount_info['subtotal'],
+        'offer_discount': discount_info['offer_discount'],
+        'shipping_cost': discount_info['shipping_cost'],
+        'cart_total': float(cart_total),
+        'tax': float(tax),
+        'has_out_of_stock': any(item.variant.stock == 0 for item in cart_items),
+    }
+    return render(request, 'cart_and_orders_app/user_cart_list.html', context)
 
 @login_required
 @require_POST
@@ -419,36 +395,35 @@ def user_update_cart_quantity(request, item_id):
     action = request.POST.get('action')
     if action == 'increment' and item.quantity < item.variant.stock and item.quantity < 10:
         item.quantity += 1
-        item.save()
-        return JsonResponse({
-            'success': True,
-            'message': f'Quantity updated to {item.quantity}',
-            'quantity': item.quantity,
-            'subtotal': float(item.get_subtotal()),
-            'cart_count': cart.items.count(),
-            'cart_subtotal': float(cart.get_subtotal())
-        })
     elif action == 'decrement' and item.quantity > 1:
         item.quantity -= 1
-        item.save()
-        return JsonResponse({
-            'success': True,
-            'message': f'Quantity updated to {item.quantity}',
-            'quantity': item.quantity,
-            'subtotal': float(item.get_subtotal()),
-            'cart_count': cart.items.count(),
-            'cart_subtotal': float(cart.get_subtotal())
-        })
     elif action == 'remove':
         item.delete()
-        return JsonResponse({
-            'success': True,
-            'message': 'Item removed from cart',
-            'cart_count': cart.items.count(),
-            'cart_subtotal': float(cart.get_subtotal())
-        })
     else:
         return JsonResponse({'success': False, 'message': f'Invalid action: {action}'}, status=400)
+
+    item.save()  # Save the updated quantity or deletion
+
+    # Recalculate cart totals and offers
+    cart_items = cart.items.select_related('variant__product').all()
+    total_price, discount_info, offer_details = apply_offers_to_cart(cart_items, None, request.user)
+
+    # Update session with new offer details
+    request.session['applied_offers'] = offer_details
+    request.session.modified = True
+
+    response_data = {
+        'success': True,
+        'message': f'Quantity updated to {item.quantity}' if action != 'remove' else 'Item removed from cart',
+        'quantity': item.quantity if action != 'remove' else 0,
+        'subtotal': float(item.get_subtotal()) if action != 'remove' else 0.0,
+        'cart_count': cart.items.count(),
+        'cart_subtotal': float(discount_info['subtotal']),
+        'offer_discount': float(discount_info['offer_discount']),
+        'offer_details': offer_details
+    }
+
+    return JsonResponse(response_data)
 
 @login_required
 def clear_cart(request):

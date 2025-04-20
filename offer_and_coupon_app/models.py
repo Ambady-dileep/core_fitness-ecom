@@ -73,13 +73,19 @@ class ProductOffer(Offer):
     )
     
     def apply_to_product(self, product, price):
-        if not self.is_valid() or product not in self.products.all() or price < self.min_purchase_amount:
-            return price, Decimal('0.00')
-        discount = price * (self.discount_value / 100)
+        discount = price * (self.discount_value / Decimal('100.0'))
+        if self.max_discount_amount and discount > self.max_discount_amount:
+            discount = self.max_discount_amount
+        discounted_price = max(Decimal('0.00'), price - discount)
+        return discounted_price, discount
+
+    def calculate_discount(self, price):
+        if price < self.min_purchase_amount:
+            return Decimal('0.00')
+        discount = price * (self.discount_value / Decimal('100.0'))
         if self.max_discount_amount:
             discount = min(discount, self.max_discount_amount)
-        discounted_price = max(price - discount, Decimal('0.00'))
-        return discounted_price, discount
+        return discount
     
     class Meta:
         verbose_name = "Product Offer"
@@ -93,15 +99,19 @@ class CategoryOffer(Offer):
     )
     
     def apply_to_product(self, product, price):
-        if not self.is_valid() or price < self.min_purchase_amount:
-            return price, Decimal('0.00')
-        if product.category not in self.categories.all():
-            return price, Decimal('0.00')
-        discount = price * (self.discount_value / 100)
+        discount = price * (self.discount_value / Decimal('100.0'))
+        if self.max_discount_amount and discount > self.max_discount_amount:
+            discount = self.max_discount_amount
+        discounted_price = max(Decimal('0.00'), price - discount)
+        return discounted_price, discount
+
+    def calculate_discount(self, price):
+        if price < self.min_purchase_amount:
+            return Decimal('0.00')
+        discount = price * (self.discount_value / Decimal('100.0'))
         if self.max_discount_amount:
             discount = min(discount, self.max_discount_amount)
-        discounted_price = max(price - discount, Decimal('0.00'))
-        return discounted_price, discount
+        return discount
 
     def get_all_categories(self):
         return self.categories.all()

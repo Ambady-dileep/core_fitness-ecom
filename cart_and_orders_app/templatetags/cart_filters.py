@@ -61,3 +61,23 @@ def subtract(value, arg):
 @register.simple_tag
 def get_best_offer_for_product_tag(product, price):
     return get_best_offer_for_product(product, price)
+
+
+@register.filter
+def divide(value, arg):
+    """Divide value by arg."""
+    try:
+        # Handle None or empty string
+        val = float(value) if value not in (None, '') else 0
+        arg_val = float(arg) if arg not in (None, '') else 1  
+        
+        # Prevent division by zero
+        if arg_val == 0:
+            logger.error(f"Divide filter error: Division by zero. value={value}, arg={arg}")
+            return 0
+            
+        return val / arg_val
+    except (ValueError, TypeError) as e:
+        logger.error(f"Divide filter error: value={value}, arg={arg}, error={e}")
+        return 0
+    

@@ -186,7 +186,7 @@ class Product(models.Model):
     def approved_reviews(self):
         return self.reviews.filter(is_approved=True)
     
-    # Add this method that might be missing (referenced in the error)
+
     @property
     def best_price(self):
         # Return a dictionary with price info instead of a tuple
