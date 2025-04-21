@@ -558,31 +558,31 @@
             function updateWishlistCount(count) {
                 const wishlistCountBadge = document.getElementById('wishlist-count');
                 if (wishlistCountBadge) {
-                    wishlistCountBadge.textContent = count;
+                    wishlistCountBadge.textContent = count > 0 ? count : 0; // Ensure non-negative
                     wishlistCountBadge.style.display = count > 0 ? 'flex' : 'none';
                 }
-                localStorage.setItem('wishlistCount', count);
+                localStorage.setItem('wishlistCount', Math.max(0, count)); // Prevent negative storage
             }
             
             // Function to update cart count
             function updateCartCount(count) {
                 const cartCountBadge = document.getElementById('cart-count');
                 if (cartCountBadge) {
-                    cartCountBadge.textContent = count;
+                    cartCountBadge.textContent = count > 0 ? count : 0; // Ensure non-negative
                     cartCountBadge.style.display = count > 0 ? 'flex' : 'none';
                 }
-                localStorage.setItem('cartCount', count);
+                localStorage.setItem('cartCount', Math.max(0, count)); // Prevent negative storage
             }
         
             // Listen for wishlist-updated events
             document.addEventListener('wishlist-updated', function(e) {
-                const count = e.detail.count >= 0 ? e.detail.count : 0;
+                const count = e.detail.count !== undefined && e.detail.count >= 0 ? e.detail.count : 0;
                 updateWishlistCount(count);
             });
             
             // Listen for cart-updated events
             document.addEventListener('cart-updated', function(e) {
-                const count = e.detail.count >= 0 ? e.detail.count : 0;
+                const count = e.detail.count !== undefined && e.detail.count >= 0 ? e.detail.count : 0;
                 updateCartCount(count);
             });
         });

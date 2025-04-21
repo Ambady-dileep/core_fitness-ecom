@@ -12,7 +12,7 @@ from .product_views import (
     approve_review,
     delete_review,
     admin_toggle_variant_status,
-    add_review,
+    user_add_review,
     autocomplete,
 )
 from .category_views import (
@@ -39,7 +39,7 @@ urlpatterns = [
     # User Routes
     path('products/', user_product_list, name='user_product_list'),
     path('products/<slug:slug>/', user_product_detail, name='user_product_detail'),
-    path('add-review/', add_review, name='add_review'),
+    path('add-review/', user_add_review, name='user_add_review'),
     path('admin/reviews/<int:review_id>/approve/', approve_review, name='admin_approve_review'),
     path('admin/reviews/<int:review_id>/delete/', delete_review, name='admin_delete_review'),
     path('autocomplete/', autocomplete, name='autocomplete'),

@@ -216,6 +216,7 @@ def admin_update_stock(request, variant_id):
     return render(request, 'cart_and_orders_app/admin_update_stock.html', context)
 
 from decimal import Decimal
+from django.views.decorators.cache import never_cache
 
 def user_cart_list(request):
     cart = Cart.objects.get(user=request.user)
@@ -228,9 +229,15 @@ def user_cart_list(request):
                   - Decimal(str(discount_info['offer_discount'])) 
                   + Decimal(str(discount_info['shipping_cost'])) 
                   + tax)
+
+    # Clear session data if cart is empty
+    if not cart_items.exists():
+        request.session.pop('applied_offers', None)
+        request.session.modified = True
+
     context = {
         'cart_items': cart_items,
-        'cart_total_items': cart.items.count(),
+        'cart_total_items': cart.items.distinct().count(),
         'cart_subtotal': discount_info['subtotal'],
         'offer_discount': discount_info['offer_discount'],
         'shipping_cost': discount_info['shipping_cost'],
@@ -315,7 +322,7 @@ def user_add_to_cart(request, variant_id=None):
         return JsonResponse({
             'success': True,
             'message': f'{variant.product.product_name} added to cart.',
-            'cart_count': cart_total_items,
+            'cart_count': cart.items.distinct().count(),
             'cart_subtotal': float(cart_subtotal),
             'wishlist_count': Wishlist.objects.filter(user=request.user).count(),
             'variant_image': variant_image,
@@ -401,29 +408,30 @@ def user_update_cart_quantity(request, item_id):
         item.delete()
     else:
         return JsonResponse({'success': False, 'message': f'Invalid action: {action}'}, status=400)
-
-    item.save()  # Save the updated quantity or deletion
-
-    # Recalculate cart totals and offers
+    if action != 'remove':
+        item.save()
     cart_items = cart.items.select_related('variant__product').all()
     total_price, discount_info, offer_details = apply_offers_to_cart(cart_items, None, request.user)
-
-    # Update session with new offer details
+    print(request.session['applied_offers'], discount_info)
     request.session['applied_offers'] = offer_details
     request.session.modified = True
+    if not cart_items.exists():
+        request.session.pop('applied_offers', None)
+        request.session.modified = True
 
     response_data = {
         'success': True,
         'message': f'Quantity updated to {item.quantity}' if action != 'remove' else 'Item removed from cart',
         'quantity': item.quantity if action != 'remove' else 0,
         'subtotal': float(item.get_subtotal()) if action != 'remove' else 0.0,
-        'cart_count': cart.items.count(),
+        'cart_count': cart.items.distinct().count(),
         'cart_subtotal': float(discount_info['subtotal']),
         'offer_discount': float(discount_info['offer_discount']),
         'offer_details': offer_details
     }
 
     return JsonResponse(response_data)
+
 
 @login_required
 def clear_cart(request):
@@ -560,7 +568,7 @@ def buy_now(request):
         return JsonResponse({
             'success': True,
             'message': 'Proceeding to checkout with selected item.',
-            'cart_count': cart.get_total_items(),
+            'cart_count': cart.items.count(),
             'redirect': '/checkout/',
             'variant_image': variant_image
         })

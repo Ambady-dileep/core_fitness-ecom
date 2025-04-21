@@ -23,6 +23,7 @@ from django.db.models import Min, Max, Q, F, ExpressionWrapper, DecimalField, Av
 from product_app.models import Product, Category, Brand, ProductVariant
 from decimal import Decimal
 from django.db import transaction
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_GET
 from .forms import ReviewForm, ProductFilterForm
 from cart_and_orders_app.models import Wishlist, Order, OrderItem
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 def is_admin(user):
     return user.is_superuser or user.is_staff
 
+@never_cache
 @login_required
 def admin_product_list(request):
     if not is_admin(request.user):
@@ -260,46 +262,62 @@ def admin_product_detail(request, slug):
     
     return render(request, 'product_app/admin_product_detail.html', context)
 
+import logging
+logger = logging.getLogger(__name__)
+
 @login_required
 @require_POST
 def admin_toggle_product_status(request, product_id):
-    if not request.user.is_admin:  # Assuming is_admin is a custom check
+    if not request.user.is_superuser and not request.user.is_staff:
         return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
 
     try:
         with transaction.atomic():
             product = get_object_or_404(Product, id=product_id)
-            is_active = request.POST.get('is_active') == 'true'
+            # Debug the incoming POST data
+            logger.info(f"Received POST data: {dict(request.POST)}")
+            is_active_str = request.POST.get('is_active', 'undefined')
+            is_active = is_active_str.lower() == 'true'  # Case-insensitive check
 
+            logger.info(f"Toggling product {product_id} ({product.product_name}) to {is_active} (from {is_active_str})")
+
+            # Set the product state based on the request
             if is_active:
-                # Unblock: Ensure at least one variant exists
+                # Unblock: Ensure at least one variant exists and is active
                 if not product.variants.exists():
                     return JsonResponse({
                         'success': False,
                         'message': 'Cannot unblock product without variants.'
                     }, status=400)
-                # Activate product and ensure at least one variant is active
                 product.is_active = True
                 if not product.variants.filter(is_active=True).exists():
                     first_variant = product.variants.first()
-                    first_variant.is_active = True
-                    first_variant.save()
+                    if first_variant:
+                        first_variant.is_active = True
+                        first_variant.save()
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'No variants available to activate.'
+                        }, status=400)
             else:
                 # Block: Set product and all variants to inactive
                 product.is_active = False
                 product.variants.update(is_active=False)
 
             product.save()
+            logger.info(f"Product {product_id} status updated to {product.is_active}")
             return JsonResponse({
                 'success': True,
-                'message': f'Product {product.product_name} has been {"unblocked" if is_active else "blocked"}.'
+                'is_active': product.is_active,
+                'message': f'Product "{product.product_name}" has been {"unblocked" if is_active else "blocked"}.'
             })
     except Exception as e:
+        logger.error(f"Error toggling product {product_id}: {str(e)}")
         return JsonResponse({
             'success': False,
-            'message': str(e)
+            'message': f'Error updating product status: {str(e)}'
         }, status=500)
-    
     
 @login_required
 def get_product_variants(request, product_id):
@@ -406,7 +424,7 @@ def admin_toggle_variant_status(request, variant_id):
 @csrf_exempt
 @login_required
 @require_POST
-def add_review(request):
+def user_add_review(request):
     try:
         logger.debug(f"Raw request body: {request.body}")
         data = json.loads(request.body)
