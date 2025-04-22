@@ -6,6 +6,7 @@ from product_app.models import Product, Category, ProductVariant
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from decimal import Decimal
+from datetime import timedelta
 from django.dispatch import receiver
 
 User = get_user_model()
@@ -120,6 +121,9 @@ class CategoryOffer(Offer):
         verbose_name = "Category Offer"
         verbose_name_plural = "Category Offers"
 
+def default_valid_to():
+    return timezone.now() + timedelta(days=30)
+
 class Coupon(models.Model):
     code = models.CharField(max_length=50, unique=True)
     discount_percentage = models.DecimalField(
@@ -135,7 +139,7 @@ class Coupon(models.Model):
         validators=[MinValueValidator(0.00)]
     )
     valid_from = models.DateTimeField(default=timezone.now)
-    valid_to = models.DateTimeField(default=timezone.now() + timezone.timedelta(days=30))
+    valid_to = models.DateTimeField(default=default_valid_to)  
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -189,7 +193,7 @@ class WalletTransaction(models.Model):
     )
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='transactions')
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
-    transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPES)
+    transaction_type = models.CharField(max_length=9, choices=TRANSACTION_TYPES)
     description = models.CharField(max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

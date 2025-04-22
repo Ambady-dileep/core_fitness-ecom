@@ -6,7 +6,6 @@ from django.utils import timezone
 from .forms import CouponForm, CouponApplyForm
 from django.core.paginator import Paginator
 from cart_and_orders_app.models import Cart, CartItem
-from cart_and_orders_app.forms import CouponApplyForm
 from decimal import Decimal
 from django.db import models, transaction
 from .models import Coupon, UserCoupon, Wallet, WalletTransaction, ProductOffer, CategoryOffer
@@ -15,7 +14,6 @@ from django.shortcuts import redirect, render
 from decimal import InvalidOperation
 from django.urls import reverse
 import json
-from .utils import apply_offers_to_cart
 from django.contrib import messages
 from django.conf import settings
 from .models import ReferralCode, Referral
@@ -25,7 +23,6 @@ import razorpay
 from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
-
 
 @login_required
 @require_POST
@@ -50,16 +47,18 @@ def apply_coupon(request):
         subtotal = Decimal('0.00')
         offer_details = []
         
+        # Calculate subtotal and offer details
         for item in cart_items:
             best_price_info = item.variant.best_price
             unit_price = best_price_info['price']
+            original_price = best_price_info['original_price']
             quantity = Decimal(str(item.quantity))
             subtotal += unit_price * quantity
-            if best_price_info['applied_offer_type'] in ['product', 'category']:
+            if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
                 offer_details.append({
                     'product': item.variant.product.product_name,
                     'offer_type': best_price_info['applied_offer_type'],
-                    'discount': float((best_price_info['original_price'] - unit_price) * quantity)
+                    'discount': float((original_price - unit_price) * quantity)  # Keep float for JSON compatibility
                 })
 
         if coupon.minimum_order_amount > subtotal:
@@ -70,24 +69,33 @@ def apply_coupon(request):
             }, status=400)
 
         # Apply coupon
-        total, discount_info = apply_offers_to_cart(cart_items, coupon, request.user)
+        coupon_discount = (coupon.discount_percentage / 100) * subtotal
+        if coupon_discount > subtotal:
+            coupon_discount = subtotal
+
+        tax = subtotal * Decimal('0.05')
+        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
+        # Convert float discounts to Decimal for sum
+        offer_discount = sum(Decimal(str(item['discount'])) for item in offer_details)
+        total = subtotal - offer_discount - coupon_discount + shipping_cost + tax
+
         request.session['applied_coupon'] = {
             'code': coupon.code,
-            'discount': float(discount_info['coupon_discount']),
+            'discount': float(coupon_discount),
             'coupon_id': coupon.id
         }
         request.session['applied_offers'] = offer_details
         request.session.modified = True
-        logger.info(f"User {request.user.username} applied coupon {coupon_code} successfully. Subtotal: {subtotal}, Coupon Discount: {discount_info['coupon_discount']}, Offers: {offer_details}")
+        logger.info(f"User {request.user.username} applied coupon {coupon_code} successfully. Subtotal: {subtotal}, Coupon Discount: {coupon_discount}, Offers: {offer_details}")
         return JsonResponse({
             'success': True,
-            'message': f"Coupon '{coupon_code}' applied successfully! You saved ₹{discount_info['coupon_discount']:.2f}.",
+            'message': f"Coupon '{coupon_code}' applied successfully! You saved ₹{coupon_discount:.2f}.",
             'subtotal': float(subtotal),
             'total': float(total),
             'discount_info': {
-                'coupon_discount': float(discount_info['coupon_discount']),
-                'offer_discount': float(discount_info.get('offer_discount', 0)),
-                'shipping_cost': float(discount_info['shipping_cost'])
+                'coupon_discount': float(coupon_discount),
+                'offer_discount': float(offer_discount),
+                'shipping_cost': float(shipping_cost)
             },
             'offer_details': offer_details
         })
@@ -123,16 +131,22 @@ def remove_coupon(request):
         for item in cart_items:
             best_price_info = item.variant.best_price
             unit_price = best_price_info['price']
+            original_price = best_price_info['original_price']
             quantity = Decimal(str(item.quantity))
             subtotal += unit_price * quantity
-            if best_price_info['applied_offer_type'] in ['product', 'category']:
+            if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
                 offer_details.append({
                     'product': item.variant.product.product_name,
                     'offer_type': best_price_info['applied_offer_type'],
-                    'discount': float((best_price_info['original_price'] - unit_price) * quantity)
+                    'discount': float((original_price - unit_price) * quantity)
                 })
 
-        total, discount_info = apply_offers_to_cart(cart_items, None, request.user)
+        tax = subtotal * Decimal('0.05')
+        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
+        # Convert float discounts to Decimal for sum
+        offer_discount = sum(Decimal(str(item['discount'])) for item in offer_details)
+        total = subtotal - offer_discount + shipping_cost + tax
+
         request.session['applied_offers'] = offer_details
         request.session.modified = True
 
@@ -144,8 +158,8 @@ def remove_coupon(request):
             'total': float(total),
             'discount_info': {
                 'coupon_discount': 0.0,
-                'offer_discount': float(discount_info.get('offer_discount', 0)),
-                'shipping_cost': float(discount_info['shipping_cost'])
+                'offer_discount': float(offer_discount),
+                'shipping_cost': float(shipping_cost)
             },
             'offer_details': offer_details
         })
@@ -153,7 +167,7 @@ def remove_coupon(request):
     except Exception as e:
         logger.error(f"Error removing coupon for user {request.user.username}: {str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'message': 'An unexpected error occurred. Please try again.'}, status=500)
-
+        
 def apply_offers_to_product(product, price):
     best_price = price
     now = timezone.now()
@@ -302,7 +316,6 @@ def view_coupons(request):
             })
         return JsonResponse({'coupons': coupons_data})
     
-    # Regular template response
     highlighted_coupon = request.GET.get('highlight')
     context = {
         'coupons': coupons,
@@ -328,23 +341,32 @@ def cancel_cart_item(request, item_id):
         messages.info(request, "Coupon data cleared from cart.")
 
     # Calculate totals with offers only
-    total_price, discount_info = apply_offers_to_cart(cart_items, None, request.user)
-    
-    # Update session with new offer details
+    subtotal = Decimal('0.00')
     offer_details = []
     for item in cart_items:
         best_price_info = item.variant.best_price
-        if best_price_info['applied_offer_type'] in ['product', 'category']:
+        unit_price = best_price_info['price']
+        original_price = best_price_info['original_price']
+        quantity = Decimal(str(item.quantity))
+        subtotal += unit_price * quantity
+        if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
             offer_details.append({
                 'product': item.variant.product.product_name,
                 'offer_type': best_price_info['applied_offer_type'],
-                'discount': float((best_price_info['original_price'] - best_price_info['price']) * Decimal(str(item.quantity)))
+                'discount': float((original_price - unit_price) * quantity)
             })
+
+    tax = subtotal * Decimal('0.05')
+    shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
+    offer_discount = sum((item['discount'] for item in offer_details), Decimal('0.00'))
+    total = subtotal - offer_discount + shipping_cost + tax
+
+    # Update session with new offer details
     request.session['applied_offers'] = offer_details
     request.session.modified = True
 
     messages.success(request, f"{item_name} removed from cart.")
-    logger.info(f"Cart updated for user {request.user.username}. Total: {total_price}, Discounts: {discount_info}")
+    logger.info(f"Cart updated for user {request.user.username}. Total: {total}, Discounts: {offer_discount}")
     return redirect('cart_and_orders_app:user_cart_list')
 
 @login_required
