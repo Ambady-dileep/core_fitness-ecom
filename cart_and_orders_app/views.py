@@ -929,6 +929,15 @@ def razorpay_callback(request):
                     'message': 'Payment successful!',
                     'redirect': reverse('cart_and_orders_app:order_success', kwargs={'order_id': order.order_id})
                 })
+        except Exception:
+            order = get_object_or_404(Order, razorpay_order_id=razorpay_order_id, user=request.user, status='Pending')
+            order.payment_status = 'FAILED'
+            order.save()
+            return JsonResponse({
+                'success': False,
+                'message': 'Payment verification failed',
+                'redirect': reverse('cart_and_orders_app:order_failure', kwargs={'order_id': order.order_id})
+            })
         except Order.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Order not found.'}, status=400)
         except Exception as e:
@@ -979,6 +988,7 @@ def initiate_payment(request):
         return JsonResponse({'success': False, 'message': f'Failed to initiate payment: {str(e)}'}, status=500)
 
 @login_required
+@require_POST
 def retry_payment(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user, payment_method='CARD', razorpay_payment_id__isnull=True, status='Pending')
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -991,7 +1001,7 @@ def retry_payment(request, order_id):
     order.save()
     return JsonResponse({
         'success': True,
-        'razorpay_order': razorpay_order,
+        'razorpay_order_id': razorpay_order['id'],
         'razorpay_key': settings.RAZORPAY_KEY_ID,
         'amount': int(order.total_amount * 100),
         'currency': 'INR',
@@ -1003,6 +1013,68 @@ def retry_payment(request, order_id):
             'contact': order.shipping_address.phone if hasattr(order.shipping_address, 'phone') else ''
         }
     })
+
+
+@login_required
+@require_POST
+@csrf_exempt  # Temporary for debugging; remove in production
+def log_payment_error(request):
+    try:
+        # Log raw request headers and body for debugging
+        logger.debug(f"Request headers: {dict(request.headers)}")
+        raw_body = request.body.decode('utf-8')
+        logger.debug(f"Raw request body: {raw_body}")
+
+        if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            logger.warning(f"Invalid request type for user {request.user.username}")
+            return JsonResponse({'success': False, 'message': 'Invalid request type'}, status=400)
+
+        # Handle empty or invalid JSON
+        error_data = json.loads(raw_body) if raw_body else {}
+        logger.debug(f"Parsed payment error data for user {request.user.username}: {json.dumps(error_data)}")
+
+        # Extract fields with defaults, prioritizing metadata if top-level is empty
+        payment_error = error_data.get('error', {})
+        razorpay_order_id = error_data.get('order_id') or payment_error.get('metadata', {}).get('order_id', '')
+        payment_id = error_data.get('payment_id') or payment_error.get('metadata', {}).get('payment_id', '')
+        error_code = payment_error.get('code', '')
+        error_description = payment_error.get('description', '')
+        error_source = payment_error.get('source', '')
+        error_step = payment_error.get('step', '')
+        error_reason = payment_error.get('reason', '')
+
+        # Log detailed error
+        logger.error(
+            f"Razorpay payment failed for user {request.user.username}: "
+            f"Order ID: {razorpay_order_id}, Payment ID: {payment_id}, "
+            f"Error Code: {error_code}, Description: {error_description}, "
+            f"Source: {error_source}, Step: {error_step}, Reason: {error_reason}"
+        )
+
+        # Update order status if applicable
+        if razorpay_order_id:
+            try:
+                from django.shortcuts import get_object_or_404
+                from .models import Order
+                order = get_object_or_404(Order, razorpay_order_id=razorpay_order_id, user=request.user, status='Pending')
+                if order.payment_status != 'FAILED':
+                    order.payment_status = 'FAILED'
+                    order.save()
+                    logger.info(f"Order {razorpay_order_id} marked as FAILED due to payment error")
+            except Order.DoesNotExist:
+                logger.warning(f"Order {razorpay_order_id} not found for payment error logging")
+                return JsonResponse({'success': False, 'message': f'Order {razorpay_order_id} not found'}, status=400)
+        else:
+            logger.warning(f"No order_id provided in payment error for user {request.user.username}")
+            return JsonResponse({'success': False, 'message': 'No order_id provided'}, status=400)
+
+        return JsonResponse({'success': True, 'message': 'Payment error logged successfully'})
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON data in payment error log for user {request.user.username}: {str(e)} - Raw data: {raw_body}")
+        return JsonResponse({'success': False, 'message': f'Invalid data format: {str(e)}'}, status=400)
+    except Exception as e:
+        logger.error(f"Unexpected error in log_payment_error for user {request.user.username}: {str(e)} - Raw data: {raw_body}")
+        return JsonResponse({'success': False, 'message': f'An error occurred: {str(e)}'}, status=500)
 
 @login_required
 def download_invoice(request, order_id):
@@ -1173,7 +1245,7 @@ def user_order_success(request, order_id):
         'order': order,
         'title': 'Order Success'
     }
-    return render(request, 'cart_and_orders_app/order_success.html', context)
+    return render(request, 'cart_and_orders_app/user_order_success.html', context)
 
 @login_required
 def user_order_failure(request, order_id):
@@ -1186,22 +1258,39 @@ def user_order_failure(request, order_id):
         'order': order,
         'title': 'Order Payment Failed'
     }
-    return render(request, 'cart_and_orders_app/order_failure.html', context)
+    return render(request, 'cart_and_orders_app/user_order_failure.html', context)
 
-@login_required
 def user_order_list(request):
+    # Filter orders for the current user
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
+    
+    # Incomplete Razorpay orders: only those that are still pending payment
     incomplete_razorpay_orders = Order.objects.filter(
         user=request.user,
-        status='Pending',
-        razorpay_order_id__isnull=False,
-        razorpay_payment_id__isnull=True
-    ).order_by('-created_at')
-    context = {
+        payment_method='CARD',
+        razorpay_payment_id__isnull=True,
+        payment_status='FAILED'
+    )
+    
+    # Handle search and filter
+    search_query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '')
+    
+    if search_query:
+        orders = orders.filter(order_id__icontains=search_query)
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    
+    # Status choices for the filter dropdown
+    status_choices = Order.STATUS_CHOICES
+    
+    return render(request, 'cart_and_orders_app/user_order_list.html', {
         'orders': orders,
-        'incomplete_razorpay_orders': incomplete_razorpay_orders
-    }
-    return render(request, 'cart_and_orders_app/user_order_list.html', context)
+        'incomplete_razorpay_orders': incomplete_razorpay_orders,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'status_choices': status_choices,
+    })
 
 @login_required
 def user_order_detail(request, order_id):
@@ -1286,6 +1375,7 @@ def user_cancel_order_item(request, order_id, item_id):
     context = {'order': order, 'form': form, 'order_item': order_item}
     return render(request, 'cart_and_orders_app/cancel_order_item.html', context)
 
+
 @login_required
 @require_POST  
 def user_return_order(request, order_id):
@@ -1306,7 +1396,6 @@ def user_return_order(request, order_id):
             messages.error(request, "Invalid return request. Please provide a valid reason.")
             logger.warning(f"Invalid return request by user {request.user.username} for order {order.order_id}")
         return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-    # Remove the GET rendering logic since the modal handles the form
     return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 @login_required
