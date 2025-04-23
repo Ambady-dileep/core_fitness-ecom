@@ -229,35 +229,7 @@ def toggle_user_block(request, user_id):
         redirect_url += f"?{urlencode(query_params)}"
     return redirect(redirect_url)
 
-@login_required
-@user_passes_test(is_admin)
-@require_POST
-def delete_user(request, user_id):
-    logger = logging.getLogger(__name__)
-    try:
-        user = CustomUser.objects.get(id=user_id)
-        if user.is_superuser:
-            logger.warning(f"Attempt to delete superuser account {user.username} by {request.user.username}")
-            messages.error(request, "Cannot delete a superuser account!")
-        else:
-            user.delete()
-            logger.info(f"User '{user.username}' deleted by admin {request.user.username}")
-            messages.success(request, f"User '{user.username}' has been deleted successfully!")
-    except CustomUser.DoesNotExist:
-        logger.error(f"User not found for deletion, id={user_id}")
-        messages.error(request, "User not found!")
-    
-    search_query = request.POST.get('search_query', '')
-    page = request.POST.get('page', '1')
-    query_params = {}
-    if search_query:
-        query_params['search'] = search_query
-    if page != '1':
-        query_params['page'] = page
-    redirect_url = reverse('user_app:admin_customer_list')
-    if query_params:
-        redirect_url += f"?{urlencode(query_params)}"
-    return redirect(redirect_url)
+
 
 @login_required
 @user_passes_test(is_admin)

@@ -540,113 +540,105 @@ def autocomplete(request):
 ###################################################### User Views ###########################################################
 
 def user_product_list(request):
-    products = Product.objects.filter(
-        is_active=True,
-        variants__is_active=True,
-        category__is_active=True,  
-        brand__is_active=True 
-    ).select_related('category', 'brand').prefetch_related(
-        'variants', 'variants__variant_images', 'reviews'
-    ).distinct()  
-    products = products.annotate(
-        min_price=Min(
-            ExpressionWrapper(
-                F('variants__original_price') * (1 - F('variants__discount_percentage') / 100),
-                output_field=DecimalField(max_digits=10, decimal_places=0)
-            )
-        ),
-        max_price=Max(
-            ExpressionWrapper(
-                F('variants__original_price') * (1 - F('variants__discount_percentage') / 100),
-                output_field=DecimalField(max_digits=10, decimal_places=0)
-            )
-        ),
+    # Initialize filter form
+    filter_form = ProductFilterForm(request.GET or None)
+    
+    # Fetch active products with related data
+    products = Product.objects.filter(is_active=True).prefetch_related(
+        'variants__variant_images', 'category', 'brand', 'reviews', 'product_offers'
+    ).annotate(
+        min_price=Min('variants__original_price'),
+        max_price=Max('variants__original_price'),
         avg_rating=Avg('reviews__rating')
     )
 
-    # Filtering
-    search_query = request.GET.get('search', '')
-    if search_query:
-        products = products.filter(
-            Q(product_name__icontains=search_query) |
-            Q(description__icontains=search_query) |
-            Q(category__name__icontains=search_query) |
-            Q(brand__name__icontains=search_query)
-        )
+    # Apply filters
+    if filter_form.is_valid():
+        search_query = filter_form.cleaned_data.get('search')
+        category = filter_form.cleaned_data.get('category')
+        brand = filter_form.cleaned_data.get('brand')
+        min_price = filter_form.cleaned_data.get('min_price')
+        max_price = filter_form.cleaned_data.get('max_price')
 
-    category_id = request.GET.get('category')
-    if category_id:
-        products = products.filter(category__id=category_id)
-
-    brand_id = request.GET.get('brand')
-    if brand_id:
-        products = products.filter(brand__id=brand_id)
-
-    min_price = request.GET.get('min_price')
-    if min_price:
-        products = products.filter(min_price__gte=min_price)
-
-    max_price = request.GET.get('max_price')
-    if max_price:
-        products = products.filter(max_price__lte=max_price)
+        if search_query:
+            products = products.filter(
+                Q(product_name__icontains=search_query) |
+                Q(description__icontains=search_query)
+            )
+        if category:
+            products = products.filter(category=category)
+        if brand:
+            products = products.filter(brand=brand)
+        if min_price is not None:
+            products = products.filter(variants__original_price__gte=min_price)
+        if max_price is not None:
+            products = products.filter(variants__original_price__lte=max_price)
 
     # Sorting
     sort_by = request.GET.get('sort', 'new_arrivals')
-    sort_options = {
-        'price_low': 'min_price',
-        'price_high': '-max_price',
-        'ratings': '-avg_rating',
-        'new_arrivals': '-created_at',
-        'a_to_z': 'product_name',
-        'z_to_a': '-product_name',
-        'best_sellers': '-variants__stock' 
-    }
-    products = products.order_by(sort_options.get(sort_by, '-created_at'))
+    if sort_by == 'price_low':
+        products = products.order_by('min_price')
+    elif sort_by == 'price_high':
+        products = products.order_by('-max_price')
+    elif sort_by == 'ratings':
+        products = products.order_by('-avg_rating')
+    elif sort_by == 'a_to_z':
+        products = products.order_by('product_name')
+    elif sort_by == 'z_to_a':
+        products = products.order_by('-product_name')
+    else:
+        products = products.order_by('-created_at')
 
+    # Prepare product data
     product_data = []
     for product in products:
-        primary_variant = product.primary_variant
-        if primary_variant:
-            primary_image = None
-            if primary_variant.variant_images.filter(is_primary=True).exists():
-                primary_image = primary_variant.variant_images.filter(is_primary=True).first()
-            
-            product_data.append({
-                'product': product,
-                'variant': primary_variant,
-                'primary_image': primary_image,
-                'discounted_price': int(primary_variant.discounted_price()),
-                'best_price': int(primary_variant.best_price['price']),
-                'has_offer': primary_variant.has_offer,
-                'best_offer_percentage': primary_variant.best_offer_percentage,
-                'avg_rating': product.average_rating,
-                'review_count': product.reviews.filter(is_approved=True).count()
-            })
+        # Select primary variant or first active variant with stock
+        variant = (
+            product.primary_variant or
+            product.variants.filter(is_active=True, stock__gt=0).order_by('original_price').first() or
+            product.variants.filter(is_active=True).order_by('original_price').first()
+        )
+
+        if not variant:
+            continue
+
+        # Get primary image
+        primary_image = variant.primary_image
+
+        # Use model methods for pricing and offer info
+        price_info = variant.best_price
+        best_price = price_info['price']
+        discounted_price = price_info['discounted_price']
+        original_price = price_info['original_price']
+        has_offer = variant.has_offer
+        best_offer_percentage = variant.best_offer_percentage
+
+        product_data.append({
+            'product': product,
+            'variant': variant,
+            'primary_image': primary_image,
+            'discounted_price': discounted_price,
+            'best_price': best_price,
+            'original_price': original_price,
+            'has_offer': has_offer,
+            'best_offer_percentage': best_offer_percentage,
+            'avg_rating': product.avg_rating or 0,
+            'review_count': product.reviews.filter(is_approved=True).count(),
+            'variant_name': variant.flavor or None,  # Use flavor as variant name
+            'category_name': product.category.name if product.category else None,
+            'total_stock': product.total_stock(),
+        })
 
     # Pagination
-    paginator = Paginator(product_data, 12) 
-    page_number = request.GET.get('page', 1)
+    paginator = Paginator(product_data, 12)
+    page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # Additional context for filters
-    max_price_range = products.aggregate(Max('max_price'))['max_price__max'] or 10000
-
-    # Create filter form
-    filter_form = ProductFilterForm(request.GET)
-    filter_form.fields['category'].queryset = Category.objects.filter(is_active=True)
-    filter_form.fields['brand'].queryset = Brand.objects.filter(is_active=True) 
-
     context = {
-        'products': page_obj,
         'filter_form': filter_form,
-        'categories': Category.objects.filter(is_active=True),
-        'brands': Brand.objects.filter(is_active=True), 
-        'sort_by': sort_by,
-        'search_query': search_query,
-        'max_price': max_price_range,
-        'selected_category': category_id,
-        'selected_brand': brand_id,
+        'products': page_obj,
         'page_obj': page_obj,
+        'sort_by': sort_by,
     }
     return render(request, 'product_app/user_product_list.html', context)
 

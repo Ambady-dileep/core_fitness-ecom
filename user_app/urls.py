@@ -45,7 +45,6 @@ urlpatterns = [
     path('verify-otp-signup/', user_views.verify_otp_signup, name='verify_otp_signup'),
     path('resend-otp-signup/', user_views.resend_otp_signup, name='resend_otp_signup'),
     path('verify-otp-signup/<str:email>/', user_views.verify_otp_signup_page, name='verify_otp_signup_page'),
-    path('admin/delete_user/<int:user_id>/', admin_views.delete_user, name='delete_user'),
 
     # Banner Management
     path('admin/banners/', admin_views.admin_banner_list, name='admin_banner_list'),

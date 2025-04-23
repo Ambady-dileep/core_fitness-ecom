@@ -42,7 +42,9 @@ def admin_orders_list(request):
     sort_by = request.GET.get('sort', '-order_date')
     status_filter = request.GET.get('status', '')
 
-    orders = Order.objects.all().select_related('user', 'shipping_address', 'coupon')
+    orders = Order.objects.all().select_related('user', 'shipping_address', 'coupon').annotate(
+        cancelled_items_count=Count('cancellations', filter=Q(cancellations__item__isnull=False))
+    )
     
     if search_query:
         orders = orders.filter(
@@ -58,6 +60,12 @@ def admin_orders_list(request):
     valid_sorts = ['order_date', '-order_date', 'total_amount', '-total_amount']
     sort_by = sort_by if sort_by in valid_sorts else '-order_date'
     orders = orders.order_by(sort_by)
+
+    for order in orders:
+        cancellations = order.cancellations.all()
+        order.has_cancellations = cancellations.exists()
+        order.partial_cancellation = any(cancellation.item for cancellation in cancellations) if cancellations.exists() else False
+        order.total_refunded = sum(cancellation.refunded_amount for cancellation in cancellations) if cancellations.exists() else Decimal('0.00')
 
     paginator = Paginator(orders, 10)
     page_number = request.GET.get('page')
@@ -1269,7 +1277,8 @@ def user_order_list(request):
         user=request.user,
         payment_method='CARD',
         razorpay_payment_id__isnull=True,
-        payment_status='FAILED'
+        payment_status='FAILED',
+        status='Pending'
     )
     
     # Handle search and filter
@@ -1330,24 +1339,41 @@ def user_order_detail(request, order_id):
 @require_POST
 def user_cancel_order(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-    if request.method == 'POST':
-        form = OrderCancellationForm(request.POST)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            try:
-                order.cancel_order(reason)
-                messages.success(request, f"Order {order.order_id} has been cancelled.")
-                logger.info(f"User {request.user.username} cancelled order {order.order_id}")
-            except ValueError as e:
-                messages.error(request, str(e))
-                logger.warning(f"Failed to cancel order {order.order_id} for user {request.user.username}: {str(e)}")
-            return redirect('cart_and_orders_app:user_order_list')
-        else:
-            messages.error(request, "Invalid cancellation request.")
+    form = OrderCancellationForm(request.POST)
+    if form.is_valid():
+        reason = form.cleaned_data['reason']
+        try:
+            order.cancel_order(reason)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f"Order {order.order_id} has been cancelled."
+                })
+            messages.success(request, f"Order {order.order_id} has been cancelled.")
+            logger.info(f"User {request.user.username} cancelled order {order.order_id}")
+        except ValueError as e:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=400)
+            messages.error(request, str(e))
+            logger.warning(f"Failed to cancel order {order.order_id} for user {request.user.username}: {str(e)}")
     else:
-        form = OrderCancellationForm()
-    context = {'order': order, 'form': form}
-    return render(request, 'cart_and_orders_app/cancel_order.html', context)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid cancellation request.'
+            }, status=400)
+        messages.error(request, "Invalid cancellation request.")
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while processing your request.'
+        }, status=400)
+    return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+
 
 @login_required
 @require_POST
@@ -1355,26 +1381,43 @@ def user_cancel_order_item(request, order_id, item_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
     order_item = get_object_or_404(OrderItem, id=item_id, order=order)
     
-    if request.method == 'POST':
-        form = OrderItemCancellationForm(request.POST, order=order)
-        if form.is_valid():
-            reason = form.cleaned_data['reason']
-            try:
-                order.cancel_item(order_item, reason)
-                messages.success(request, f"Item {order_item.variant.product.product_name} has been cancelled.")
-                logger.info(f"User {request.user.username} cancelled item {order_item.id} in order {order.order_id}")
-            except ValueError as e:
-                messages.error(request, str(e))
-                logger.warning(f"Failed to cancel item {order_item.id} for user {request.user.username}: {str(e)}")
-            return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-        else:
-            messages.error(request, "Invalid cancellation request.")
+    form = OrderItemCancellationForm(request.POST)
+    if form.is_valid():
+        combined_reason = form.cleaned_data['combined_reason']
+        try:
+            order.cancel_item(order_item, combined_reason)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f"Item {order_item.variant.product.product_name} has been cancelled."
+                })
+            messages.success(request, f"Item {order_item.variant.product.product_name} has been cancelled.")
+            logger.info(f"User {request.user.username} cancelled item {order_item.id} in order {order.order_id}")
+        except ValueError as e:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': str(e)
+                }, status=400)
+            messages.error(request, str(e))
+            logger.warning(f"Failed to cancel item {order_item.id} for user {request.user.username}: {str(e)}")
     else:
-        form = OrderItemCancellationForm(order=order)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            error_message = "Invalid cancellation request."
+            if form.errors:
+                error_message = " ".join([f"{field}: {error}" for field, errors in form.errors.items() for error in errors])
+            return JsonResponse({
+                'success': False,
+                'message': error_message
+            }, status=400)
+        messages.error(request, "Invalid cancellation request.")
     
-    context = {'order': order, 'form': form, 'order_item': order_item}
-    return render(request, 'cart_and_orders_app/cancel_order_item.html', context)
-
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while processing your request.'
+        }, status=400)
+    return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 @login_required
 @require_POST  
@@ -1489,3 +1532,4 @@ def admin_bulk_actions(request):
             messages.error(request, "Invalid action selected.")
         return redirect('cart_and_orders_app:admin_orders_list')
     return redirect('cart_and_orders_app:admin_orders_list')
+

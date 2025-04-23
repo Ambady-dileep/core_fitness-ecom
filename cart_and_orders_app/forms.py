@@ -55,20 +55,28 @@ class OrderCancellationForm(forms.Form):
 
 class OrderItemCancellationForm(forms.Form):
     reason = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        required=True,
+        label="Reason for Cancellation"
+    )
+    other_reason = forms.CharField(
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
         required=False,
-        label="Reason for Cancellation (Optional)"
-    )
-    order_item = forms.ModelChoiceField(
-        queryset=OrderItem.objects.none(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        label="Select Item to Cancel"
+        label="Additional Details (if Other is selected)"
     )
 
-    def __init__(self, *args, order=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if order:
-            self.fields['order_item'].queryset = order.items.all()
+    def clean(self):
+        cleaned_data = super().clean()
+        reason = cleaned_data.get('reason')
+        other_reason = cleaned_data.get('other_reason')
+        if reason == "Other" and not other_reason:
+            raise forms.ValidationError("Please provide additional details for 'Other' reason.")
+        if reason == "Other" and other_reason:
+            cleaned_data['combined_reason'] = f"Other: {other_reason}"
+        else:
+            cleaned_data['combined_reason'] = reason
+
+        return cleaned_data
 
 class ReturnRequestForm(forms.ModelForm):
     class Meta:

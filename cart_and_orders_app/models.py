@@ -252,6 +252,12 @@ class Order(models.Model):
         for item in self.items.all():
             subtotal += item.price * Decimal(str(item.quantity))
         return subtotal
+    
+    def get_subtotal(self):
+        """
+        Calculate the subtotal for this order item (price * quantity).
+        """
+        return self.price * Decimal(str(self.quantity))
 
     def decrease_stock(self):
         """
@@ -273,6 +279,32 @@ class Order(models.Model):
             variant.stock += item.quantity
             variant.save()
             logger.info(f"Restored {item.quantity} stock for {variant.product.product_name}")
+
+    def get_cancelled_items_count(self):
+        """
+        Return the number of items in this order that have been cancelled.
+        """
+        return self.cancellations.filter(item__isnull=False).count()
+
+    def get_original_total_amount(self):
+        """
+        Calculate the original total amount before any item cancellations.
+        This assumes the original cart_items are still associated with the order.
+        """
+        subtotal = Decimal('0.00')
+        for cart_item in self.cart_items.all():
+            best_price_info = cart_item.variant.best_price
+            unit_price = best_price_info['price']
+            quantity = Decimal(str(cart_item.quantity))
+            subtotal += unit_price * quantity
+        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('50.00')
+        tax = subtotal * Decimal('0.05')
+        coupon_discount = Decimal('0.00')
+        if self.coupon and self.coupon.is_valid():
+            coupon_discount = (self.coupon.discount_percentage / 100) * subtotal
+            if coupon_discount > subtotal:
+                coupon_discount = subtotal
+        return subtotal - coupon_discount + shipping_cost + tax
 
     class Meta:
         indexes = [
