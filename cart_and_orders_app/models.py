@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.db.models import Sum, F
 from user_app.models import CustomUser, Address
 from product_app.models import ProductVariant
-from offer_and_coupon_app.utils import get_best_offer_for_product
+from offer_and_coupon_app.models import UserCoupon
 from decimal import Decimal
 from django.conf import settings
 from django.db import transaction
@@ -28,13 +28,11 @@ class Cart(models.Model):
         for item in self.items.select_related('variant__product').all():
             try:
                 best_price_info = item.variant.best_price
-                unit_price = best_price_info.get('price', Decimal('0.00'))  # Default to 0 if price is missing
-                if not isinstance(unit_price, Decimal):
-                    unit_price = Decimal(str(unit_price))
-                total += unit_price * Decimal(str(item.quantity))
+                unit_price = best_price_info['price']
+                total += unit_price * Decimal(item.quantity)  
             except (AttributeError, KeyError, ValueError) as e:
                 logger.error(f"Error calculating subtotal for cart {self.id}, item {item.id}: {str(e)}")
-                continue  # Skip invalid items
+                continue
         return total
 
 class CartItem(models.Model):
@@ -51,24 +49,15 @@ class CartItem(models.Model):
         return f"{self.quantity} x {self.variant}"
 
     def get_subtotal(self):
-        """
-        Calculate subtotal for this item using the stored price or variant's best price.
-        """
         price = self.price or self.variant.best_price['price']
-        return price * Decimal(str(self.quantity))
+        return price * Decimal(self.quantity) 
     
     def get_discounted_price(self):
-        """
-        Calculate total discounted price for this item (price * quantity).
-        """
         best_price_info = self.variant.best_price
         unit_price = best_price_info['price']
         return unit_price * Decimal(str(self.quantity))
     
     def get_discount_amount(self):
-        """
-        Calculate total discount amount for this item.
-        """
         best_price_info = self.variant.best_price
         original_price = best_price_info['original_price']
         discounted_price = best_price_info['price']
@@ -91,11 +80,8 @@ class CartItem(models.Model):
         return self.variant.product.primary_image
 
     def save(self, *args, **kwargs):
-        """
-        Update price and applied_offer based on the best offer for the variant.
-        """
         best_price_info = self.variant.best_price
-        self.price = best_price_info['price']  # Store unit price
+        self.price = best_price_info['price']
         self.applied_offer = best_price_info['applied_offer_type']
         if self.quantity > self.variant.stock:
             logger.warning(f"CartItem quantity {self.quantity} exceeds stock {self.variant.stock} for variant {self.variant}")
@@ -149,9 +135,8 @@ class Order(models.Model):
             variant = order_item.variant
             variant.stock += order_item.quantity
             variant.save()
-            refund_amount = order_item.price * Decimal(str(order_item.quantity))
+            refund_amount = order_item.price * Decimal(order_item.quantity)
 
-            # Refund to wallet
             wallet, created = Wallet.objects.get_or_create(user=self.user)
             wallet.add_funds(refund_amount)
             WalletTransaction.objects.create(
@@ -161,7 +146,6 @@ class Order(models.Model):
                 description=f"Refund for cancelled item in order {self.order_id}"
             )
 
-            # Record cancellation
             OrderCancellation.objects.create(
                 order=self,
                 item=order_item,
@@ -169,10 +153,8 @@ class Order(models.Model):
                 refunded_amount=refund_amount
             )
 
-            # Remove the item from the order
             order_item.delete()
 
-            # Update order status if no items remain
             if not self.items.exists():
                 self.status = 'Cancelled'
                 self.save()
@@ -184,10 +166,8 @@ class Order(models.Model):
             raise ValueError("Order cannot be cancelled in its current status.")
 
         with transaction.atomic():
-            # Restore stock for all items
             self.restore_stock()
 
-            # Refund total amount to wallet
             wallet, created = Wallet.objects.get_or_create(user=self.user)
             wallet.add_funds(self.total_amount)
             WalletTransaction.objects.create(
@@ -197,14 +177,12 @@ class Order(models.Model):
                 description=f"Refund for cancelled order {self.order_id}"
             )
 
-            # Record cancellation
             OrderCancellation.objects.create(
                 order=self,
                 reason=reason,
                 refunded_amount=self.total_amount
             )
 
-            # Update order status
             self.status = 'Cancelled'
             self.save()
 
@@ -222,16 +200,25 @@ class Order(models.Model):
             best_price_info = item.variant.best_price
             unit_price = best_price_info['price']
             original_price = best_price_info['original_price']
-            quantity = Decimal(str(item.quantity))
+            quantity = Decimal(item.quantity)
             subtotal += unit_price * quantity
             offer_discount += (original_price - unit_price) * quantity
 
         if self.coupon and self.coupon.is_valid():
-            coupon_discount = (self.coupon.discount_percentage / 100) * subtotal
-            if coupon_discount > subtotal:
-                coupon_discount = subtotal 
+            try:
+                user_coupon = UserCoupon.objects.get(user=self.user, coupon=self.coupon, is_used=False)
+                final_subtotal, coupon_discount = self.coupon.apply_to_subtotal(subtotal)
+                user_coupon.is_used = True
+                user_coupon.used_at = timezone.now()
+                user_coupon.order = self
+                user_coupon.save()
+                self.coupon.usage_count += 1
+                self.coupon.save()
+            except UserCoupon.DoesNotExist:
+                logger.warning(f"Invalid UserCoupon for user {self.user.id}, coupon {self.coupon.code}")
+                self.coupon = None
 
-        self.total_amount = subtotal - offer_discount - coupon_discount
+        self.total_amount = subtotal - coupon_discount
         self.discount_amount = offer_discount + coupon_discount
         super().save(update_fields=['total_amount', 'discount_amount'])
         if not self.items.exists():
@@ -245,24 +232,18 @@ class Order(models.Model):
                 )
 
     def get_total_price(self):
-        """
-        Calculate total price including discounts.
-        """
         subtotal = Decimal('0.00')
         for item in self.items.all():
-            subtotal += item.price * Decimal(str(item.quantity))
+            subtotal += item.price * Decimal(item.quantity)
         return subtotal
     
     def get_subtotal(self):
-        """
-        Calculate the subtotal for this order item (price * quantity).
-        """
-        return self.price * Decimal(str(self.quantity))
+        subtotal = Decimal('0.00')
+        for item in self.items.all():
+            subtotal += item.price * Decimal(item.quantity)
+        return subtotal
 
     def decrease_stock(self):
-        """
-        Decrease stock for each item in the order.
-        """
         with transaction.atomic():
             for item in self.items.select_related('variant').all():
                 variant = ProductVariant.objects.select_for_update().get(id=item.variant.id)
@@ -281,29 +262,20 @@ class Order(models.Model):
             logger.info(f"Restored {item.quantity} stock for {variant.product.product_name}")
 
     def get_cancelled_items_count(self):
-        """
-        Return the number of items in this order that have been cancelled.
-        """
         return self.cancellations.filter(item__isnull=False).count()
 
     def get_original_total_amount(self):
-        """
-        Calculate the original total amount before any item cancellations.
-        This assumes the original cart_items are still associated with the order.
-        """
         subtotal = Decimal('0.00')
         for cart_item in self.cart_items.all():
             best_price_info = cart_item.variant.best_price
             unit_price = best_price_info['price']
-            quantity = Decimal(str(cart_item.quantity))
+            quantity = Decimal(cart_item.quantity)
             subtotal += unit_price * quantity
         shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('50.00')
         tax = subtotal * Decimal('0.05')
         coupon_discount = Decimal('0.00')
         if self.coupon and self.coupon.is_valid():
-            coupon_discount = (self.coupon.discount_percentage / 100) * subtotal
-            if coupon_discount > subtotal:
-                coupon_discount = subtotal
+            final_subtotal, coupon_discount = self.coupon.apply_to_subtotal(subtotal)
         return subtotal - coupon_discount + shipping_cost + tax
 
     class Meta:
@@ -313,7 +285,7 @@ class Order(models.Model):
         ]
 
     def __str__(self):
-        return f"Order {self.order_id} - {self.user.username}"  
+        return f"Order {self.order_id} - {self.user.username}"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

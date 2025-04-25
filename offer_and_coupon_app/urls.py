@@ -18,8 +18,6 @@ urlpatterns = [
     path('wallet/balance/', user_views.wallet_balance, name='wallet_balance'),
     path('add-funds/', user_views.add_funds, name='add_funds'),
     path('add-funds-callback/', user_views.add_funds_callback, name='add_funds_callback'),
-    path('referral/dashboard/', user_views.referral_dashboard, name='referral_dashboard'),
-    path('referral/signup/', user_views.referral_signup, name='referral_signup'),
 
     # Admin-facing URLs
     # Coupon Management
@@ -33,16 +31,6 @@ urlpatterns = [
     # Wallet Management
     path('admin/wallet/', admin_views.admin_wallet_transactions, name='admin_wallet_transactions'),
     path('admin/wallet/transactions/<int:transaction_id>/', admin_views.admin_wallet_transaction_detail, name='admin_wallet_transaction_detail'),
-
-    # Unified Offer Management
-    path('admin/offers/', admin_views.admin_offer_list, name='admin_offer_list'),
-    path('admin/offers/add/', admin_views.admin_add_offer, name='admin_add_offer'),
-    path('admin/offers/<int:offer_id>/edit/', admin_views.admin_edit_offer, name='admin_edit_offer'),
-    path('admin/offers/<int:offer_id>/delete/', admin_views.admin_delete_offer, name='admin_delete_offer'),
-    path('admin/offers/<int:offer_id>/toggle-product/', admin_views.admin_product_offer_toggle, name='admin_product_offer_toggle'),
-    path('admin/offers/<int:offer_id>/toggle-category/', admin_views.admin_category_offer_toggle, name='admin_category_offer_toggle'),
-    path('admin/categories/<int:category_id>/offers/', admin_views.admin_category_offers, name='admin_category_offers'),
-    path('admin/categories/<int:category_id>/offers/add/', admin_views.admin_add_category_offer, name='admin_add_category_offer'),
 
     # Redirect old product offer URLs
     path('admin/product-offers/', redirect_to_offer_list, name='admin_product_offer_list'),

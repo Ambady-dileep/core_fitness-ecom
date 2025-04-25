@@ -1,31 +1,22 @@
 from django.core.paginator import Paginator
-from django.db.models import Q, Avg, Min, Sum, Max, F
+from django.db.models import Q, Avg, Min, Sum, Max, F,DecimalField
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from product_app.models import Product, Category, ProductVariant
-from django.core.exceptions import ValidationError
-from cart_and_orders_app.models import Wishlist
 from django.utils import timezone
-from django.db.models import F, ExpressionWrapper, DecimalField
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from offer_and_coupon_app.models import ProductOffer, CategoryOffer
-from django.core.paginator import Paginator
 from .models import Product, ProductVariant, Category, Brand, VariantImage, Review
-from django.db.models import Q
 import logging
+from .forms import ProductForm, ProductVariantFormSet, ProductFilterForm, ReviewForm
 from datetime import timedelta
 import json
-from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
-from django.db.models import Min, Max, Q, F, ExpressionWrapper, DecimalField, Avg, Sum
+from django.contrib.auth.decorators import login_required,user_passes_test
 from product_app.models import Product, Category, Brand, ProductVariant
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_GET
-from .forms import ReviewForm, ProductFilterForm
 from cart_and_orders_app.models import Wishlist, Order, OrderItem
 
 logger = logging.getLogger(__name__)
@@ -33,44 +24,42 @@ logger = logging.getLogger(__name__)
 def is_admin(user):
     return user.is_superuser or user.is_staff
 
-@never_cache
 @login_required
+@user_passes_test(is_admin)
+@never_cache
 def admin_product_list(request):
-    if not is_admin(request.user):
-        return redirect('user_app:user_home')
-
     products = Product.objects.all().select_related('category', 'brand').prefetch_related(
-        'variants', 'variants__variant_images', 'reviews', 'product_offers'
-    )
-
-    now = timezone.now()
-    products = products.annotate(
-        calculated_total_stock=Sum('variants__stock'),
-        avg_rating=Avg('reviews__rating', filter=Q(reviews__is_approved=True))
+        'variants', 'variants__variant_images', 'reviews'
     )
 
     # Filtering
-    if request.GET.get('q'):
-        query = request.GET.get('q')
-        search_field = request.GET.get('search_field', 'all')
-        if search_field == 'product_name':
-            products = products.filter(product_name__icontains=query)
-        elif search_field == 'category':
-            products = products.filter(category__name__icontains=query)
-        elif search_field == 'brand':
-            products = products.filter(brand__name__icontains=query)
-        else:
-            products = products.filter(
-                Q(product_name__icontains=query) |
-                Q(category__name__icontains=query) |
-                Q(brand__name__icontains=query)
-            )
+    filter_form = ProductFilterForm(request.GET)
+    if filter_form.is_valid():
+        search = filter_form.cleaned_data.get('search')
+        category = filter_form.cleaned_data.get('category')
+        brand = filter_form.cleaned_data.get('brand')
+        min_price = filter_form.cleaned_data.get('min_price')
+        max_price = filter_form.cleaned_data.get('max_price')
 
-    if request.GET.get('brand'):
-        products = products.filter(brand__id=request.GET.get('brand'))
-    if request.GET.get('status') == 'active':
+        if search:
+            products = products.filter(
+                Q(product_name__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(brand__name__icontains=search)
+            )
+        if category:
+            products = products.filter(category=category)
+        if brand:
+            products = products.filter(brand=brand)
+        if min_price is not None:
+            products = products.filter(variants__best_price__price__gte=min_price)
+        if max_price is not None:
+            products = products.filter(variants__best_price__price__lte=max_price)
+
+    status = request.GET.get('status', 'all')
+    if status == 'active':
         products = products.filter(is_active=True)
-    elif request.GET.get('status') == 'inactive':
+    elif status == 'inactive':
         products = products.filter(is_active=False)
 
     # Sorting
@@ -78,12 +67,15 @@ def admin_product_list(request):
     sort_options = {
         'new_arrivals': '-created_at',
         '-created_at': '-created_at',
-        '-avg_rating': '-avg_rating',
-        'rating': '-avg_rating',
-        'calculated_total_stock': 'calculated_total_stock',
-        'stock_low': 'calculated_total_stock'
+        'rating': '-average_rating',
+        '-average_rating': '-average_rating',
+        'stock_low': 'total_stock',
+        'calculated_total_stock': 'total_stock',
     }
-    products = products.order_by(sort_options.get(sort_by, '-created_at'))
+    if sort_by in ('stock_low', 'calculated_total_stock'):
+        products = products.annotate(total_stock=Sum('variants__stock')).order_by(sort_options.get(sort_by, '-created_at'))
+    else:
+        products = products.order_by(sort_options.get(sort_by, '-created_at'))
 
     # Pagination
     paginator = Paginator(products, 10)
@@ -91,147 +83,483 @@ def admin_product_list(request):
     page_obj = paginator.get_page(page_number)
 
     context = {
-        'products': page_obj,
-        'filter_form': {'brand': Brand.objects.filter(is_active=True)}, 
+        'page_obj': page_obj,
+        'filter_form': filter_form,
         'sort_by': sort_by,
+        'status': status,
+        'title': 'Product Management',
     }
     return render(request, 'product_app/admin_product_list.html', context)
 
 @login_required
-def admin_product_form(request, slug=None):
-    product = None
-    if slug:
-        product = get_object_or_404(Product, slug=slug)
-    
+@user_passes_test(is_admin)
+@never_cache
+def admin_add_product(request):
     if request.method == 'POST':
-        try:
-            with transaction.atomic():
-                if product:
-                    # Update existing product
-                    product.product_name = request.POST.get('product_name')
-                    product.category = Category.objects.get(id=request.POST.get('category'))
-                    product.brand = Brand.objects.get(id=request.POST.get('brand')) if request.POST.get('brand') else None
-                    product.description = request.POST.get('description')
-                    product.country_of_manufacture = request.POST.get('country_of_manufacture')
-                    product.save()
-                else:
-                    # Create new product
-                    product_data = {
-                        'product_name': request.POST.get('product_name'),
-                        'category': Category.objects.get(id=request.POST.get('category')),
-                        'brand': Brand.objects.get(id=request.POST.get('brand')) if request.POST.get('brand') else None,
-                        'description': request.POST.get('description'),
-                        'country_of_manufacture': request.POST.get('country_of_manufacture'),
-                    }
-                    product = Product(**product_data)
-                    product.save()
-                
-                # Handle image deletions
-                delete_image_ids = request.POST.getlist('delete_image_ids')
-                if delete_image_ids:
-                    VariantImage.objects.filter(id__in=delete_image_ids).delete()
-                
-                # Process variants
-                variant_count = int(request.POST.get('variant_count', 0))
-                for i in range(variant_count):
-                    variant_id = request.POST.get(f'variant_id_{i}')
-                    is_active = request.POST.get(f'is_active_{i}') == 'on'  # Checkbox returns 'on' when checked
-                    if variant_id:
-                        variant = ProductVariant.objects.get(id=variant_id)
-                        variant.flavor = request.POST.get(f'flavor_{i}')
-                        variant.size_weight = request.POST.get(f'size_weight_{i}')
-                        variant.original_price = request.POST.get(f'original_price_{i}')
-                        variant.discount_percentage = request.POST.get(f'discount_percentage_{i}', 0)
-                        variant.stock = request.POST.get(f'stock_{i}')
-                        variant.is_active = is_active
-                        variant.save()
-                    else:
-                        variant_data = {
-                            'product': product,
-                            'flavor': request.POST.get(f'flavor_{i}'),
-                            'size_weight': request.POST.get(f'size_weight_{i}'),
-                            'original_price': request.POST.get(f'original_price_{i}'),
-                            'discount_percentage': request.POST.get(f'discount_percentage_{i}', 0),
-                            'stock': request.POST.get(f'stock_{i}'),
-                            'is_active': is_active
-                        }
-                        variant = ProductVariant(**variant_data)
-                        variant.save()
-                    
-                    # Process variant images
-                    images = request.FILES.getlist(f'images_{i}')
-                    primary_image = request.POST.get(f'primary_image_{i}')
-                    new_image_ids = []
-                    for idx, image in enumerate(images[:3]):
-                        is_primary = (primary_image == f'new_{idx}')
-                        variant_image = VariantImage.objects.create(
-                            variant=variant,
-                            image=image,
-                            is_primary=is_primary,
-                            alt_text=f"{product.product_name} - {variant.flavor or 'Standard'} {variant.size_weight or ''} image {idx + 1}"
-                        )
-                        new_image_ids.append(variant_image.id)
+        product_form = ProductForm(request.POST)
+        variant_count = int(request.POST.get('variant_count', 0))
 
-                    if variant_id and primary_image and primary_image.startswith('existing_'):
-                        existing_image_id = primary_image.split('_')[1]
-                        VariantImage.objects.filter(variant=variant).update(is_primary=False)
-                        VariantImage.objects.filter(id=existing_image_id).update(is_primary=True)
+        if product_form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Save product
+                    product = product_form.save(commit=False)
+                    product.is_active = True
+                    product.save()
 
-                    if variant.variant_images.exists() and not variant.variant_images.filter(is_primary=True).exists():
-                        first_image = variant.variant_images.first()
-                        first_image.is_primary = True
-                        first_image.save()
-                
-                # Ensure at least one active variant for active product
-                if product.is_active and not product.variants.filter(is_active=True).exists():
-                    if product.variants.exists():
-                        first_variant = product.variants.first()
-                        first_variant.is_active = True
-                        first_variant.save()
-                
+                    # Process variants manually
+                    for i in range(variant_count):
+                        variant_id = request.POST.get(f'variant_id_{i}', '')
+                        flavor = request.POST.get(f'flavor_{i}', '') or None
+                        size_weight = request.POST.get(f'size_weight_{i}', '') or None
+                        original_price = request.POST.get(f'original_price_{i}')
+                        offer_percentage = request.POST.get(f'offer_percentage_{i}', '')
+                        stock = request.POST.get(f'stock_{i}')
+                        images = request.FILES.getlist(f'images_{i}')
+                        primary_image = request.POST.get(f'primary_image_{i}')
+                        delete_image_ids = request.POST.get(f'delete_image_ids_{i}', '').split(',')
+                        delete_image_ids = [id for id in delete_image_ids if id.strip() and id.isdigit()]
+
+                        # Validate required fields
+                        if not original_price or not stock:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Original price and stock are required for variant {i + 1}.'
+                            }, status=400)
+
+                        # Validate size_weight
+                        if size_weight and len(size_weight) > 50:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Size/Weight for variant {i + 1} cannot exceed 50 characters.'
+                            }, status=400)
+
+                        # Create or update variant
+                        if variant_id and variant_id.isdigit():
+                            variant = get_object_or_404(ProductVariant, id=variant_id, product=product)
+                        else:
+                            variant = ProductVariant(product=product)
+
+                        variant.flavor = flavor
+                        variant.size_weight = size_weight
+                        variant.is_active = True
+
+                        # Handle original_price
+                        try:
+                            original_price_float = float(original_price)
+                            if original_price_float < 0:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Original price for variant {i + 1} must be non-negative.'
+                                }, status=400)
+                            variant.original_price = original_price_float
+                        except (ValueError, TypeError):
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Invalid original price for variant {i + 1}.'
+                            }, status=400)
+
+                        # Handle offer_percentage
+                        if offer_percentage.strip():
+                            try:
+                                offer_percentage_float = float(offer_percentage)
+                                if offer_percentage_float < 0 or offer_percentage_float > 100:
+                                    return JsonResponse({
+                                        'success': False,
+                                        'message': f'Offer percentage for variant {i + 1} must be between 0 and 100.'
+                                    }, status=400)
+                                variant.offer_percentage = offer_percentage_float
+                            except (ValueError, TypeError):
+                                variant.offer_percentage = 0.00
+                        else:
+                            variant.offer_percentage = 0.00
+
+                        # Handle stock
+                        try:
+                            stock_int = int(stock)
+                            if stock_int < 0:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Stock for variant {i + 1} must be non-negative.'
+                                }, status=400)
+                            variant.stock = stock_int
+                        except (ValueError, TypeError):
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Invalid stock value for variant {i + 1}.'
+                            }, status=400)
+
+                        variant.save()
+
+                        # Delete specified images
+                        if delete_image_ids:
+                            VariantImage.objects.filter(id__in=delete_image_ids, variant=variant).delete()
+
+                        # Calculate total images
+                        existing_images = variant.variant_images.count()
+                        total_images = existing_images + len(images)
+
+                        # Validate minimum one image
+                        if total_images < 1:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'At least one image is required for variant {i + 1}.'
+                            }, status=400)
+
+                        # Validate maximum images
+                        if total_images > 3:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Maximum 3 images allowed for variant {i + 1}.'
+                            }, status=400)
+
+                        # Validate image size and type
+                        for image in images:
+                            if image.size > 10 * 1024 * 1024:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Image for variant {i + 1} exceeds 10MB.'
+                                }, status=400)
+                            if not image.content_type.startswith('image/'):
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Invalid image type for variant {i + 1}.'
+                                }, status=400)
+
+                        # Add new images
+                        for idx, image in enumerate(images):
+                            is_primary = (primary_image == f'new_{idx}')
+                            VariantImage.objects.create(
+                                variant=variant,
+                                image=image,
+                                is_primary=is_primary,
+                                alt_text=f"{product.product_name} - {variant.flavor or 'Standard'} {variant.size_weight or ''} image {idx + 1}",
+                                image_type='primary' if is_primary else 'detail'
+                            )
+
+                        # Set primary image for existing images
+                        if primary_image and primary_image.startswith('existing_'):
+                            existing_image_id = primary_image.split('_')[1]
+                            if existing_image_id.isdigit():
+                                VariantImage.objects.filter(variant=variant).update(is_primary=False)
+                                VariantImage.objects.filter(id=existing_image_id, variant=variant).update(is_primary=True)
+                            else:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Invalid primary image ID for variant {i + 1}.'
+                                }, status=400)
+
+                        # Validate primary image
+                        if total_images > 0 and not primary_image:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Please select a primary image for variant {i + 1}.'
+                            }, status=400)
+
+                    return JsonResponse({
+                        'success': True,
+                        'message': f"Product '{product.product_name}' added successfully!"
+                    })
+            except ValidationError as e:
                 return JsonResponse({
-                    'success': True,
-                    'message': f"Product {'updated' if slug else 'added'} successfully!",
-                })
-        
-        except Exception as e:
-            logger.error(f"Error {'updating' if slug else 'adding'} product: {e}")
+                    'success': False,
+                    'message': f"Validation error: {str(e)}"
+                }, status=400)
+            except Exception as e:
+                logger.error(f"Error adding product: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f"Error adding product: {str(e)}"
+                }, status=500)
+        else:
+            errors = product_form.errors.as_json()
             return JsonResponse({
                 'success': False,
-                'message': str(e),
+                'message': 'Please correct the errors in the form.',
+                'errors': json.loads(errors)
             }, status=400)
-    
-    # GET request
+    else:
+        product_form = ProductForm()
+        variant_formset = ProductVariantFormSet()
+
     context = {
-        'product': product,
+        'product_form': product_form,
+        'variant_formset': variant_formset,
         'categories': Category.objects.filter(is_active=True),
         'brands': Brand.objects.filter(is_active=True),
         'flavor_choices': ProductVariant.FLAVOR_CHOICES,
+        'title': 'Add New Product',
+        'action': 'Add',
     }
     return render(request, 'product_app/admin_add_product.html', context)
 
 @login_required
-def admin_add_product(request):
-    return admin_product_form(request)
-
-@login_required
+@user_passes_test(is_admin)
+@never_cache
 def admin_edit_product(request, slug):
-    return admin_product_form(request, slug)
+    product = get_object_or_404(Product, slug=slug)
+    if request.method == 'POST':
+        product_form = ProductForm(request.POST, instance=product)
+        variant_count = int(request.POST.get('variant_count', 0))
+
+        if product_form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Save product
+                    product = product_form.save(commit=False)
+                    product.is_active = True
+                    product.save()
+
+                    submitted_variant_ids = []
+                    for i in range(variant_count):
+                        variant_id = request.POST.get(f'variant_id_{i}', '')
+                        flavor = request.POST.get(f'flavor_{i}', '') or None
+                        size_weight = request.POST.get(f'size_weight_{i}', '') or None
+                        original_price = request.POST.get(f'original_price_{i}')
+                        offer_percentage = request.POST.get(f'offer_percentage_{i}', '')
+                        stock = request.POST.get(f'stock_{i}')
+                        images = request.FILES.getlist(f'images_{i}')
+                        primary_image = request.POST.get(f'primary_image_{i}')
+                        delete_image_ids = request.POST.get(f'delete_image_ids_{i}', '').split(',')
+                        delete_image_ids = [id for id in delete_image_ids if id.strip() and id.isdigit()]
+
+                        # Log for debugging
+                        logger.debug(f"Variant {i + 1}: delete_image_ids = {delete_image_ids}, primary_image = {primary_image}, new_images = {len(images)}")
+
+                        # Validate required fields
+                        if not original_price or not stock:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Original price and stock are required for variant {i + 1}.'
+                            }, status=400)
+
+                        # Validate size_weight
+                        if size_weight and len(size_weight) > 50:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Size/Weight for variant {i + 1} cannot exceed 50 characters.'
+                            }, status=400)
+
+                        # Create or update variant
+                        if variant_id and variant_id.isdigit():
+                            variant = get_object_or_404(ProductVariant, id=variant_id, product=product)
+                            submitted_variant_ids.append(int(variant_id))
+                        else:
+                            variant = ProductVariant(product=product)
+
+                        variant.flavor = flavor
+                        variant.size_weight = size_weight
+                        variant.is_active = True
+
+                        # Handle original_price
+                        try:
+                            original_price_float = float(original_price)
+                            if original_price_float < 0:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Original price for variant {i + 1} must be non-negative.'
+                                }, status=400)
+                            variant.original_price = original_price_float
+                        except (ValueError, TypeError):
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Invalid original price for variant {i + 1}.'
+                            }, status=400)
+
+                        # Handle offer_percentage
+                        if offer_percentage.strip():
+                            try:
+                                offer_percentage_float = float(offer_percentage)
+                                if offer_percentage_float < 0 or offer_percentage_float > 100:
+                                    return JsonResponse({
+                                        'success': False,
+                                        'message': f'Offer percentage for variant {i + 1} must be between 0 and 100.'
+                                    }, status=400)
+                                variant.offer_percentage = offer_percentage_float
+                            except (ValueError, TypeError):
+                                variant.offer_percentage = 0.00
+                        else:
+                            variant.offer_percentage = 0.00
+
+                        # Handle stock
+                        try:
+                            stock_int = int(stock)
+                            if stock_int < 0:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Stock for variant {i + 1} must be non-negative.'
+                                }, status=400)
+                            variant.stock = stock_int
+                        except (ValueError, TypeError):
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Invalid stock value for variant {i + 1}.'
+                            }, status=400)
+
+                        variant.save()
+
+                        # Delete specified images
+                        if delete_image_ids:
+                            VariantImage.objects.filter(id__in=delete_image_ids, variant=variant).delete()
+
+                        # Calculate total images after deletion
+                        existing_images = variant.variant_images.count()
+                        total_images = existing_images + len(images)
+
+                        # Validate image count
+                        if total_images < 1:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'At least one image is required for variant {i + 1}.'
+                            }, status=400)
+                        if total_images > 3:
+                            return JsonResponse({
+                                'success': False,
+                                'message': f'Maximum 3 images allowed for variant {i + 1}.'
+                            }, status=400)
+
+                        # Validate image size and type
+                        for image in images:
+                            if image.size > 10 * 1024 * 1024:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Image for variant {i + 1} exceeds 10MB.'
+                                }, status=400)
+                            if not image.content_type.startswith('image/'):
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Invalid image type for variant {i + 1}.'
+                                }, status=400)
+
+                        # Reset primary image status for existing images
+                        VariantImage.objects.filter(variant=variant).update(is_primary=False)
+
+                        # Add new images
+                        for idx, image in enumerate(images):
+                            is_primary = (primary_image == f'new_{idx}')
+                            VariantImage.objects.create(
+                                variant=variant,
+                                image=image,
+                                is_primary=is_primary,
+                                alt_text=f"{product.product_name} - {variant.flavor or 'Standard'} {variant.size_weight or ''} image {idx + 1}",
+                                image_type='primary' if is_primary else 'detail'
+                            )
+
+                        # Set primary image for existing images
+                        if primary_image and primary_image.startswith('existing_'):
+                            existing_image_id = primary_image.split('_')[1]
+                            if existing_image_id.isdigit():
+                                if not VariantImage.objects.filter(id=existing_image_id, variant=variant).exists():
+                                    return JsonResponse({
+                                        'success': False,
+                                        'message': f'Invalid primary image ID for variant {i + 1}: Image does not exist.'
+                                    }, status=400)
+                                VariantImage.objects.filter(id=existing_image_id, variant=variant).update(is_primary=True)
+
+                        # Ensure a primary image is set
+                        primary_image_exists = variant.variant_images.filter(is_primary=True).exists()
+                        if total_images > 0 and not primary_image_exists:
+                            first_image = variant.variant_images.first()
+                            if first_image:
+                                first_image.is_primary = True
+                                first_image.image_type = 'primary'
+                                first_image.save()
+                            else:
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Please select a primary image for variant {i + 1}.'
+                                }, status=400)
+
+                    # Delete variants not included in the form
+                    product.variants.exclude(id__in=submitted_variant_ids).delete()
+
+                    return JsonResponse({
+                        'success': True,
+                        'message': f"Product '{product.product_name}' updated successfully!"
+                    })
+            except ValidationError as e:
+                return JsonResponse({
+                    'success': False,
+                    'message': f"Validation error: {str(e)}"
+                }, status=400)
+            except Exception as e:
+                logger.error(f"Error updating product: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f"Error updating product: {str(e)}"
+                }, status=500)
+        else:
+            errors = product_form.errors.as_json()
+            return JsonResponse({
+                'success': False,
+                'message': 'Please correct the errors in the form.',
+                'errors': json.loads(errors)
+            }, status=400)
+    else:
+        product_form = ProductForm(instance=product)
+        variant_formset = ProductVariantFormSet(
+            initial=[{
+                'variant_id': variant.id,
+                'flavor': variant.flavor,
+                'size_weight': variant.size_weight,
+                'original_price': variant.original_price,
+                'offer_percentage': variant.offer_percentage,
+                'stock': variant.stock,
+            } for variant in product.variants.all()]
+        )
+
+    context = {
+        'product_form': product_form,
+        'variant_formset': variant_formset,
+        'product': product,
+        'categories': Category.objects.filter(is_active=True),
+        'brands': Brand.objects.filter(is_active=True),
+        'flavor_choices': ProductVariant.FLAVOR_CHOICES,
+        'title': f'Edit Product: {product.product_name}',
+        'action': 'Edit',
+    }
+    return render(request, 'product_app/admin_add_product.html', context)
 
 @login_required
+@user_passes_test(is_admin)
+@never_cache
 def admin_product_detail(request, slug):
-    product = get_object_or_404(Product.objects.select_related('category', 'brand'), slug=slug)
-    variants = ProductVariant.objects.filter(product=product).prefetch_related('variant_images')
-    reviews = product.reviews.all().select_related('user').order_by('-created_at')
+    product = get_object_or_404(
+        Product.objects.select_related('category', 'brand').prefetch_related(
+            'variants__variant_images', 'reviews__user'
+        ),
+        slug=slug
+    )
+    variants = product.variants.prefetch_related('variant_images')
+    reviews = product.reviews.select_related('user').order_by('-created_at')
+    
+    # Add discount_percentage and compute min/max prices
+    variants_with_discount = []
+    prices = []
+    for variant in variants:
+        best_price = variant.best_price
+        discount_percentage = Decimal('0.00')
+        if variant.original_price > best_price['price'] and variant.original_price > 0:
+            discount_percentage = (
+                (variant.original_price - best_price['price']) / variant.original_price * 100
+            ).quantize(Decimal('0.01'))
+        variant.discount_percentage = discount_percentage
+        variants_with_discount.append(variant)
+        prices.append(best_price['price'])
+    
+    # Compute min_price and max_price
+    min_price = min(prices, default=Decimal('0.00')).quantize(Decimal('0.01'))
+    max_price = max(prices, default=Decimal('0.00')).quantize(Decimal('0.01'))
+    
     stats = {
         'variants_count': variants.count(),
         'active_variants': variants.filter(is_active=True).count(),
-        'total_stock': variants.aggregate(total_stock=Sum('stock'))['total_stock'] or 0,
-        'avg_rating': product.average_rating, 
-        'review_count': reviews.count(),
+        'total_stock': product.total_stock(),
+        'avg_rating': product.average_rating,
         'approved_review_count': reviews.filter(is_approved=True).count(),
         'pending_review_count': reviews.filter(is_approved=False).count(),
     }
+    
     thirty_days_ago = timezone.now() - timedelta(days=30)
     sales_stats = {
         'total_units_sold': OrderItem.objects.filter(
@@ -241,53 +569,114 @@ def admin_product_detail(request, slug):
         'total_revenue': OrderItem.objects.filter(
             variant__product=product,
             order__created_at__gte=thirty_days_ago
-        ).aggregate(total=Sum(F('quantity') * F('price')))['total'] or 0, 
+        ).aggregate(
+            total=Sum(F('quantity') * F('price'), output_field=DecimalField(max_digits=12, decimal_places=2))
+        )['total'] or Decimal('0.00'),
         'total_orders': OrderItem.objects.filter(
             variant__product=product,
             order__created_at__gte=thirty_days_ago
         ).values('order').distinct().count(),
     }
-    wishlist_count = Wishlist.objects.filter(variant__product=product).count()
-    primary_variant = variants.filter(is_active=True).first()  
     
+    wishlist_count = Wishlist.objects.filter(variant__product=product).count()
+    primary_variant = variants.filter(is_active=True).first()
+
     context = {
         'product': product,
-        'variants': variants,
+        'variants': variants_with_discount,
         'reviews': reviews[:10],
         'wishlist_count': wishlist_count,
         'stats': stats,
         'sales_stats': sales_stats,
         'primary_variant': primary_variant,
+        'min_price': min_price,
+        'max_price': max_price,
+        'title': f'Product: {product.product_name}',
     }
-    
     return render(request, 'product_app/admin_product_detail.html', context)
 
-import logging
-logger = logging.getLogger(__name__)
+@login_required
+@user_passes_test(is_admin)
+def admin_product_reviews(request, slug):
+    product = get_object_or_404(Product, slug=slug)
+    reviews = product.reviews.select_related('user').order_by('-created_at')
+    
+    paginator = Paginator(reviews, 10)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    html = ''
+    for review in page_obj:
+        html += f'''
+            <div class="card mb-2">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6>{review.user.username} <span class="text-muted">({review.age()})</span></h6>
+                            <div class="text-warning">{review.star_rating()}</div>
+                            <div>{review.rating} stars</div>
+                        </div>
+                        <div>
+                            <span class="badge {'bg-success' if review.is_approved else 'bg-warning text-dark'}">
+                                {'Approved' if review.is_approved else 'Pending'}
+                            </span>
+                            {'<span class="badge bg-info">Verified</span>' if review.is_verified_purchase else ''}
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <strong>{review.title or 'Untitled'}</strong>
+                        <p>{review.excerpt(200)}</p>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-primary view-review" data-bs-toggle="modal" data-bs-target="#reviewModal"
+                                data-id="{review.id}" data-user="{review.user.username}" data-rating="{review.rating}"
+                                data-title="{review.title or ''}" data-comment="{review.comment}"
+                                data-date="{review.age()}" data-verified="{'true' if review.is_verified_purchase else 'false'}"
+                                data-approved="{'true' if review.is_approved else 'false'}"
+                                data-stars="{review.star_rating()}">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        {'<button class="btn btn-sm btn-outline-success approve-review" data-id="' + str(review.id) + '"><i class="fas fa-check"></i> Approve</button>' if not review.is_approved else ''}
+                        <button class="btn btn-sm btn-outline-danger delete-review" data-id="{review.id}">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        '''
+    
+    if page_obj.paginator.num_pages > 1:
+        html += '<nav aria-label="Reviews pagination"><ul class="pagination justify-content-center mt-3">'
+        if page_obj.has_previous():
+            html += f'<li class="page-item"><a class="page-link" href="#" data-page="{page_obj.previous_page_number()}">Previous</a></li>'
+        for num in page_obj.paginator.page_range:
+            html += f'<li class="page-item {"active" if num == page_obj.number else ""}"><a class="page-link" href="#" data-page="{num}">{num}</a></li>'
+        if page_obj.has_next():
+            html += f'<li class="page-item"><a class="page-link" href="#" data-page="{page_obj.next_page_number()}">Next</a></li>'
+        html += '</ul></nav>'
+    
+    if not reviews.exists():
+        html = '<div class="text-center py-5"><i class="fas fa-comment-slash fa-3x text-muted mb-3"></i><p>No reviews yet for this product.</p></div>'
+    
+    return JsonResponse({
+        'success': True,
+        'html': html
+    })
 
 @login_required
+@user_passes_test(is_admin)
 @require_POST
 def admin_toggle_product_status(request, product_id):
-    if not request.user.is_superuser and not request.user.is_staff:
-        return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
-
     try:
         with transaction.atomic():
             product = get_object_or_404(Product, id=product_id)
-            # Debug the incoming POST data
-            logger.info(f"Received POST data: {dict(request.POST)}")
-            is_active_str = request.POST.get('is_active', 'undefined')
-            is_active = is_active_str.lower() == 'true'  # Case-insensitive check
-
-            logger.info(f"Toggling product {product_id} ({product.product_name}) to {is_active} (from {is_active_str})")
-
-            # Set the product state based on the request
+            is_active = request.POST.get('is_active', 'false').lower() == 'true'
+            
             if is_active:
-                # Unblock: Ensure at least one variant exists and is active
                 if not product.variants.exists():
                     return JsonResponse({
                         'success': False,
-                        'message': 'Cannot unblock product without variants.'
+                        'message': 'Cannot activate product without variants.'
                     }, status=400)
                 product.is_active = True
                 if not product.variants.filter(is_active=True).exists():
@@ -301,24 +690,78 @@ def admin_toggle_product_status(request, product_id):
                             'message': 'No variants available to activate.'
                         }, status=400)
             else:
-                # Block: Set product and all variants to inactive
                 product.is_active = False
                 product.variants.update(is_active=False)
-
+            
             product.save()
-            logger.info(f"Product {product_id} status updated to {product.is_active}")
             return JsonResponse({
                 'success': True,
                 'is_active': product.is_active,
-                'message': f'Product "{product.product_name}" has been {"unblocked" if is_active else "blocked"}.'
+                'message': f'Product "{product.product_name}" has been {"activated" if is_active else "deactivated"}.'
             })
     except Exception as e:
-        logger.error(f"Error toggling product {product_id}: {str(e)}")
+        logger.error(f"Error toggling product {product_id}: {e}")
         return JsonResponse({
             'success': False,
-            'message': f'Error updating product status: {str(e)}'
+            'message': f'Error: {str(e)}'
         }, status=500)
-    
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def admin_toggle_variant_status(request, variant_id):
+    try:
+        variant = get_object_or_404(ProductVariant, id=variant_id)
+        product = variant.product
+
+        if not product.is_active and variant.is_active:
+            return JsonResponse({
+                'success': False,
+                'message': "Cannot activate variant for an inactive product."
+            }, status=400)
+
+        new_status = not variant.is_active
+
+        if not new_status and product.variants.filter(is_active=True).count() <= 1 and variant.is_active:
+            return JsonResponse({
+                'success': False,
+                'message': "Cannot deactivate the last active variant."
+            }, status=400)
+
+        variant.is_active = new_status
+        variant.save()
+
+        if new_status and not product.is_active:
+            product.is_active = True
+            product.save()
+
+        if not product.variants.filter(is_active=True).exists():
+            product.is_active = False
+            product.save()
+
+        status = "activated" if variant.is_active else "deactivated"
+        return JsonResponse({
+            'success': True,
+            'message': f"Variant {status} successfully!",
+            'is_active': variant.is_active,
+            'product_is_active': product.is_active
+        })
+    except Exception as e:
+        logger.error(f"Error toggling variant {variant_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+
+
+
+
+
+
+
+
 @login_required
 def get_product_variants(request, product_id):
     try:
@@ -360,66 +803,6 @@ def get_product_variants(request, product_id):
         return JsonResponse(response_data)
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=400)
-    
-
-@login_required
-@require_POST
-def admin_toggle_variant_status(request, variant_id):
-    try:
-        if not is_admin(request.user):
-            return JsonResponse({
-                'success': False,
-                'message': "Unauthorized access"
-            }, status=403)
-
-        variant = ProductVariant.objects.get(id=variant_id)
-        product = variant.product
-
-        if not product.is_active and variant.is_active:
-            return JsonResponse({
-                'success': False,
-                'message': "Cannot activate variant for an inactive product"
-            }, status=400)
-
-        new_status = not variant.is_active
-
-        # Prevent deactivating the last active variant
-        if not new_status and product.variants.filter(is_active=True).count() <= 1 and variant.is_active:
-            return JsonResponse({
-                'success': False,
-                'message': "Cannot deactivate the last active variant. Product must have at least one active variant."
-            }, status=400)
-
-        variant.is_active = new_status
-        variant.save()
-
-        # If activating a variant and product is inactive, activate the product
-        if new_status and not product.is_active:
-            product.is_active = True
-            product.save()
-
-        # If no variants are active, deactivate the product
-        if not product.variants.filter(is_active=True).exists():
-            product.is_active = False
-            product.save()
-
-        status = "activated" if variant.is_active else "deactivated"
-        return JsonResponse({
-            'success': True,
-            'message': f"Variant {status} successfully!",
-            'is_active': variant.is_active,
-            'product_is_active': product.is_active
-        })
-    except ProductVariant.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': "Variant not found"
-        }, status=404)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': str(e)
-        }, status=500)
 
 @csrf_exempt
 @login_required
@@ -545,10 +928,10 @@ def user_product_list(request):
     
     # Fetch active products with related data
     products = Product.objects.filter(is_active=True).prefetch_related(
-        'variants__variant_images', 'category', 'brand', 'reviews', 'product_offers'
+        'variants__images', 'category', 'brand', 'reviews'
     ).annotate(
-        min_price=Min('variants__original_price'),
-        max_price=Max('variants__original_price'),
+        min_price=Min('variants__price'),
+        max_price=Max('variants__price'),
         avg_rating=Avg('reviews__rating')
     )
 
@@ -570,9 +953,9 @@ def user_product_list(request):
         if brand:
             products = products.filter(brand=brand)
         if min_price is not None:
-            products = products.filter(variants__original_price__gte=min_price)
+            products = products.filter(variants__price__gte=min_price)
         if max_price is not None:
-            products = products.filter(variants__original_price__lte=max_price)
+            products = products.filter(variants__price__lte=max_price)
 
     # Sorting
     sort_by = request.GET.get('sort', 'new_arrivals')
@@ -593,25 +976,41 @@ def user_product_list(request):
     product_data = []
     for product in products:
         # Select primary variant or first active variant with stock
-        variant = (
-            product.primary_variant or
-            product.variants.filter(is_active=True, stock__gt=0).order_by('original_price').first() or
-            product.variants.filter(is_active=True).order_by('original_price').first()
-        )
+        variant = product.primary_variant or product.variants.filter(
+            is_active=True, stock__gt=0
+        ).order_by('price').first() or product.variants.filter(
+            is_active=True
+        ).order_by('price').first()
 
         if not variant:
             continue
 
         # Get primary image
-        primary_image = variant.primary_image
+        primary_image = variant.images.filter(is_primary=True).first()
 
-        # Use model methods for pricing and offer info
-        price_info = variant.best_price
-        best_price = price_info['price']
-        discounted_price = price_info['discounted_price']
-        original_price = price_info['original_price']
-        has_offer = variant.has_offer
-        best_offer_percentage = variant.best_offer_percentage
+        # Calculate prices
+        discounted_price = variant.discounted_price if hasattr(variant, 'discounted_price') else variant.price
+        best_price = discounted_price
+        best_offer_percentage = 0
+        has_offer = False
+
+        # Check product offer
+        product_offer = product.offers.filter(is_active=True).first()
+        if product_offer:
+            offer_price = discounted_price * (1 - product_offer.discount_percentage / 100)
+            if offer_price < best_price:
+                best_price = offer_price
+                best_offer_percentage = product_offer.discount_percentage
+                has_offer = True
+
+        # Check category offer
+        category_offer = product.category.offers.filter(is_active=True).first()
+        if category_offer:
+            offer_price = discounted_price * (1 - category_offer.discount_percentage / 100)
+            if offer_price < best_price:
+                best_price = offer_price
+                best_offer_percentage = category_offer.discount_percentage
+                has_offer = True
 
         product_data.append({
             'product': product,
@@ -619,14 +1018,13 @@ def user_product_list(request):
             'primary_image': primary_image,
             'discounted_price': discounted_price,
             'best_price': best_price,
-            'original_price': original_price,
             'has_offer': has_offer,
             'best_offer_percentage': best_offer_percentage,
             'avg_rating': product.avg_rating or 0,
             'review_count': product.reviews.filter(is_approved=True).count(),
-            'variant_name': variant.flavor or None,  # Use flavor as variant name
-            'category_name': product.category.name if product.category else None,
-            'total_stock': product.total_stock(),
+            'variant_name': variant.name if hasattr(variant, 'name') else None,  # Optional: variant name
+            'category_name': product.category.name if product.category else None,  # Optional: category name
+            'total_stock': sum(v.stock for v in product.variants.filter(is_active=True))  # Optional: total stock
         })
 
     # Pagination

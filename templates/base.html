@@ -5,38 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Core Fitness{% endblock %}</title>
     
-    <!-- Bootstrap CSS -->
+    <!-- Minimal CSS imports -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- GSAP for animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js" defer></script>
     
     <!-- Custom CSS -->
     <style>
         :root {
-            --primary-color: #EEEEEE;
-            --accent-color: #333333;
-            --text-color: #333333;
+            --primary:rgb(34, 34, 34);
+            --accent:rgb(255, 0, 0);
+            --text: #333333;
             --light-text: #777777;
-            --background-color: #FFFFFF;
-            --light-gray: #F8F8F8;
-            --border-color: #EEEEEE;
-            --hover-color: #DDDDDD;
-            --cart-icon-color: #4A90E2; /* Minimalist blue for cart */
-            --wishlist-icon-color: #E94E77; /* Minimalist pink for wishlist */
-            --icon-hover-color: #000000; /* Black on hover for both */
+            --bg: #FFFFFF;
+            --light-bg: #F8F8F8;
+            --border: #EEEEEE;
+        }
+        [data-theme="dark"] {
+            /* Dark mode */
+            --primary: rgb(200, 200, 200);
+            --accent: rgb(255, 80, 80);
+            --text: #E0E0E0;
+            --light-text: #A0A0A0;
+            --bg: #1A1A1A;
+            --light-bg: #2C2C2C;
+            --border: #444444;
         }
         
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding-top: 70px;
-            color: var(--text-color);
-            background-color: var(--background-color);
+            font-family: 'Inter', -apple-system, sans-serif;
+            padding-top: 80px;
+            color: var(--text);
+            background-color: var(--bg);
             line-height: 1.6;
             font-weight: 300;
             letter-spacing: 0.02em;
+            overflow-x: hidden;
         }
 
         /* Typography */
@@ -45,205 +52,293 @@
             letter-spacing: 0.03em;
         }
         
-        /* Navbar Styling - Minimalist */
+        /* Navbar */
         .navbar {
-            background-color: var(--background-color);
-            box-shadow: none;
-            border-bottom: 1px solid var(--border-color);
-            min-height: 80px;
-            padding: 0.7rem 1.5rem;
+            background-color: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.03);
+            min-height: 70px;
+            padding: 0.5rem 1.5rem;
+            transition: all 0.3s ease;
+        }
+        [data-theme="dark"] .navbar {
+            background-color: rgba(40, 40, 40, 0.98);
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .navbar.scrolled {
+            min-height: 60px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
         }
         
         .navbar-brand {
-            font-weight: 900;
-            color: var(--text-color) !important;
+            font-weight: 600;
+            color: var(--primary) !important;
             letter-spacing: 0.1rem;
-            font-size: 1.9rem;
+            font-size: 1.5rem;
             text-transform: uppercase;
+            display: flex;
+            align-items: center;
         }
         
-        .navbar-nav .nav-link {
+        .logo-svg {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: dash 2s ease-in-out forwards;
+            margin-right: 0.5rem;
+            height: 30px;
+            width: 30px;
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+        
+        .nav-link {
             padding: 0.5rem 1rem;
             font-size: 0.85rem;
-            color: var(--text-color) !important;
+            color: var(--text) !important;
             font-weight: 400;
             letter-spacing: 0.05em;
-            transition: all 0.2s ease;
             text-transform: uppercase;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 1px;
+            bottom: 0;
+            left: 50%;
+            background-color: var(--accent);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+        
+        .nav-link:hover::after {
+            width: 70%;
         }
         
         .nav-link:hover {
-            color: var(--light-text) !important;
+            color: var(--accent) !important;
         }
         
+        /* Dropdown */
         .dropdown-menu {
-            border-radius: 0;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
-            padding: 0.5rem 0;
+            border-radius: 2px;
+            border: none;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            padding: 0.7rem 0;
+            margin-top: 1rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            transform: translateY(10px);
+            display: block;
+        }
+        
+        .dropdown:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
         
         .dropdown-item {
             font-size: 0.85rem;
-            padding: 0.5rem 1.5rem;
+            padding: 0.6rem 1.5rem;
             letter-spacing: 0.03em;
+            transition: all 0.2s ease;
         }
         
         .dropdown-item:hover {
-            background-color: var(--light-gray);
+            background-color: var(--light-bg);
+            transform: translateX(5px);
         }
         
-        .navbar .btn-sm {
-            padding: 0.3rem 1rem;
-            font-size: 0.8rem;
-            border-radius: 0;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 400;
-        }
-        
-        .input-group {
-            width: 160px;
-        }
-        
-        .input-group .form-control {
-            height: 34px;
-            border-radius: 0;
-            border: 1px solid var(--border-color);
-            font-size: 0.85rem;
-            box-shadow: none;
-        }
-        
-        .input-group .form-control:focus {
-            box-shadow: none;
-            border-color: var(--accent-color);
-        }
-        
-        .input-group .btn {
-            border-radius: 0;
-            padding: 0 10px;
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-        }
-
-        /* Badge styling */
-        .badge {
-            font-size: 0.65rem;
-            padding: 0.2em 0.4em;
-            border-radius: 2px;
-            font-weight: 400;
-            background-color: var(--accent-color);
-        }
-
-        /* Icon styling */
+        /* Icons */
         .nav-icon {
             position: relative;
-            display: inline-block;
-            margin-right: 1rem;
-            transition: color 0.2s ease; /* Smooth color transition */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1.5rem;
+            transition: all 0.3s ease;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
         }
         
-        .nav-icon.cart-icon i {
-            color: var(--cart-icon-color);
+        .nav-icon svg {
+            width: 20px;
+            height: 20px;
+            transition: all 0.3s ease;
+            fill: none;
+            stroke-width: 2;
         }
         
-        .nav-icon.wishlist-icon i {
-            color: var(--wishlist-icon-color);
+        .nav-icon.cart-icon svg {
+            stroke: var(--primary);
         }
         
-        .nav-icon:hover i {
-            color: var(--icon-hover-color);
+        .nav-icon.wishlist-icon svg {
+            stroke: var(--accent);
         }
         
-        .nav-icon i {
-            font-size: 1.4rem;
+        .nav-icon:hover {
+            background-color: rgba(0,0,0,0.03);
+            transform: translateY(-2px);
+        }
+        
+        .nav-icon:hover svg {
+            transform: scale(1.1);
         }
         
         .nav-icon .badge {
             position: absolute;
-            top: -6px;
-            right: -6px;
-            min-width: 16px;
-            height: 16px;
+            top: 0;
+            right: 0;
+            min-width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+            border-radius: 50%;
+            background-color: var(--accent);
+            transform: translate(30%, -30%);
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        /* Button styling */
-        .btn-primary {
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-            color: white;
-            font-weight: 400;
-            border-radius: 0;
+        /* Buttons */
+        .btn {
+            border-radius: 2px;
             letter-spacing: 0.05em;
             text-transform: uppercase;
             font-size: 0.85rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            color: white;
+            font-weight: 400;
             padding: 0.5rem 1.5rem;
-            transition: all 0.2s ease;
         }
         
         .btn-primary:hover {
-            background-color: #000000;
-            border-color: #000000;
+            background-color: var(--accent);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
         
         .btn-outline-light {
-            border-color: var(--border-color);
-            color: var(--text-color);
-            border-radius: 0;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
+            border-color: var(--border);
+            color: var(--text);
         }
         
         .btn-outline-light:hover {
-            background-color: var(--light-gray);
-            border-color: var(--border-color);
-            color: var(--text-color);
+            background-color: var(--light-bg);
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-2px);
         }
         
-        /* Card styling */
+        .btn-sm {
+            padding: 0.4rem 1.2rem;
+            font-size: 0.8rem;
+        }
+        
+        /* Cards */
         .card {
-            border-radius: 0;
+            border-radius: 2px;
             border: none;
-            box-shadow: none;
-            transition: transform 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.03);
+            transition: all 0.4s ease;
             margin-bottom: 30px;
-            background-color: var(--background-color);
-            border: 1px solid var(--border-color);
+            background-color: var(--bg);
+            overflow: hidden;
+        }
+        [data-theme="dark"] footer {
+            background-color: var(--bg);
         }
         
         .card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.08);
         }
         
         .card-title {
-            color: var(--text-color);
+            color: var(--text);
             font-weight: 400;
             font-size: 1rem;
             letter-spacing: 0.05em;
             text-transform: uppercase;
             margin-bottom: 1rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
         }
         
-        .card-body {
-            padding: 1.5rem;
+        .theme-toggle svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--text);
+            transition: all 0.3s ease;
         }
         
-        /* Footer styling */
+        .theme-toggle:hover svg {
+            stroke: var(--accent);
+            transform: scale(1.1);
+        }
+        
+        .card-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 30px;
+            height: 1px;
+            background-color: var(--accent);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover .card-title::after {
+            width: 60px;
+        }
+        
+        /* Footer */
         footer {
-            background-color: var(--background-color);
+            background-color: var(--bg);
             color: var(--light-text);
-            padding: 3rem 0;
-            margin-top: 4rem;
-            border-top: 1px solid var(--border-color);
+            padding: 5rem 0 2rem;
+            margin-top: 6rem;
+            border-top: 1px solid var(--border);
+            position: relative;
+        }
+        
+        footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.3;
         }
         
         footer h5 {
-            color: var(--text-color);
-            font-weight: 400;
-            font-size: 0.85rem;
+            color: var(--text);
+            font-weight: 500;
+            font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-bottom: 1.5rem;
@@ -251,227 +346,364 @@
         
         footer a {
             color: var(--light-text) !important;
-            transition: color 0.2s;
+            transition: all 0.3s ease;
             font-size: 0.85rem;
             text-decoration: none;
+            display: inline-block;
+            position: relative;
+        }
+        
+        footer a::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 1px;
+            bottom: 0;
+            left: 0;
+            background-color: var(--accent);
+            transition: all 0.3s ease;
         }
         
         footer a:hover {
-            color: var(--text-color) !important;
+            color: var(--text) !important;
+            transform: translateX(3px);
+        }
+        
+        footer a:hover::after {
+            width: 100%;
+        }
+        
+        .social-icons {
+            display: flex;
+            gap: 15px;
         }
         
         .social-icons a {
-            display: inline-block;
-            width: 32px;
-            height: 32px;
-            line-height: 32px;
-            text-align: center;
-            margin-right: 10px;
-            background-color: var(--light-gray);
-            transition: all 0.2s;
-            color: var(--text-color) !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--light-bg);
+            transition: all 0.3s ease;
+            color: var(--text) !important;
+        }
+        
+        .social-icons a::after {
+            display: none;
         }
         
         .social-icons a:hover {
-            background-color: var(--accent-color);
+            background-color: var(--accent);
             color: white !important;
+            transform: translateY(-5px);
         }
         
-        /* Alert styling */
+        .social-icons a i {
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+        
+        .social-icons a:hover i {
+            transform: scale(1.2);
+        }
+        
+        /* Alerts */
         .alert-container {
             position: fixed;
-            top: 80px;
+            top: 90px;
             right: 20px;
             z-index: 1030;
-            max-width: 300px;
+            max-width: 320px;
         }
         
         .alert {
             border: none;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border-radius: 0;
-            padding: 0.8rem 1.2rem;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            border-radius: 3px;
+            padding: 1rem 1.5rem;
             font-size: 0.85rem;
             letter-spacing: 0.02em;
+            transform: translateX(100%);
+            opacity: 0;
+            animation: slideIn 0.5s forwards, fadeOut 0.5s forwards 4s;
         }
         
-        .fade-out {
-            animation: fadeOut 3s forwards;
-            animation-delay: 2s;
+        @keyframes slideIn {
+            to { transform: translateX(0); opacity: 1; }
         }
         
         @keyframes fadeOut {
-            from {opacity: 1;}
-            to {opacity: 0; display: none;}
+            to { opacity: 0; visibility: hidden; }
         }
         
         /* Section styling */
         .section-title {
-            margin-bottom: 2rem;
-            color: var(--text-color);
+            margin-bottom: 2.5rem;
+            color: var(--text);
             font-weight: 400;
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             position: relative;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            padding-bottom: 0.5rem;
-        }
-
-        .navbar .input-group {
-            width: 430px;
-            margin: 0 auto;
-        }
-        
-        @media (max-width: 991px) 
-        .navbar .input-group .form-control {
-            height: 39px;
-            border-radius: 0;
-            border: 1px solid var(--border-color);
-            font-size: 0.85rem;
-            box-shadow: none;
-        }
-
-        .navbar .input-group .form-control:focus {
-            box-shadow: none;
-            border-color: var(--accent-color);
-        }
-
-        .navbar .input-group .btn {
-            border-radius: 0;
-            padding: 0 10px;
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-        }
-
-        .navbar-collapse {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .navbar-nav.me-auto {
-            flex-grow: 1;
-        }
-
-        .navbar-nav.ms-auto {
-            flex-grow: 1;
-            justify-content: flex-end;
+            padding-bottom: 0.8rem;
+            text-align: center;
         }
         
         .section-title::after {
             content: '';
             position: absolute;
-            left: 0;
+            left: 50%;
             bottom: 0;
             width: 40px;
             height: 1px;
-            background-color: var(--accent-color);
+            background-color: var(--accent);
+            transform: translateX(-50%);
+            transition: all 0.5s ease;
         }
         
-        .container.mt-4 {
-            margin-top: 3rem !important;
-        }
-        
-        .my-5 {
-            margin-top: 4rem !important;
-            margin-bottom: 4rem !important;
-        }
-        
-        .py-5 {
-            padding-top: 4rem !important;
-            padding-bottom: 4rem !important;
+        .section-title:hover::after {
+            width: 80px;
         }
         
         .minimal-divider {
             width: 40px;
             height: 1px;
-            background-color: var(--accent-color);
-            margin: 2rem 0;
+            background-color: var(--accent);
+            margin: 1.5rem 0;
+            transition: all 0.3s ease;
         }
         
-        .minimal-text {
-            font-weight: 300;
-            line-height: 1.8;
-            letter-spacing: 0.02em;
+        /* Page transitions */
+        .page-transition {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #fff;
+            z-index: 9999;
+            pointer-events: none;
+            transform: translateY(100%);
+        }
+        
+        /* Loading animation */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            margin-top: -20px;
+            margin-left: -20px;
+            border-radius: 50%;
+            border: 2px solid var(--light-bg);
+            border-top: 2px solid var(--accent);
+            animation: spin 1s linear infinite;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 9998;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Custom scroll bar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--light-bg); 
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 3px;
+        }
+        
+        [data-theme="dark"]::-webkit-scrollbar-track {
+            background: var(--light-bg);
+        }
+        
+        [data-theme="dark"]::-webkit-scrollbar-thumb {
+            background: var(--accent);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary); 
+        }
+        
+        /* Responsive */
+        @media (max-width: 991px) {
+            .navbar-collapse {
+                background: white;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+                border-radius: 3px;
+                padding: 1rem;
+                margin-top: 1rem;
+            }
+            
+            .dropdown-menu {
+                opacity: 1;
+                visibility: visible;
+                transform: none;
+                box-shadow: none;
+                border: 1px solid var(--border);
+                margin-top: 0;
+                margin-bottom: 1rem;
+            }
         }
     </style>
     
-{% block extra_css %}
-{% endblock %}
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Page transition overlay -->
+    <div class="page-transition"></div>
+    <div class="loading-spinner"></div>
+
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'user_app:user_home' %}">
-                <i class="fas fa-dumbbell me-2"></i>Core Fitness</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <!-- Left Side Navigation -->
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+<nav class="navbar navbar-expand-lg navbar-light fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'user_app:user_home' %}">
+            <svg class="logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 3a2.85 2.85 0 1 1 0 5.7"/>
+                <path d="M10 10a2.85 2.85 0 1 1 0 5.7"/>
+                <path d="M15 21.21V14a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v7.21"/>
+                <path d="M7 9a2.85 2.85 0 1 1 0-5.7"/>
+                <path d="M7 9a2.85 2.85 0 1 1 0 5.7"/>
+            </svg>
+            Core Fitness
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <!-- Left Side Navigation -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="{% url 'user_app:user_home' %}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'product_app:user_product_list' %}">Products</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'product_app:user_category_list' %}">Categories</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ms-auto align-items-center">
+                {% if user.is_authenticated %}
+                    <!-- Theme Toggle -->
                     <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="{% url 'user_app:user_home' %}">Home</a>
+                        <button class="nav-link nav-icon theme-toggle" aria-label="Toggle theme">
+                            <svg id="theme-icon" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <!-- Sun icon (light mode) -->
+                                <circle cx="12" cy="12" r="5"></circle>
+                                <line x1="12" y1="1" x2="12" y2="3"></line>
+                                <line x1="12" y1="21" x2="12" y2="23"></line>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                <line x1="1" y1="12" x2="3" y2="12"></line>
+                                <line x1="21" y1="12" x2="23" y2="12"></line>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                            </svg>
+                        </button>
+                    </li>
+                    <!-- Wishlist Icon -->
+                    <li class="nav-item">
+                        <a class="nav-link nav-icon wishlist-icon" href="{% url 'cart_and_orders_app:user_wishlist' %}">
+                            <svg viewBox="0 0 24 24" stroke="currentColor" fill="none">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            <span class="position-absolute badge" id="wishlist-count">
+                                {{ request.user.wishlist_items.count|default:0 }}
+                            </span>
+                        </a>
+                    </li>
+                    <!-- Shopping Cart Icon -->
+                    <li class="nav-item">
+                        <a class="nav-link nav-icon cart-icon" href="{% url 'cart_and_orders_app:user_cart_list' %}">
+                            <svg viewBox="0 0 24 24" stroke="currentColor" fill="none">
+                                <circle cx="9" cy="21" r="1"></circle>
+                                <circle cx="20" cy="21" r="1"></circle>
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                            </svg>
+                            <span class="position-absolute badge" id="cart-count">
+                                {{ request.user.cart.items.count|default:0 }}
+                            </span>
+                        </a>
+                    </li>
+                    <!-- User Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" 
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="me-1">{{ user.username }}</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <path d="M6 9l6 6 6-6"/>
+                            </svg>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{% url 'user_app:my_profile' %}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                My Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_order_list' %}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                </svg>
+                                My Orders
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'offer_and_coupon_app:wallet_dashboard' %}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
+                                    <rect x="1" y="1" width="22" height="16" rx="2" ry="2"></rect>
+                                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                                </svg>
+                                My Wallet
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'user_app:user_logout' %}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                                Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                {% else %}
+                    <li class="nav-item me-3">
+                        <a class="btn btn-outline-light btn-sm" href="{% url 'user_app:user_login' %}">Login</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'product_app:user_product_list' %}">Products</a>
+                        <a class="btn btn-primary btn-sm" href="{% url 'user_app:user_signup' %}">Sign Up</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'product_app:user_category_list' %}">Categories</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav ms-auto align-items-center">
-                    {% if user.is_authenticated %}
-                        <!-- Wishlist Icon -->
-                        <li class="nav-item me-3">
-                            <a class="nav-link nav-icon wishlist-icon" href="{% url 'cart_and_orders_app:user_wishlist' %}">
-                                <i class="fas fa-heart"></i>
-                                <span class="position-absolute badge" id="wishlist-count">
-                                    {{ request.user.wishlist_items.count|default:0 }}
-                                </span>
-                            </a>
-                        </li>
-                        <!-- Shopping Cart Icon -->
-                        <li class="nav-item me-3">
-                            <a class="nav-link nav-icon cart-icon" href="{% url 'cart_and_orders_app:user_cart_list' %}">
-                                <i class="fas fa-shopping-cart"></i>
-                                <span class="position-absolute badge" id="cart-count">
-                                    {{ request.user.cart.items.count|default:0 }}
-                                </span>
-                            </a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" 
-                               data-bs-toggle="dropdown" aria-expanded="false">
-                                {{ user.username }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                <li><a class="dropdown-item" href="{% url 'user_app:my_profile' %}">My Profile</a></li>
-                                <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_order_list' %}">My Orders</a></li>
-                                <li><a class="dropdown-item" href="{% url 'cart_and_orders_app:user_wishlist' %}">My Wishlist</a></li>
-                                <li><a class="dropdown-item" href="{% url 'offer_and_coupon_app:wallet_dashboard' %}">My Wallet</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'user_app:user_logout' %}">Logout</a></li>
-                            </ul>
-                        </li>
-                    {% else %}
-                        <li class="nav-item me-3">
-                            <a class="btn btn-outline-light btn-sm" href="{% url 'user_app:user_login' %}">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="btn btn-primary btn-sm" href="{% url 'user_app:user_signup' %}">Sign Up</a></li>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
+                {% endif %}
+            </ul>
         </div>
-    </nav>
+    </div>
+</nav>
+
+    <!-- Alert container for notifications -->
+    <div class="alert-container"></div>
 
     <!-- Main Content -->
-    <div class="container mt-4">
+    <div class="container mt-4 main-content">
         {% block content %}{% endblock %}
     </div>
 
@@ -479,37 +711,91 @@
     <footer class="footer mt-auto">
         <div class="container">
             <div class="row">
-                <div class="col-md-4 mb-5 mb-md-0">
+                <div class="col-lg-4 col-md-6 mb-5 mb-lg-0">
                     <h5>About</h5>
                     <div class="minimal-divider"></div>
-                    <p class="minimal-text">Your ultimate destination for premium fitness supplements and accessories. Elevate your performance with Core Fitness.</p>
+                    <p class="mb-4">Your ultimate destination for premium fitness supplements and accessories. Elevate your performance with Core Fitness.</p>
+                    <p class="mb-1">
+                        <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        corefitness@gmail.com
+                    </p>
+                    <p>
+                        <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        +91 8547502375
+                    </p>
                 </div>
-                <div class="col-md-4 mb-5 mb-md-0">
+                <div class="col-lg-4 col-md-6 mb-5 mb-lg-0">
                     <h5>Links</h5>
                     <div class="minimal-divider"></div>
                     <ul class="list-unstyled">
-                        <li class="mb-3"><a href="{% url 'user_app:about_us' %}">About Us</a></li>
-                        <li class="mb-3"><a href="{% url 'user_app:contact_us' %}">Contact Us</a></li>
-                        <li class="mb-3"><a href="{% url 'user_app:faq' %}">FAQ</a></li>
-                        <li class="mb-3"><a href="{% url 'user_app:privacy_policy' %}">Privacy Policy</a></li>
+                        <li class="mb-3"><a href="{% url 'user_app:about_us' %}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            About Us</a>
+                        </li>
+                        <li class="mb-3"><a href="{% url 'user_app:contact_us' %}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                            </svg>
+                            Contact Us</a>
+                        </li>
+                        <li class="mb-3"><a href="{% url 'user_app:faq' %}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            FAQ</a>
+                        </li>
+                        <li class="mb-3"><a href="{% url 'user_app:privacy_policy' %}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="9" y1="3" x2="9" y2="21"></line>
+                            </svg>
+                            Privacy Policy</a>
+                        </li>
                     </ul>
                 </div>
-                <div class="col-md-4">
+                <div class="col-lg-4 col-md-6">
                     <h5>Connect</h5>
                     <div class="minimal-divider"></div>
                     <div class="social-icons mb-4">
-                        <a href="#"><i class="fab fa-facebook-f"></i></a>
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#"><i class="fab fa-instagram"></i></a>
-                        <a href="#"><i class="fab fa-youtube"></i></a>
+                        <a href="#" aria-label="Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="#" aria-label="Twitter">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="#" aria-label="Instagram">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                        <a href="#" aria-label="YouTube">
+                            <i class="fab fa-youtube"></i>
+                        </a>
                     </div>
-                    <p class="minimal-text mb-1">corefitness@gmail.com</p>
-                    <p class="minimal-text">+91 8547502375</p>
+                    <p class="mt-4">Subscribe to our newsletter for exclusive content and deals.</p>
+                    <div class="input-group mt-3">
+                        <input type="email" class="form-control" placeholder="Your email">
+                        <button class="btn btn-primary" type="button">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="#fff" fill="none" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div class="minimal-divider mx-auto" style="margin-top: 3rem;"></div>
+            <div class="minimal-divider mx-auto" style="margin-top: 3rem; width: 60px;"></div>
             <div class="text-center mt-4">
-                <p class="minimal-text">© 2025 Core Fitness. All rights reserved.</p>
+                <p>© 2025 Core Fitness. All rights reserved.</p>
             </div>
         </div>
     </footer>
@@ -517,13 +803,118 @@
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize wishlist count from localStorage or from server
+            // Initialize GSAP
+            gsap.registerPlugin(ScrollTrigger);
+            
+            // Navbar scroll effect
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 50) {
+                    document.querySelector('.navbar').classList.add('scrolled');
+                } else {
+                    document.querySelector('.navbar').classList.remove('scrolled');
+                }
+            });
+            
+            // Page entrance animation
+            const pageTransition = document.querySelector('.page-transition');
+            gsap.fromTo(pageTransition, {
+                y: 0
+            }, {
+                y: '-100%',
+                duration: 0.3,
+                ease: 'power3.inOut'
+            });
+            
+            // Animate section titles on scroll
+            gsap.utils.toArray('.section-title').forEach(title => {
+                gsap.fromTo(title, {
+                    opacity: 0,
+                    y: 20
+                }, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.8,
+                    scrollTrigger: {
+                        trigger: title,
+                        start: "top 80%",
+                        toggleActions: "play none none none"
+                    }
+                });
+            });
+            
+            // Animate cards on scroll
+            gsap.utils.toArray('.card').forEach(card => {
+                gsap.fromTo(card, {
+                    opacity: 0,
+                    y: 30
+                }, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
+                    scrollTrigger: {
+                        trigger: card,
+                        start: "top 85%",
+                        toggleActions: "play none none none"
+                    }
+                });
+            });
+            const themeToggle = document.querySelector('.theme-toggle');
+const themeIcon = document.getElementById('theme-icon');
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
+    // Update icon
+    if (theme === 'dark') {
+        themeIcon.innerHTML = `
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        `;
+    } else {
+        themeIcon.innerHTML = `
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        `;
+    }
+}
+
+            // Check for saved theme or system preference
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else {
+                setTheme(prefersDark ? 'dark' : 'light');
+            }
+
+            // Toggle theme on click
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setTheme(newTheme);
+                
+                // Animate icon
+                gsap.fromTo(themeIcon, 
+                    { scale: 0, rotation: 0 }, 
+                    { scale: 1, rotation: 360, duration: 0.5, ease: 'power3.out' }
+                );
+            });
+            
+            // Initialize wishlist count
             const storedWishlistCount = localStorage.getItem('wishlistCount');
             const serverWishlistCount = {{ request.user.wishlist_items.count|default:0 }};
             
-            // Use localStorage value if exists, otherwise use server count and update localStorage
             if (storedWishlistCount !== null) {
                 updateWishlistCount(parseInt(storedWishlistCount));
             } else {
@@ -531,11 +922,10 @@
                 localStorage.setItem('wishlistCount', serverWishlistCount);
             }
             
-            // Initialize cart count from localStorage or from server
+            // Initialize cart count
             const storedCartCount = localStorage.getItem('cartCount');
             const serverCartCount = {{ request.user.cart.items.count|default:0 }};
             
-            // Use localStorage value if exists, otherwise use server count and update localStorage
             if (storedCartCount !== null) {
                 updateCartCount(parseInt(storedCartCount));
             } else {
@@ -543,51 +933,122 @@
                 localStorage.setItem('cartCount', serverCartCount);
             }
             
-            console.log('Swal loaded:', typeof Swal !== 'undefined' ? 'Yes' : 'No');
-            
-            // Auto-dismiss alerts after 5 seconds
-            setTimeout(function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                });
-            }, 5000);
+            // Function to show alerts
+            window.showAlert = function(message, type = 'success') {
+                const alertContainer = document.querySelector('.alert-container');
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert alert-${type} d-flex align-items-center`;
+                
+                // Icon based on alert type
+                let icon = '';
+                if (type === 'success') {
+                    icon = `<svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+                } else if (type === 'danger') {
+                    icon = `<svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+                } else if (type === 'warning') {
+                    icon = `<svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+                } else if (type === 'info') {
+                    icon = `<svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+                }
+                
+                alertDiv.innerHTML = `
+                    ${icon}
+                    <div>${message}</div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                
+                alertContainer.appendChild(alertDiv);
+                
+                // Remove alert after 5 seconds
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.remove();
+                    }
+                }, 5000);
+            };
             
             // Function to update wishlist count
             function updateWishlistCount(count) {
                 const wishlistCountBadge = document.getElementById('wishlist-count');
                 if (wishlistCountBadge) {
-                    wishlistCountBadge.textContent = count > 0 ? count : 0; // Ensure non-negative
+                    wishlistCountBadge.textContent = count > 0 ? count : 0;
                     wishlistCountBadge.style.display = count > 0 ? 'flex' : 'none';
+                    
+                    if (count > 0) {
+                        gsap.fromTo(wishlistCountBadge, 
+                            { scale: 0 }, 
+                            { scale: 1.2, duration: 0.3, ease: "back.out(2)", 
+                              onComplete: () => gsap.to(wishlistCountBadge, { scale: 1, duration: 0.2 }) 
+                            }
+                        );
+                    }
                 }
-                localStorage.setItem('wishlistCount', Math.max(0, count)); // Prevent negative storage
+                localStorage.setItem('wishlistCount', Math.max(0, count));
             }
             
             // Function to update cart count
             function updateCartCount(count) {
                 const cartCountBadge = document.getElementById('cart-count');
                 if (cartCountBadge) {
-                    cartCountBadge.textContent = count > 0 ? count : 0; // Ensure non-negative
+                    cartCountBadge.textContent = count > 0 ? count : 0;
                     cartCountBadge.style.display = count > 0 ? 'flex' : 'none';
+                    
+                    if (count > 0) {
+                        gsap.fromTo(cartCountBadge, 
+                            { scale: 0 }, 
+                            { scale: 1.2, duration: 0.3, ease: "back.out(2)", 
+                              onComplete: () => gsap.to(cartCountBadge, { scale: 1, duration: 0.2 }) 
+                            }
+                        );
+                    }
                 }
-                localStorage.setItem('cartCount', Math.max(0, count)); // Prevent negative storage
+                localStorage.setItem('cartCount', Math.max(0, count));
             }
         
             // Listen for wishlist-updated events
             document.addEventListener('wishlist-updated', function(e) {
                 const count = e.detail.count !== undefined && e.detail.count >= 0 ? e.detail.count : 0;
                 updateWishlistCount(count);
+                showAlert('Wishlist updated successfully!', 'success');
             });
             
             // Listen for cart-updated events
             document.addEventListener('cart-updated', function(e) {
                 const count = e.detail.count !== undefined && e.detail.count >= 0 ? e.detail.count : 0;
                 updateCartCount(count);
+                showAlert('Cart updated successfully!', 'success');
+            });
+            
+            // Page navigation transitions
+            document.querySelectorAll('a').forEach(link => {
+                if (link.getAttribute('href') && 
+                    !link.getAttribute('href').startsWith('#') && 
+                    !link.getAttribute('href').includes('javascript:') &&
+                    !link.classList.contains('dropdown-toggle') &&
+                    link.getAttribute('target') !== '_blank') {
+                    
+                    link.addEventListener('click', function(e) {
+                        const href = this.getAttribute('href');
+                        
+                        if (this.hasAttribute('data-bs-toggle')) return;
+                        
+                        e.preventDefault();
+                        
+                        const spinner = document.querySelector('.loading-spinner');
+                        gsap.to(spinner, { opacity: 1, duration: 0.3 });
+                        
+                        gsap.fromTo('.page-transition', 
+                            { y: '100%' }, 
+                            { y: '0%', duration: 0.5, ease: 'power3.inOut', onComplete: () => {
+                                window.location.href = href;
+                            }}
+                        );
+                    });
+                }
             });
         });
         
-        // Function to get CSRF token from cookies (for AJAX)
+        // Function to get CSRF token from cookies
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -603,7 +1064,6 @@
             return cookieValue;
         }
     </script>
-{% block extra_js %}
-{% endblock %}
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

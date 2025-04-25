@@ -8,7 +8,7 @@ from django.urls import reverse
 from .forms import BannerForm
 from urllib.parse import urlencode
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from user_app.models import CustomUser, UserProfile, LoginAttempt, Banner
+from user_app.models import CustomUser, UserProfile, Banner
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Q, Count, Sum, F
 from django.utils import timezone

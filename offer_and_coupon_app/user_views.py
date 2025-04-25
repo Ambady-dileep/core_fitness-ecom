@@ -8,7 +8,7 @@ from django.core.paginator import Paginator
 from cart_and_orders_app.models import Cart, CartItem
 from decimal import Decimal
 from django.db import models, transaction
-from .models import Coupon, UserCoupon, Wallet, WalletTransaction, ProductOffer, CategoryOffer
+from .models import Coupon, UserCoupon, Wallet, WalletTransaction
 from django.contrib import messages
 from django.shortcuts import redirect, render
 from decimal import InvalidOperation
@@ -16,7 +16,6 @@ from django.urls import reverse
 import json
 from django.contrib import messages
 from django.conf import settings
-from .models import ReferralCode, Referral
 from django.db.models import Q, F
 from django.views.decorators.csrf import csrf_exempt
 import razorpay
@@ -168,39 +167,6 @@ def remove_coupon(request):
         logger.error(f"Error removing coupon for user {request.user.username}: {str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'message': 'An unexpected error occurred. Please try again.'}, status=500)
         
-def apply_offers_to_product(product, price):
-    best_price = price
-    now = timezone.now()
-    product_offers = ProductOffer.objects.filter(
-        products=product,
-        is_active=True,
-        valid_from__lte=now,
-        valid_to__gte=now
-    )
-    category_offers = CategoryOffer.objects.filter(
-        is_active=True,
-        valid_from__lte=now,
-        valid_to__gte=now
-    )
-    
-    applicable_category_offers = []
-    if hasattr(product, 'category'): 
-        for offer in category_offers:
-            applicable_categories = offer.get_all_categories()
-            if product.category in applicable_categories:
-                applicable_category_offers.append(offer)
-    
-    for offer in product_offers:
-        discount = offer.calculate_discount(price)
-        if discount > (price - best_price):
-            best_price = price - discount
-    
-    for offer in applicable_category_offers:
-        discount = offer.calculate_discount(price)
-        if discount > (price - best_price):
-            best_price = price - discount
-    
-    return max(Decimal('0.00'), best_price)
 
 @login_required
 @require_GET
@@ -516,32 +482,3 @@ def add_funds_callback(request):
         logger.error("Failed to add funds: %s", str(e))
         return JsonResponse({'success': False, 'message': 'Failed to add funds.'}, status=500)
     
-@login_required
-def referral_dashboard(request):
-    user = request.user
-    try:
-        referral_code = user.referral_code 
-    except ReferralCode.DoesNotExist:
-        referral_code = ReferralCode.objects.create(user=user)
-    if settings.DEBUG:
-        domain = "http://127.0.0.1:8000"
-    else:
-        domain = "https://yourdomain.com"  
-    referral_url = f"{domain}{reverse('referral_signup')}?code={referral_code.code}"
-    referrals = Referral.objects.filter(referrer=user)
-    referral_coupons = user.user_coupons.filter(coupon__in=[r.coupon for r in referrals if r.coupon])
-    
-    context = {
-        'referral_code': referral_code.code,
-        'referral_url': referral_url,
-        'referrals': referrals,
-        'referral_coupons': referral_coupons,
-    }
-    
-    return render(request, 'offer_and_coupon_app/referral_dashboard.html', context)
-
-def referral_signup(request):
-    code = request.GET.get('code')
-    if code:
-        request.session['referral_code'] = code
-    return redirect('user_app:user_signup')

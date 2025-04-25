@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.contrib.auth.forms import UserCreationForm
 from .models import CustomUser, Banner
-from offer_and_coupon_app.models import ReferralCode
 from .models import Address, CustomUser, UserProfile, validate_full_name
 
 class AdminLoginForm(forms.Form):
@@ -217,37 +216,7 @@ class CustomUserCreationForm(UserCreationForm):
     
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'full_name', 'phone_number', 'password1', 'password2', 'referral_code')
-    
-    def clean_referral_code(self):
-        code = self.cleaned_data.get('referral_code')
-        
-        if code:
-            try:
-                ReferralCode.objects.get(code=code)
-            except ReferralCode.DoesNotExist:
-                raise forms.ValidationError("Invalid referral code")
-        return code
-    
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        
-        if commit:
-            user.save()
-            referral_code = self.cleaned_data.get('referral_code')
-            if referral_code:
-                from offer_and_coupon_app.models import ReferralCode, Referral
-                try:
-                    referrer_code = ReferralCode.objects.get(code=referral_code)
-                    referral = Referral.objects.create(
-                        referrer=referrer_code.user,
-                        referred_user=user
-                    )
-                    referral.generate_coupon()
-                except ReferralCode.DoesNotExist:
-                    pass 
-                    
-        return user
+        fields = ('username', 'email', 'full_name', 'phone_number', 'password1', 'password2')
     
 
 class BannerForm(forms.ModelForm):

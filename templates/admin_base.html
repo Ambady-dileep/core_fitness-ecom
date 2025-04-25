@@ -8,6 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.7.12/sweetalert2.min.css">
 
     <style>
         :root {
@@ -280,6 +281,29 @@
             background-color: rgba(139, 125, 107, 0.15) !important;
             color: var(--accent-color);
         }
+        .swal-minimalist {
+            font-family: 'Cormorant Garamond', serif;
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        
+        .swal2-title {
+            font-family: 'Libre Baskerville', serif;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        
+        .swal2-html-container {
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--text-color);
+        }
+        
+        .swal2-confirm, .swal2-cancel {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 0.9rem;
+            padding: 0.5rem 1.25rem;
+            border-radius: 6px;
+        }
 
         /* Button styles */
         .btn-primary {
@@ -413,6 +437,127 @@
         body.sidebar-open .sidebar-backdrop {
             display: block;
         }
+        /* Notification Container */
+        .notification-container {
+          position: fixed;
+          top: calc(var(--header-height) + 10px);
+          right: 20px;
+          width: 320px;
+          max-height: 80vh;
+          overflow-y: auto;
+          z-index: 1040;
+          display: none;
+        }
+      
+        /* Notification Item */
+        .notification-item {
+          background-color: #EAF7ED;
+          border-left: 4px solid #2ECC71;
+          margin-bottom: 10px;
+          padding: 15px;
+          border-radius: 8px;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+          animation: slideIn 0.3s ease forwards;
+          position: relative;
+        }
+      
+        .notification-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 6px;
+        }
+      
+        .notification-title {
+          font-family: 'Libre Baskerville', serif;
+          font-weight: 700;
+          font-size: 1rem;
+          color: #2C3E50;
+          margin: 0;
+        }
+      
+        .notification-time {
+          font-size: 0.8rem;
+          color: #8B7D6B;
+          opacity: 0.8;
+        }
+      
+        .notification-message {
+          font-size: 0.95rem;
+          color: #2F2F2F;
+          margin-bottom: 5px;
+        }
+      
+        .notification-footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 8px;
+        }
+      
+        .notification-action {
+          font-size: 0.85rem;
+          color: #8B7D6B;
+          text-decoration: none;
+          font-weight: 500;
+          font-family: 'Libre Baskerville', serif;
+          transition: color 0.2s ease;
+        }
+      
+        .notification-action:hover {
+          color: #2ECC71;
+        }
+      
+        .notification-close {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          font-size: 0.8rem;
+          color: #8B7D6B;
+          cursor: pointer;
+          opacity: 0.5;
+          transition: opacity 0.2s ease;
+        }
+      
+        .notification-close:hover {
+          opacity: 1;
+        }
+      
+        /* Notification Animations */
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      
+        @keyframes pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(46, 204, 113, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+          }
+        }
+      
+        /* Bell notification indicator */
+        .notification-indicator {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          width: 8px;
+          height: 8px;
+          background-color: #2ECC71;
+          border-radius: 50%;
+          animation: pulse 2s infinite;
+        }
     </style>
 </head>
 <body>
@@ -438,15 +583,17 @@
                     <i class="fas fa-chevron-down ms-1 d-none d-md-block" style="font-size: 0.7rem;"></i>
                 </div>
                 <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="#"><i class="fas fa-user"></i> Profile</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                    <li><a class="dropdown-item" href="#" id="logoutLink">
                         <i class="fas fa-sign-out-alt"></i> Logout
                     </a></li>
                 </ul>
             </div>
         </div>
     </header>
+    <div id="notificationContainer" class="notification-container">
+        <!-- Notifications will be added here dynamically -->
+    </div>
 
     <!-- Sidebar Backdrop (Mobile) -->
     <div class="sidebar-backdrop"></div>
@@ -516,11 +663,6 @@
                     <i class="fas fa-image"></i> <span>Banner</span>
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link {% if 'admin/offers' in request.path %}active{% endif %}" href="{% url 'offer_and_coupon_app:admin_offer_list' %}">
-                    <i class="fas fa-gift"></i> <span>Offer</span>
-                </a>
-            </li>
         </ul>
     </nav>
 
@@ -538,27 +680,150 @@
         </div>
     </footer>
 
-    <!-- Logout Confirmation Modal -->
-    <div class="modal fade" id="logoutModal" tabindex="-1" aria-labelledby="logoutModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="logoutModalLabel">Confirm Logout</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    Are you sure you want to logout?
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <a href="{% url 'user_app:admin_logout' %}" class="btn btn-sm btn-primary">Logout</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.all.min.js"></script>
     <script>
+
+        const notifications = [
+        {
+            id: 1,
+            title: "New Order",
+            message: "A new order #1243 has been placed for $89.99",
+            time: "10 minutes ago",
+            link: "#",
+            actionText: "View Order"
+        },
+        {
+            id: 2,
+            title: "Low Stock Alert",
+            message: "Protein powder (Chocolate) is running low on stock",
+            time: "2 hours ago",
+            link: "#",
+            actionText: "Check Inventory"
+        },
+        {
+            id: 3,
+            title: "Customer Review",
+            message: "John D. left a 5-star review on CrossFit Gloves",
+            time: "Yesterday",
+            link: "#",
+            actionText: "Read Review"
+        }
+        ];
+        document.getElementById('logoutLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            Swal.fire({
+                title: 'Confirm Logout',
+                text: 'Are you sure you want to logout?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#8B7D6B',
+                cancelButtonColor: '#6C7A89',
+                confirmButtonText: 'Logout',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    popup: 'swal-minimalist'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "{% url 'user_app:admin_logout' %}";
+                }
+            });
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add notification indicator to bell icon
+            const notificationBtn = document.querySelector('.header-btn[aria-label="Notifications"]');
+            const notificationContainer = document.getElementById('notificationContainer');
+            
+            
+            // Add notification indicator
+            const indicator = document.createElement('span');
+            indicator.classList.add('notification-indicator');
+            notificationBtn.appendChild(indicator);
+            
+            // Toggle notification container visibility
+            notificationBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (notificationContainer.style.display === 'block') {
+                    notificationContainer.style.display = 'none';
+                } else {
+                    notificationContainer.style.display = 'block';
+                    renderNotifications();
+                    
+                    // Remove notification indicator when notifications are viewed
+                    if (indicator) {
+                        indicator.remove();
+                    }
+                }
+            });
+            
+            // Close notification container when clicking outside
+            document.addEventListener('click', function(e) {
+                if (notificationContainer.style.display === 'block' && 
+                    !notificationContainer.contains(e.target) && 
+                    e.target !== notificationBtn) {
+                    notificationContainer.style.display = 'none';
+                }
+            });
+            
+            // Function to render notifications
+            function renderNotifications() {
+                notificationContainer.innerHTML = '';
+                
+                if (notifications.length === 0) {
+                    const emptyNotification = document.createElement('div');
+                    emptyNotification.classList.add('notification-item');
+                    emptyNotification.innerHTML = `
+                        <p class="notification-message">No new notifications.</p>
+                    `;
+                    notificationContainer.appendChild(emptyNotification);
+                    return;
+                }
+                
+                notifications.forEach((notification, index) => {
+                    const notificationItem = document.createElement('div');
+                    notificationItem.classList.add('notification-item');
+                    notificationItem.style.animationDelay = `${index * 0.1}s`;
+                    
+                    notificationItem.innerHTML = `
+                        <div class="notification-header">
+                            <h4 class="notification-title">${notification.title}</h4>
+                            <span class="notification-time">${notification.time}</span>
+                        </div>
+                        <p class="notification-message">${notification.message}</p>
+                        <div class="notification-footer">
+                            <a href="${notification.link}" class="notification-action">${notification.actionText}</a>
+                        </div>
+                        <span class="notification-close" data-id="${notification.id}">
+                            <i class="fas fa-times"></i>
+                        </span>
+                    `;
+                    
+                    notificationContainer.appendChild(notificationItem);
+                });
+                
+                // Add event listeners for close buttons
+                document.querySelectorAll('.notification-close').forEach(closeBtn => {
+                    closeBtn.addEventListener('click', function() {
+                        const notificationId = this.getAttribute('data-id');
+                        // In a real app, you'd call an endpoint to mark notification as read
+                        this.closest('.notification-item').style.opacity = '0';
+                        setTimeout(() => {
+                            this.closest('.notification-item').remove();
+                            
+                            // If all notifications are dismissed, close the container
+                            if (notificationContainer.children.length === 0) {
+                                notificationContainer.style.display = 'none';
+                            }
+                        }, 300);
+                    });
+                });
+            }
+        });
         // Toggle sidebar on mobile
         document.querySelector('.sidebar-toggle').addEventListener('click', function() {
             document.body.classList.toggle('sidebar-open');

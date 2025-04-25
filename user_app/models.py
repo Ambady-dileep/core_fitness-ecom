@@ -6,8 +6,6 @@ from django.core.exceptions import ValidationError
 import re
 from cloudinary.models import CloudinaryField
 from django.conf import settings
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 def validate_full_name(value):
     if not value:
@@ -120,17 +118,7 @@ class CustomUser(AbstractUser):
                     self.login_attempts = 0
                     self.last_login_attempt = None
                     self.save()
-        return True
-
-    def increment_login_attempts(self):
-        self.login_attempts += 1
-        self.last_login_attempt = datetime.now()
-        self.save()
-
-    def reset_login_attempts(self):
-        self.login_attempts = 0
-        self.last_login_attempt = None
-        self.save()
+        return True    
 
 
 class Address(models.Model):
@@ -167,20 +155,6 @@ class Address(models.Model):
     def __str__(self):
         return f"{self.address_line1}, {self.city}, {self.country}"
 
-class LoginAttempt(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    success = models.BooleanField(default=False)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'login_attempts'
-        ordering = ['-timestamp']
-
-    def __str__(self):
-        return f"{self.user.username} - {'Success' if self.success else 'Failed'}"
-
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
@@ -196,13 +170,6 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
-
-@receiver(post_save, sender=CustomUser)
-def create_or_update_user_profile(sender, instance, created, **kwargs):
-    if created: 
-        UserProfile.objects.create(user=instance)
-    elif hasattr(instance, 'profile'):
-        instance.profile.save()
 
 
 class Banner(models.Model):

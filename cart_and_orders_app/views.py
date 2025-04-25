@@ -553,7 +553,6 @@ def buy_now(request):
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
-from offer_and_coupon_app.utils import get_best_offer_for_product
 logger = logging.getLogger(__name__)
 @login_required
 @never_cache
