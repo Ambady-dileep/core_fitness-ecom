@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.contrib.auth.forms import UserCreationForm
 from .models import CustomUser, Banner
+from .models import ContactMessage
 from .models import Address, CustomUser, UserProfile, validate_full_name
 
 class AdminLoginForm(forms.Form):
@@ -233,3 +234,21 @@ class BannerForm(forms.ModelForm):
         labels = {
             'is_active': 'Active',
         }
+
+
+class ContactForm(forms.ModelForm):
+    class Meta:
+        model = ContactMessage
+        fields = ['name', 'email', 'subject', 'message']
+        widgets = {
+            'name': forms.TextInput(attrs={'placeholder': 'Your Name', 'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'placeholder': 'Your Email', 'class': 'form-control'}),
+            'subject': forms.TextInput(attrs={'placeholder': 'Subject', 'class': 'form-control'}),
+            'message': forms.Textarea(attrs={'placeholder': 'Your Message', 'class': 'form-control', 'rows': 5}),
+        }
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not email:
+            raise forms.ValidationError("Email is required.")
+        return email

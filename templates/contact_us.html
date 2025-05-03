@@ -1,331 +1,206 @@
 {% extends 'base.html' %}
+
 {% block title %}Contact Us - CoreFitness{% endblock %}
 
 {% block content %}
-<div class="contact-container">
+<div class="container py-5">
     <!-- Header Section -->
-    <div class="header-section">
-        <h1>Contact Us</h1>
-        <div class="header-underline"></div>
+    <div class="text-center mb-5">
+        <h1 class="section-title">Contact Us</h1>
+        <div class="header-underline mx-auto"></div>
+        <p class="minimal-text text-muted" style="max-width: 600px; margin: 0 auto;">
+            We're here to help! Reach out with any questions or feedback.
+        </p>
     </div>
 
-    <!-- Contact Info and Form -->
-    <div class="contact-row">
-        <div class="contact-col info-col">
-            <h2>Get in Touch</h2>
-            <ul class="contact-list">
-                <li>
-                    <div class="icon-wrapper">
-                        <i class="fas fa-envelope"></i>
-                    </div>
-                    <div class="contact-info">
-                        <span class="label">Email</span>
-                        <a href="mailto:support@corefitness.com">support@corefitness.com</a>
-                    </div>
-                </li>
-                <li>
-                    <div class="icon-wrapper">
-                        <i class="fas fa-phone"></i>
-                    </div>
-                    <div class="contact-info">
-                        <span class="label">Phone</span>
-                        <span>+1-800-CORE-FIT (1-800-267-3348)</span>
-                    </div>
-                </li>
-                <li>
-                    <div class="icon-wrapper">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div class="contact-info">
-                        <span class="label">Address</span>
-                        <span>CoreFitness, 123 Fitness Lane, City, State, ZIP</span>
-                    </div>
-                </li>
-            </ul>
-            
-            <h2>Hours</h2>
-            <div class="hours-grid">
-                <div class="day-column">
-                    <span class="day">Monday–Friday</span>
-                    <span class="day">Saturday</span>
-                    <span class="day">Sunday</span>
-                </div>
-                <div class="time-column">
-                    <span class="time">9:00 AM – 6:00 PM</span>
-                    <span class="time">10:00 AM – 2:00 PM</span>
-                    <span class="time">Closed</span>
-                </div>
+    <!-- Messages -->
+    {% if messages %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-8">
+            {% for message in messages %}
+            <div class="alert {% if message.tags == 'success' %}alert-success{% else %}alert-danger{% endif %} d-flex align-items-center" role="alert">
+                <i class="fas {% if message.tags == 'success' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %} me-3"></i>
+                <span>{{ message }}</span>
             </div>
-            <div class="faq-link">
-                <p>Have a question? Check our <a href="{% url 'user_app:faq' %}">FAQ</a> page first.</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Contact Info and Form -->
+    <div class="row g-4">
+        <!-- Contact Info -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body p-4">
+                    <h2 class="card-title mb-4">Get in Touch</h2>
+                    <ul class="list-unstyled">
+                        <li class="d-flex mb-3">
+                            <div class="icon-wrapper me-3">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <div>
+                                <span class="label d-block">Email</span>
+                                <a href="mailto:support@corefitness.com">support@corefitness.com</a>
+                            </div>
+                        </li>
+                        <li class="d-flex mb-3">
+                            <div class="icon-wrapper me-3">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div>
+                                <span class="label d-block">Phone</span>
+                                <span>+1-800-267-3348</span>
+                            </div>
+                        </li>
+                        <li class="d-flex mb-3">
+                            <div class="icon-wrapper me-3">
+                                <i class="fas fa-map-marker-alt"></i>
+                            </div>
+                            <div>
+                                <span class="label d-block">Address</span>
+                                <span>123 Fitness Lane, City, State, ZIP</span>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <h2 class="card-title mb-4 mt-4">Hours</h2>
+                    <div class="d-flex">
+                        <div class="me-4">
+                            <span class="d-block mb-2">Monday–Friday</span>
+                            <span class="d-block mb-2">Saturday</span>
+                            <span class="d-block mb-2">Sunday</span>
+                        </div>
+                        <div>
+                            <span class="d-block mb-2">9:00 AM – 6:00 PM</span>
+                            <span class="d-block mb-2">10:00 AM – 2:00 PM</span>
+                            <span class="d-block mb-2">Closed</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <p class="minimal-text">Have a question? Check our <a href="{% url 'user_app:faq' %}">FAQ</a> page first.</p>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="contact-col form-col">
-            <h2>Send a Message</h2>
-            <form method="post" action="{% url 'user_app:contact_us' %}">
-                {% csrf_token %}
-                <div class="form-group">
-                    <input type="text" name="name" class="form-control" placeholder="Your Name" required>
+
+        <!-- Contact Form -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body p-4">
+                    <h2 class="card-title mb-4">Send a Message</h2>
+                    <form method="post" action="{% url 'user_app:contact_us' %}">
+                        {% csrf_token %}
+                        {{ form.non_field_errors }}
+                        {% for field in form %}
+                        <div class="mb-3">
+                            {{ field }}
+                            {% if field.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ field.errors|join:", " }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary w-100">Send Message</button>
+                    </form>
                 </div>
-                <div class="form-group">
-                    <input type="email" name="email" class="form-control" placeholder="Your Email" required>
-                </div>
-                <div class="form-group">
-                    <input type="text" name="subject" class="form-control" placeholder="Subject" required>
-                </div>
-                <div class="form-group">
-                    <textarea name="message" class="form-control" rows="5" placeholder="Your Message" required></textarea>
-                </div>
-                <button type="submit" class="btn-submit">Send Message</button>
-            </form>
+            </div>
         </div>
     </div>
 </div>
 
 <style>
-    /* General Styles */
-    body {
-        font-family: 'Inter', sans-serif;
-        background-color: #fafafa;
-        color: #333;
-        line-height: 1.6;
-    }
-
-    /* Container Styling */
-    .contact-container {
-        max-width: 1950px;
-        margin: 0 auto;
-        padding: 80px 20px;
-    }
-
-    /* Header Section */
-    .header-section {
-        text-align: center;
-        margin-bottom: 80px;
-    }
-    
-    .header-section h1 {
-        font-size: 2.5rem;
-        font-weight: 300;
-        color: #222;
-        letter-spacing: 1px;
-        margin-bottom: 15px;
-    }
-    
     .header-underline {
         width: 40px;
         height: 2px;
-        background: #222;
-        margin: 0 auto;
+        background: var(--accent);
     }
-
-    /* Contact Section */
-    .contact-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 40px;
-        margin-bottom: 40px;
-        opacity: 0;
-        transform: translateY(15px);
-        transition: all 0.8s ease-out;
+    .card {
+        border: 1px solid var(--border);
+        box-shadow: none;
+        background: var(--bg);
     }
-    
-    .contact-row.visible {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    
-    .contact-col {
-        flex: 1;
-        min-width: 300px;
-        padding: 40px;
-        background: white;
-        border-radius: 4px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
-    }
-    
-    .contact-col h2 {
+    .card-title {
+        color: var(--text);
         font-size: 1.5rem;
-        font-weight: 400;
-        color: #222;
-        margin-bottom: 25px;
-        position: relative;
+        font-weight: 500;
     }
-
-    /* Contact Info Styling */
-    .contact-list {
-        list-style: none;
-        padding: 0;
-        margin-bottom: 40px;
-    }
-    
-    .contact-list li {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 20px;
-    }
-    
     .icon-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
         width: 40px;
         height: 40px;
-        margin-right: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--light-bg);
         border-radius: 50%;
-        background-color: #f5f5f5;
     }
-    
     .icon-wrapper i {
-        font-size: 1rem;
-        color: #222;
+        color: var(--text);
     }
-    
-    .contact-info {
-        display: flex;
-        flex-direction: column;
-    }
-    
     .label {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         font-weight: 500;
-        margin-bottom: 4px;
+        color: var(--light-text);
     }
-    
-    .contact-info a, .contact-info span:not(.label) {
+    .list-unstyled a, .list-unstyled span:not(.label) {
         font-size: 0.95rem;
-        color: #555;
+        color: var(--text);
     }
-    
-    .contact-info a {
-        color: #222;
-        text-decoration: none;
-        transition: color 0.2s ease;
+    .list-unstyled a:hover {
+        color: var(--accent);
     }
-    
-    .contact-info a:hover {
-        color: #555;
-    }
-
-    /* Hours Grid */
-    .hours-grid {
-        display: flex;
-        margin-bottom: 30px;
-    }
-    
-    .day-column, .time-column {
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .day-column {
-        width: 120px;
-        margin-right: 20px;
-    }
-    
-    .day, .time {
-        font-size: 0.95rem;
-        color: #555;
-        margin-bottom: 10px;
-    }
-    
-    .day {
-        font-weight: 500;
-    }
-
-    /* FAQ Link */
-    .faq-link {
-        margin-top: 20px;
-    }
-    
-    .faq-link p {
-        font-size: 0.95rem;
-        color: #555;
-    }
-    
-    .faq-link a {
-        color: #222;
-        text-decoration: none;
-        font-weight: 500;
-        transition: color 0.2s ease;
-    }
-    
-    .faq-link a:hover {
-        color: #555;
-    }
-
-    /* Form Styling */
-    .form-group {
-        margin-bottom: 20px;
-    }
-    
     .form-control {
-        width: 100%;
-        padding: 12px 15px;
-        font-size: 0.95rem;
-        border: 1px solid #eee;
-        border-radius: 4px;
-        background-color: #f9f9f9;
-        transition: all 0.3s ease;
+        border: 1px solid var(--border);
+        border-radius: 0;
+        background: var(--bg);
+        font-size: 0.85rem;
+        padding: 0.75rem 1rem;
     }
-    
     .form-control:focus {
-        outline: none;
-        border-color: #ddd;
-        background-color: #fff;
-        box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.02);
+        border-color: var(--accent);
+        box-shadow: none;
     }
-    
-    .btn-submit {
-        background-color: #222;
-        color: white;
-        padding: 12px 30px;
-        font-size: 0.9rem;
-        font-weight: 500;
-        border: none;
-        border-radius: 2px;
-        letter-spacing: 0.5px;
-        transition: all 0.3s ease;
-        cursor: pointer;
+    .minimal-text {
+        font-size: 0.95rem;
+        color: var(--light-text);
     }
-    
-    .btn-submit:hover {
-        background-color: #333;
-        transform: translateY(-2px);
+    .minimal-text a {
+        color: var(--accent);
+        text-decoration: none;
     }
-
-    /* Responsive Design */
+    .minimal-text a:hover {
+        text-decoration: underline;
+    }
     @media (max-width: 768px) {
-        .contact-row {
-            flex-direction: column;
-        }
-        
-        .contact-col {
-            padding: 30px;
-        }
-        
-        .header-section {
-            margin-bottom: 50px;
-        }
-        
-        .contact-row {
-            gap: 30px;
+        .container {
+            padding: 20px;
         }
     }
 </style>
 
+{% block extra_js %}
 <script>
+    // Optional: Add animation for card visibility
     document.addEventListener('DOMContentLoaded', () => {
-        const rows = document.querySelectorAll('.contact-row');
+        const cards = document.querySelectorAll('.card');
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
                 }
             });
         }, { threshold: 0.2 });
 
-        rows.forEach(row => observer.observe(row));
+        cards.forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(15px)';
+            card.style.transition = 'all 0.8s ease-out';
+            observer.observe(card);
+        });
     });
 </script>
+{% endblock %}
 {% endblock %}

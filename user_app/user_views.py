@@ -4,14 +4,14 @@ from .forms import AddressForm, GenerateOTPForm, ValidateOTPForm
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.contrib import messages
-from django.db.models import Q, Min, Count, Avg
+from django.db.models import Q, Min, Count, Avg, Max
 from product_app.models import Product, Category
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from .models import CustomUser as User
-from django.views.decorators.http import require_POST
-from django.views.decorators.http import require_http_methods
+from decimal import Decimal
+from django.views.decorators.http import require_POST, require_http_methods
 from .models import Address
-from .forms import UserProfileForm, ProfileForm, CustomPasswordChangeForm
+from .forms import UserProfileForm, ProfileForm, CustomPasswordChangeForm, CustomUserCreationForm
 from .models import Banner
 from django.conf import settings
 from product_app.models import Product, Category, Review
@@ -19,15 +19,12 @@ from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.views.decorators.cache import never_cache
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.http import JsonResponse
 from cart_and_orders_app.models import Order  
-from .forms import CustomUserCreationForm
-from django.shortcuts import get_object_or_404
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.views.decorators.cache import cache_control
+from django.views.decorators.cache import cache_control,never_cache
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from .utils.otp_utils import generate_otp, store_otp, get_otp, delete_otp, set_otp_cooldown, get_otp_cooldown
 
@@ -39,18 +36,27 @@ logger = logging.getLogger(__name__)
 def user_login(request):
     if request.user.is_authenticated:
         return redirect('user_app:user_home')
+    
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
         try:
             user = User.objects.get(username=username)
             
             if hasattr(user, 'userprofile') and user.userprofile.is_blocked:
-                messages.error(request, "Your account has been blocked. Please contact support.")
+                error_message = "Your account has been blocked. Please contact support."
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_message})
+                messages.error(request, error_message)
                 return render(request, 'signup_login.html')
             
             if hasattr(user, 'check_login_attempts') and not user.check_login_attempts():
-                messages.error(request, "Too many failed attempts. Please try again after 15 minutes.")
+                error_message = "Too many failed attempts. Please try again after 15 minutes."
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_message})
+                messages.error(request, error_message)
                 return render(request, 'signup_login.html')
             
             authenticated_user = authenticate(request, username=username, password=password)
@@ -60,20 +66,32 @@ def user_login(request):
                 if hasattr(user, 'login_attempts'):
                     user.login_attempts = 0
                     user.save()
+                if is_ajax:
+                    return JsonResponse({
+                        'success': True,
+                        'redirect_url': reverse('user_app:user_home')
+                    })
                 return redirect('user_app:user_home')
             else:
                 if hasattr(user, 'login_attempts'):
                     user.login_attempts += 1
                     user.save()
-                messages.error(request, "Invalid username or password.")
+                error_message = "Invalid username or password."
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_message})
+                messages.error(request, error_message)
                 
         except User.DoesNotExist:
-            messages.error(request, "Invalid username or password.")
+            error_message = "Invalid username or password."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
     
     context = {
-        'generate_otp_form': GenerateOTPForm(), 
+        'generate_otp_form': GenerateOTPForm(),
     }
     return render(request, 'signup_login.html', context)
+
 
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def user_signup(request):
@@ -88,6 +106,8 @@ def user_signup(request):
         'form_data': {}
     }
     
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
@@ -108,13 +128,19 @@ def user_signup(request):
         
         # Validation checks
         if not username or len(username) < 3 or len(username) > 20 or not username.isalnum():
-            messages.error(request, "Username must be 3-20 characters long and alphanumeric.")
+            error_message = "Username must be 3-20 characters long and alphanumeric."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
         try:
             validate_email(email)
         except ValidationError:
-            messages.error(request, "Please enter a valid email address.")
+            error_message = "Please enter a valid email address."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
         # Password validation
@@ -126,28 +152,43 @@ def user_signup(request):
             any(char in "!@#$%^&*()+-_=[]{};:,.<>?" for char in password1),
             password1 == password2
         ]):
-            messages.error(request, "Password must be 8+ characters with uppercase, lowercase, number, and special character.")
+            error_message = "Password must be 8+ characters with uppercase, lowercase, number, and special character."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
         if not re.match(r'^[6-9]\d{9}$', phone_number):
-            messages.error(request, "Invalid phone number. Must be 10 digits starting with 6-9.")
+            error_message = "Invalid phone number. Must be 10 digits starting with 6-9."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
         # Check for existing users
         if User.objects.filter(Q(username__iexact=username) | 
                               Q(email__iexact=email) | 
                               Q(phone_number=phone_number)).exists():
-            messages.error(request, "Username, email, or phone number already exists.")
+            error_message = "Username, email, or phone number already exists."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
         stored_otp = get_otp(email)
         if stored_otp and 'signup_data' in request.session and request.session['signup_data'].get('email') == email:
-            messages.error(request, "A signup process is already in progress for this email. Please verify the OTP or wait 3 minutes to try again.")
+            error_message = "A signup process is already in progress for this email. Please verify the OTP or wait 3 minutes to try again."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
 
         # Generate and send OTP
         if get_otp_cooldown(email):
-            messages.error(request, "Please wait 3 minutes before requesting a new OTP.")
+            error_message = "Please wait 3 minutes before requesting a new OTP."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
 
         try:
@@ -186,12 +227,22 @@ def user_signup(request):
                 'referral_code': referral_code
             }
 
-            messages.success(request, "An OTP has been sent to your email. Please verify to complete signup.")
+            success_message = "An OTP has been sent to your email. Please verify to complete signup."
+            if is_ajax:
+                return JsonResponse({
+                    'success': True,
+                    'message': success_message,
+                    'redirect_url': reverse('user_app:verify_otp_signup_page', kwargs={'email': email})
+                })
+            messages.success(request, success_message)
             return redirect('user_app:verify_otp_signup_page', email=email)
 
         except Exception as e:
             logger.error(f"Failed to send OTP during signup: {str(e)}", exc_info=True)
-            messages.error(request, f"Failed to send OTP: {str(e)}. Please try again.")
+            error_message = f"Failed to send OTP: {str(e)}. Please try again."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
     if 'referral_code' in request.session:
@@ -224,152 +275,62 @@ def change_password(request):
             return redirect('user_app:my_profile')
     return redirect('user_app:my_profile')
 
-@never_cache
-@login_required
+
 def user_home(request):
-    if not request.user.is_authenticated:
-        return redirect('user_app:user_login')
+    # Fetch active banners
+    banners = Banner.objects.filter(is_active=True)
 
-    category_id = request.GET.get('category')
-    min_price = request.GET.get('min_price')
-    max_price = request.GET.get('max_price')
-    brand = request.GET.get('brand')
-    sort_by = request.GET.get('sort')
-    search_query = request.GET.get('search')
-    availability = request.GET.get('availability')
-    rating = request.GET.get('rating')
-    banners = Banner.objects.filter(is_active=True).order_by('display_order')
+    # Fetch active categories
+    categories = Category.objects.filter(is_active=True)
 
-    # Base queryset: Active products with active variants from active categories and brands
-    products = Product.objects.filter(
-        is_active=True,
-        category__is_active=True,  # Filter by active categories
-        variants__isnull=False,
-        variants__is_active=True
-    ).annotate(
-        lowest_price=Min('variants__original_price')
-    ).distinct()
+    # Helper function to annotate products with price and discount
+    def annotate_products(products):
+        annotated_products = []
+        for product in products:
+            primary_variant = product.primary_variant
+            if primary_variant:
+                best_price_info = primary_variant.best_price
+                original_price = best_price_info['original_price']
+                sales_price = best_price_info['price']
+                # Calculate discount percentage
+                if original_price > sales_price:
+                    discount = ((original_price - sales_price) / original_price * 100).quantize(Decimal('1'))
+                else:
+                    discount = Decimal('0')
+                annotated_products.append({
+                    'product': product,
+                    'sales_price': sales_price,
+                    'original_price': original_price,
+                    'discount': discount
+                })
+            else:
+                annotated_products.append({
+                    'product': product,
+                    'sales_price': Decimal('0'),
+                    'original_price': Decimal('0'),
+                    'discount': Decimal('0')
+                })
+        return annotated_products
 
-    # Add filter for active brands (only if brand is not null)
-    products = products.filter(
-        Q(brand__isnull=True) | Q(brand__is_active=True)
-    )
-
-    # Apply filters
-    if category_id:
-        # Ensure we only filter by active categories
-        products = products.filter(category_id=category_id, category__is_active=True)
-    
-    if min_price and max_price:
-        products = products.filter(lowest_price__gte=min_price, lowest_price__lte=max_price)
-    elif min_price:
-        products = products.filter(lowest_price__gte=min_price)
-    elif max_price:
-        products = products.filter(lowest_price__lte=max_price)
-    
-    if brand:
-        # Ensure we only filter by active brands
-        products = products.filter(brand=brand, brand__is_active=True)
-    
-    if search_query:
-        products = products.filter(
-            Q(product_name__icontains=search_query) |
-            Q(description__icontains=search_query) |
-            Q(category__name__icontains=search_query) |
-            Q(brand__icontains=search_query)
-        )
-    
-    if availability:
-        if availability == 'in_stock':
-            products = products.filter(variants__stock__gt=0)
-        elif availability == 'out_of_stock':
-            products = products.filter(variants__stock=0)
-    
-    if rating:
-        try:
-            rating_float = float(rating)
-            products = products.filter(average_rating__gte=rating_float)
-        except ValueError:
-            pass
-
-    # Apply sorting
-    if sort_by == 'price_low':
-        products = products.order_by('lowest_price')
-    elif sort_by == 'price_high':
-        products = products.order_by('-lowest_price')
-    elif sort_by == 'a_to_z':
-        products = products.order_by('product_name')
-    elif sort_by == 'z_to_a':
-        products = products.order_by('-product_name')
-    elif sort_by == 'new_arrivals':
-        products = products.order_by('-created_at')
-    elif sort_by == 'best_sellers':
-        products = products.annotate(
-            order_count=Count('orderitem')
-        ).order_by('-order_count')
-    else:
-        products = products.order_by('-created_at')
-
-    # Specific product sections - update to include category and brand active status
+    # Fetch featured products
     featured_products = Product.objects.filter(
         is_active=True,
-        category__is_active=True,
         variants__is_active=True
-    ).filter(
-        Q(brand__isnull=True) | Q(brand__is_active=True)
-    ).annotate(
-        avg_rating=Avg('reviews__rating')
-    ).order_by('-avg_rating')[:8]
-    
+    ).distinct()[:8]
+    featured_products = annotate_products(featured_products)
+
+    # Fetch new arrivals
     new_arrivals = Product.objects.filter(
         is_active=True,
-        category__is_active=True,
         variants__is_active=True
-    ).filter(
-        Q(brand__isnull=True) | Q(brand__is_active=True)
-    ).order_by('-created_at')[:8]
-    
-    top_rated = Product.objects.filter(
-        is_active=True,
-        category__is_active=True,
-        variants__is_active=True
-    ).filter(
-        Q(brand__isnull=True) | Q(brand__is_active=True)
-    ).annotate(
-        avg_rating=Avg('reviews__rating')
-    ).filter(avg_rating__gte=4.0).order_by('-avg_rating')[:8]
-    
-    recent_reviews = Review.objects.filter(
-        is_approved=True,
-        product__is_active=True,
-        product__category__is_active=True,
-    ).filter(
-        Q(product__brand__isnull=True) | Q(product__brand__is_active=True)
-    ).order_by('-created_at')[:3]
-
-    categories = Category.objects.filter(is_active=True)
-    brands = Product.objects.filter(
-        is_active=True,
-        category__is_active=True,
-        variants__is_active=True,
-        brand__is_active=True
-    ).values_list('brand', flat=True).distinct()
+    ).order_by('-created_at').distinct()[:8]
+    new_arrivals = annotate_products(new_arrivals)
 
     context = {
-        'products': products,
+        'banners': banners,
+        'categories': categories,
         'featured_products': featured_products,
         'new_arrivals': new_arrivals,
-        'top_rated': top_rated,
-        'recent_reviews': recent_reviews,
-        'categories': categories,
-        'brands': brands,
-        'selected_category': category_id,
-        'min_price': min_price,
-        'max_price': max_price,
-        'selected_brand': brand,
-        'sort_by': sort_by,
-        'search_query': search_query,
-        'banners': banners,
     }
     return render(request, 'user_app/user_home.html', context)
 
@@ -591,29 +552,55 @@ def user_address_list(request):
 def generate_and_send_otp(request):
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = GenerateOTPForm(request.POST)
+        logger.debug(f"Received OTP generation request: {request.POST}")
         if form.is_valid():
             email = form.cleaned_data['email']
+            logger.debug(f"Valid email: {email}")
             if get_otp_cooldown(email):
-                return JsonResponse({'success': False, 'error': 'Please wait 3 minutes before requesting a new OTP.'}, status=429)
+                logger.warning(f"Cooldown active for {email}")
+                return JsonResponse(
+                    {'success': False, 'error': 'Please wait 120 seconds before requesting a new OTP.'},
+                    status=429
+                )
             try:
                 user = User.objects.get(email=email)
+                logger.debug(f"User found: {user.username}")
+                # Delete any existing OTP to invalidate it
+                delete_otp(email)
                 otp = generate_otp()
-                store_otp(email, otp, timeout=180)
-                set_otp_cooldown(email, timeout=180)
+                logger.debug(f"Generated OTP: {otp}")
+                store_otp(email, otp, timeout=120)
+                set_otp_cooldown(email, timeout=120)
+                logger.debug(f"OTP stored in Redis for {email}")
                 send_mail(
                     subject="Your OTP for Password Reset",
-                    message=f"Your OTP for resetting your password is: {otp}. It expires in 3 minutes.",
+                    message=f"Your OTP for resetting your password is: {otp}. It expires in 2 minutes.",
                     from_email=settings.EMAIL_HOST_USER,
                     recipient_list=[email],
                     fail_silently=False,
                 )
-                return JsonResponse({'success': True, 'message': 'OTP sent to your email.'})
+                logger.info(f"OTP email sent to {email}")
+                return JsonResponse({
+                    'success': True,
+                    'message': 'OTP sent to your email.',
+                    'next_step': 'validate_otp',  # Indicate next step
+                    'email': email  # Pass email for frontend to use in OTP validation
+                })
             except User.DoesNotExist:
+                logger.error(f"No user found for email: {email}")
                 return JsonResponse({'success': False, 'error': 'No account found with this email.'})
             except Exception as e:
-                logger.error(f"Failed to send OTP: {str(e)}")
-                return JsonResponse({'success': False, 'error': 'Failed to send OTP. Please try again.'})
-        return JsonResponse({'success': False, 'error': form.errors.get('email', ['Invalid email format.'])[0]})
+                logger.error(f"Failed to send OTP for {email}: {str(e)}", exc_info=True)
+                return JsonResponse(
+                    {'success': False, 'error': f'Failed to send OTP: {str(e)}'},
+                    status=500
+                )
+        logger.warning(f"Invalid form data: {form.errors}")
+        return JsonResponse(
+            {'success': False, 'error': form.errors.get('email', ['Invalid email format.'])[0]},
+            status=400
+        )
+    logger.error("Invalid request: Not an AJAX request")
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 @require_http_methods(["POST"])
@@ -642,37 +629,49 @@ def validate_otp(request):
         return JsonResponse({'success': False, 'error': form.errors.get('otp', ['Invalid OTP format.'])[0]})
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
+
 @require_http_methods(["POST"])
 def resend_otp(request):
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         email = request.POST.get('email')
         if not email:
+            logger.warning("Resend OTP: No email provided")
             return JsonResponse({'success': False, 'error': 'No email provided.'}, status=400)
         if get_otp_cooldown(email):
-            return JsonResponse({'success': False, 'error': 'Please wait 3 minutes before resending.'}, status=429)
+            logger.info(f"Cooldown active for {email}")
+            return JsonResponse(
+                {'success': False, 'error': 'Please wait 120 seconds before resending.'},
+                status=429
+            )
         try:
             user = User.objects.get(email=email)
             new_otp = generate_otp()
-            store_otp(email, new_otp, timeout=180)
-            set_otp_cooldown(email, timeout=180)
+            logger.debug(f"Generated new OTP for resend: {new_otp}")
+            store_otp(email, new_otp, timeout=120)  # Update to 120 seconds
+            set_otp_cooldown(email, timeout=120)  # Update to 120 seconds
             send_mail(
                 subject="Your New OTP for Password Reset",
-                message=f"Your new OTP for resetting your password is: {new_otp}. It expires in 3 minutes.",
+                message=f"Your new OTP for resetting your password is: {new_otp}. It expires in 2 minutes.",
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
             )
+            logger.info(f"Resend OTP email sent successfully to {email}")
             return JsonResponse({'success': True, 'message': 'New OTP sent to your email.'})
         except User.DoesNotExist:
+            logger.warning(f"No user found for email: {email}")
             return JsonResponse({'success': False, 'error': 'No account found with this email.'})
         except Exception as e:
-            logger.error(f"Failed to resend OTP: {str(e)}")
-            return JsonResponse({'success': False, 'error': 'Failed to resend OTP. Please try again.'})
+            logger.error(f"Failed to resend OTP for {email}: {str(e)}", exc_info=True)
+            return JsonResponse(
+                {'success': False, 'error': 'Failed to resend OTP. Please try again.'},
+                status=500
+            )
+    logger.warning("Invalid request: Not an AJAX request")
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 
 
-@require_http_methods(["GET", "POST"])
 def password_reset_confirm(request, uidb64, token):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
@@ -684,40 +683,48 @@ def password_reset_confirm(request, uidb64, token):
         if request.method == 'POST':
             new_password1 = request.POST.get('new_password1')
             new_password2 = request.POST.get('new_password2')
-            if not new_password1 or not new_password2:
-                messages.error(request, "Both password fields are required.")
-            elif new_password1 != new_password2:
-                messages.error(request, "Passwords do not match.")
-            elif not all([
-                len(new_password1) >= 8,
-                any(char.isupper() for char in new_password1),
-                any(char.islower() for char in new_password1),
-                any(char.isdigit() for char in new_password1),
-                any(char in "!@#$%^&*()+-_=[]{};:,.<>?" for char in new_password1),
-            ]):
-                messages.error(request, "Password must be 8+ characters with uppercase, lowercase, number, and special character.")
-            else:
-                try:
-                    user.set_password(new_password1)
-                    user.save()
-                    messages.success(request, "Your password has been reset successfully. Please log in with your new password.")
-                    return redirect('user_app:user_login')
-                except Exception as e:
-                    logger.error(f"Password reset error: {str(e)}")
-                    messages.error(request, "An error occurred while resetting your password.")
-            return render(request, 'password_reset_confirm.html', {
+            errors = {}
+
+            # Validate new_password1
+            if not new_password1:
+                errors['new_password1'] = 'Password is required.'
+            elif len(new_password1) < 8:
+                errors['new_password1'] = 'Password must be at least 8 characters.'
+            elif not re.search(r'[A-Z]', new_password1):
+                errors['new_password1'] = 'Password must contain at least one uppercase letter.'
+            elif not re.search(r'[a-z]', new_password1):
+                errors['new_password1'] = 'Password must contain at least one lowercase letter.'
+            elif not re.search(r'\d', new_password1):
+                errors['new_password1'] = 'Password must contain at least one number.'
+            elif not re.search(r'[!@#$%^&*()+\-_=\[\]{};:\'",.<>?]', new_password1):
+                errors['new_password1'] = 'Password must contain at least one special character.'
+
+            # Validate new_password2
+            if not new_password2:
+                errors['new_password2'] = 'Please confirm your password.'
+            elif new_password1 and new_password2 and new_password1 != new_password2:
+                errors['new_password2'] = 'Passwords do not match.'
+
+            if errors:
+                return render(request, 'password_reset.html', {
+                    'validlink': True,
+                    'uidb64': uidb64,
+                    'token': token,
+                    'errors': errors
+                })
+
+            # If validation passes, set the new password
+            user.set_password(new_password1)
+            user.save()
+            return redirect('user_app:user_login')  # Redirect to login page after success
+        else:
+            return render(request, 'password_reset.html', {
                 'validlink': True,
                 'uidb64': uidb64,
-                'token': token,
+                'token': token
             })
-        return render(request, 'password_reset_confirm.html', {
-            'validlink': True,
-            'uidb64': uidb64,
-            'token': token,
-        })
     else:
-        messages.error(request, "The password reset link is invalid or has expired.")
-        return render(request, 'password_reset_confirm.html', {'validlink': False})
+        return render(request, 'password_reset.html', {'validlink': False})
 
 @require_http_methods(["GET"])
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)

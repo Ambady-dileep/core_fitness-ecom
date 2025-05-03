@@ -26,148 +26,92 @@ logger = logging.getLogger(__name__)
 @login_required
 @require_POST
 def apply_coupon(request):
-    coupon_code = request.POST.get('coupon_code', '').strip().upper()
-    if not coupon_code:
-        logger.warning(f"User {request.user.username} submitted empty coupon code")
-        return JsonResponse({'success': False, 'message': 'Please enter a valid coupon code.'}, status=400)
+    form = CouponApplyForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({'success': False, 'message': form.errors['coupon_code'][0]}, status=400)
 
     try:
-        cart = Cart.objects.filter(user=request.user).first()
-        if not cart or not cart.items.exists():
-            logger.warning(f"User {request.user.username} has no cart or empty cart")
+        coupon = Coupon.objects.get(code=form.cleaned_data['coupon_code'])
+        cart = get_object_or_404(Cart, user=request.user)
+        if not cart.items.exists():
             return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=400)
 
-        coupon = Coupon.objects.get(code=coupon_code)
-        if not coupon.is_valid():
-            logger.info(f"User {request.user.username} attempted to apply invalid coupon {coupon_code}")
-            return JsonResponse({'success': False, 'message': f"Coupon '{coupon_code}' is expired or invalid."}, status=400)
+        # Check if user has already used this coupon
+        if UserCoupon.objects.filter(user=request.user, coupon=coupon, is_used=True).exists():
+            return JsonResponse({'success': False, 'message': 'This coupon has already been used.'}, status=400)
 
-        cart_items = cart.items.select_related('variant__product').all()
-        subtotal = Decimal('0.00')
-        offer_details = []
-        
-        # Calculate subtotal and offer details
-        for item in cart_items:
-            best_price_info = item.variant.best_price
-            unit_price = best_price_info['price']
-            original_price = best_price_info['original_price']
-            quantity = Decimal(str(item.quantity))
-            subtotal += unit_price * quantity
-            if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
-                offer_details.append({
-                    'product': item.variant.product.product_name,
-                    'offer_type': best_price_info['applied_offer_type'],
-                    'discount': float((original_price - unit_price) * quantity)  # Keep float for JSON compatibility
-                })
-
-        if coupon.minimum_order_amount > subtotal:
-            logger.info(f"User {request.user.username} attempted to apply coupon {coupon_code} below minimum order amount {coupon.minimum_order_amount}")
+        # Use Cart.get_totals for consistent calculations
+        totals = cart.get_totals(coupon=coupon)
+        if totals['subtotal'] < coupon.minimum_order_amount:
             return JsonResponse({
                 'success': False,
-                'message': f"This coupon requires a minimum order of ₹{coupon.minimum_order_amount:.2f}. Your cart total is ₹{subtotal:.2f}."
+                'message': f'This coupon requires a minimum order amount of ₹{coupon.minimum_order_amount}.'
             }, status=400)
 
-        # Apply coupon
-        coupon_discount = (coupon.discount_percentage / 100) * subtotal
-        if coupon_discount > subtotal:
-            coupon_discount = subtotal
-
-        tax = subtotal * Decimal('0.05')
-        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
-        # Convert float discounts to Decimal for sum
-        offer_discount = sum(Decimal(str(item['discount'])) for item in offer_details)
-        total = subtotal - offer_discount - coupon_discount + shipping_cost + tax
+        # Create or get UserCoupon
+        UserCoupon.objects.get_or_create(
+            user=request.user,
+            coupon=coupon,
+            defaults={'is_used': False}
+        )
 
         request.session['applied_coupon'] = {
+            'coupon_id': coupon.id,
             'code': coupon.code,
-            'discount': float(coupon_discount),
-            'coupon_id': coupon.id
+            'discount': float(totals['coupon_discount'])
         }
-        request.session['applied_offers'] = offer_details
         request.session.modified = True
-        logger.info(f"User {request.user.username} applied coupon {coupon_code} successfully. Subtotal: {subtotal}, Coupon Discount: {coupon_discount}, Offers: {offer_details}")
+
+        logger.info(f"Coupon {coupon.code} applied by user {request.user.username}")
         return JsonResponse({
             'success': True,
-            'message': f"Coupon '{coupon_code}' applied successfully! You saved ₹{coupon_discount:.2f}.",
-            'subtotal': float(subtotal),
-            'total': float(total),
+            'message': f'Coupon {coupon.code} applied successfully!',
             'discount_info': {
-                'coupon_discount': float(coupon_discount),
-                'offer_discount': float(offer_discount),
-                'shipping_cost': float(shipping_cost)
-            },
-            'offer_details': offer_details
+                'subtotal': float(totals['subtotal']),
+                'offer_discount': float(totals['offer_discount']),
+                'coupon_discount': float(totals['coupon_discount']),
+                'coupon_code': coupon.code,
+                'shipping_cost': float(totals['shipping_cost']),
+                'total': float(totals['total'])
+            }
         })
-
     except Coupon.DoesNotExist:
-        logger.warning(f"User {request.user.username} attempted to apply non-existent coupon {coupon_code}")
-        return JsonResponse({'success': False, 'message': f"Coupon '{coupon_code}' does not exist."}, status=400)
+        return JsonResponse({'success': False, 'message': 'Invalid coupon code.'}, status=400)
     except Exception as e:
-        logger.error(f"Error applying coupon {coupon_code} for user {request.user.username}: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': 'An unexpected error occurred. Please try again.'}, status=500)
+        logger.error(f"Apply Coupon Error for user {request.user.username}: {str(e)}")
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+    
 
 @login_required
 @require_POST
 def remove_coupon(request):
-    try:
-        if 'applied_coupon' not in request.session:
-            logger.info(f"User {request.user.username} attempted to remove non-existent coupon")
-            return JsonResponse({'success': False, 'message': 'No coupon is applied.'}, status=400)
+    if 'applied_coupon' not in request.session:
+        return JsonResponse({'success': False, 'message': 'No coupon applied.'}, status=400)
 
-        cart = Cart.objects.filter(user=request.user).first()
-        if not cart or not cart.items.exists():
-            logger.warning(f"User {request.user.username} has no cart or empty cart")
-            return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=400)
+    cart = get_object_or_404(Cart, user=request.user)
+    if not cart.items.exists():
+        return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=400)
 
-        coupon_code = request.session['applied_coupon']['code']
-        del request.session['applied_coupon']
-        request.session.modified = True
+    # Use Cart.get_totals without coupon
+    totals = cart.get_totals()
 
-        # Recalculate cart totals without coupon
-        cart_items = cart.items.select_related('variant__product').all()
-        subtotal = Decimal('0.00')
-        offer_details = []
-        for item in cart_items:
-            best_price_info = item.variant.best_price
-            unit_price = best_price_info['price']
-            original_price = best_price_info['original_price']
-            quantity = Decimal(str(item.quantity))
-            subtotal += unit_price * quantity
-            if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
-                offer_details.append({
-                    'product': item.variant.product.product_name,
-                    'offer_type': best_price_info['applied_offer_type'],
-                    'discount': float((original_price - unit_price) * quantity)
-                })
+    del request.session['applied_coupon']
+    request.session.modified = True
 
-        tax = subtotal * Decimal('0.05')
-        shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
-        # Convert float discounts to Decimal for sum
-        offer_discount = sum(Decimal(str(item['discount'])) for item in offer_details)
-        total = subtotal - offer_discount + shipping_cost + tax
-
-        request.session['applied_offers'] = offer_details
-        request.session.modified = True
-
-        logger.info(f"User {request.user.username} removed coupon {coupon_code} successfully.")
-        return JsonResponse({
-            'success': True,
-            'message': f"Coupon '{coupon_code}' removed successfully.",
-            'subtotal': float(subtotal),
-            'total': float(total),
-            'discount_info': {
-                'coupon_discount': 0.0,
-                'offer_discount': float(offer_discount),
-                'shipping_cost': float(shipping_cost)
-            },
-            'offer_details': offer_details
-        })
-
-    except Exception as e:
-        logger.error(f"Error removing coupon for user {request.user.username}: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': 'An unexpected error occurred. Please try again.'}, status=500)
-        
-
+    logger.info(f"Coupon removed by user {request.user.username}")
+    return JsonResponse({
+        'success': True,
+        'message': 'Coupon removed successfully!',
+        'discount_info': {
+            'subtotal': float(totals['subtotal']),
+            'offer_discount': float(totals['offer_discount']),
+            'coupon_discount': 0.0,
+            'coupon_code': None,
+            'shipping_cost': float(totals['shipping_cost']),
+            'total': float(totals['total'])
+        }
+    })
+      
 @login_required
 @require_GET
 def available_coupons(request):
@@ -177,12 +121,12 @@ def available_coupons(request):
             logger.warning(f"No cart found for user {request.user.username}")
             return JsonResponse({'success': False, 'message': 'No cart available.'}, status=200)
 
-        cart_items = cart.items.select_related('variant__product').all()
-        if not cart_items.exists():
+        if not cart.items.exists():
             logger.warning(f"Cart for user {request.user.username} is empty")
             return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=200)
 
-        subtotal = cart.get_subtotal()
+        totals = cart.get_totals()
+        subtotal = totals['subtotal']
         if subtotal <= 0:
             logger.warning(f"Invalid subtotal {subtotal} for user {request.user.username}")
             return JsonResponse({'success': False, 'message': 'Invalid cart subtotal.'}, status=200)
@@ -192,12 +136,10 @@ def available_coupons(request):
             valid_from__lte=timezone.now(),
             valid_to__gte=timezone.now(),
             minimum_order_amount__lte=subtotal
-        ).filter(
-            models.Q(usage_limit=0) | models.Q(usage_count__lt=models.F('usage_limit'))
         ).exclude(
             user_coupons__user=request.user,
             user_coupons__is_used=True
-        ).select_related().order_by('-discount_percentage')
+        ).order_by('-discount_percentage')
 
         coupons_data = [{
             'id': coupon.id,
@@ -207,35 +149,13 @@ def available_coupons(request):
             'valid_to': coupon.valid_to.isoformat()
         } for coupon in valid_coupons]
 
-        # Calculate offer savings
-        offer_savings = Decimal('0.00')
-        offer_details = []
-        for item in cart_items:
-            try:
-                best_price_info = item.variant.best_price
-                original_price = best_price_info.get('original_price', Decimal('0.00'))
-                discounted_price = best_price_info.get('price', Decimal('0.00'))
-                quantity = Decimal(str(item.quantity))
-                item_discount = (original_price - discounted_price) * quantity
-                if item_discount > 0:
-                    offer_savings += item_discount
-                    offer_details.append({
-                        'product': item.variant.product.product_name,
-                        'offer_type': best_price_info.get('applied_offer_type', 'None'),
-                        'discount': float(item_discount)
-                    })
-            except (AttributeError, KeyError, ValueError) as e:
-                logger.error(f"Error calculating offer savings for item {item.id}: {str(e)}")
-                continue
-
         response_data = {
             'success': True,
             'coupons': coupons_data,
-            'offer_savings': float(offer_savings) if offer_savings else None,
-            'offer_details': offer_details
+            'offer_savings': float(totals['offer_discount']),
+            'offer_details': totals.get('offer_details', [])
         }
 
-        # Include applied coupon info if present
         if request.GET.get('for_checkout') and 'applied_coupon' in request.session:
             applied_coupon = request.session['applied_coupon']
             response_data['applied_coupon'] = {
@@ -246,94 +166,9 @@ def available_coupons(request):
 
         logger.info(f"User {request.user.username} fetched {len(coupons_data)} available coupons. Subtotal: {subtotal}")
         return JsonResponse(response_data)
-
     except Exception as e:
-        logger.error(f"Error fetching available coupons for user {request.user.username}: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': 'Failed to load coupons. Please try again.'}, status=500)
-
-@login_required
-def view_coupons(request):
-    now = timezone.now()
-    coupons = Coupon.objects.filter(
-        is_active=True,
-        valid_from__lte=now,
-        valid_to__gte=now
-    ).filter(
-        Q(usage_limit=0) | Q(usage_count__lt=F('usage_limit'))
-    ).exclude(
-        user_coupons__user=request.user,
-        user_coupons__is_used=True
-    ).order_by('-created_at')
-    
-    # Check if JSON response requested
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        coupons_data = []
-        for coupon in coupons:
-            coupons_data.append({
-                'id': coupon.id,
-                'code': coupon.code,
-                'discount_percentage': float(coupon.discount_percentage),
-                'minimum_order_amount': float(coupon.minimum_order_amount),
-                'valid_from': coupon.valid_from.strftime('%Y-%m-%d %H:%M'),
-                'valid_to': coupon.valid_to.strftime('%Y-%m-%d %H:%M'),
-                'usage_limit': coupon.usage_limit,
-                'usage_count': coupon.usage_count,
-                'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
-            })
-        return JsonResponse({'coupons': coupons_data})
-    
-    highlighted_coupon = request.GET.get('highlight')
-    context = {
-        'coupons': coupons,
-        'highlighted_coupon': highlighted_coupon,
-        'now': now
-    }
-    return render(request, 'offer_and_coupon_app/available_coupons.html', context)
-
-@login_required
-def cancel_cart_item(request, item_id):
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    item_name = cart_item.variant.product.product_name
-    cart_item.delete()
-    logger.info(f"User {request.user.username} removed cart item {item_name} (ID: {item_id})")
-    
-    cart = get_object_or_404(Cart, user=request.user)
-    cart_items = cart.items.select_related('variant__product').all()
-    
-    # Clear any residual coupon session data
-    if 'applied_coupon' in request.session:
-        del request.session['applied_coupon']
-        request.session.modified = True
-        messages.info(request, "Coupon data cleared from cart.")
-
-    # Calculate totals with offers only
-    subtotal = Decimal('0.00')
-    offer_details = []
-    for item in cart_items:
-        best_price_info = item.variant.best_price
-        unit_price = best_price_info['price']
-        original_price = best_price_info['original_price']
-        quantity = Decimal(str(item.quantity))
-        subtotal += unit_price * quantity
-        if best_price_info['applied_offer_type'] in ['product', 'category'] and (original_price - unit_price) * quantity > 0:
-            offer_details.append({
-                'product': item.variant.product.product_name,
-                'offer_type': best_price_info['applied_offer_type'],
-                'discount': float((original_price - unit_price) * quantity)
-            })
-
-    tax = subtotal * Decimal('0.05')
-    shipping_cost = Decimal('0.00') if subtotal >= 2500 else Decimal('70.00')
-    offer_discount = sum((item['discount'] for item in offer_details), Decimal('0.00'))
-    total = subtotal - offer_discount + shipping_cost + tax
-
-    # Update session with new offer details
-    request.session['applied_offers'] = offer_details
-    request.session.modified = True
-
-    messages.success(request, f"{item_name} removed from cart.")
-    logger.info(f"Cart updated for user {request.user.username}. Total: {total}, Discounts: {offer_discount}")
-    return redirect('cart_and_orders_app:user_cart_list')
+        logger.error(f"Error fetching available coupons for user {request.user.username}: {str(e)}")
+        return JsonResponse({'success': False, 'message': 'Failed to load coupons.'}, status=500)
 
 @login_required
 def view_coupons(request):
@@ -342,13 +177,56 @@ def view_coupons(request):
         is_active=True,
         valid_from__lte=now,
         valid_to__gte=now
-    ).filter(
-        Q(usage_limit=0) | Q(usage_count__lt=F('usage_limit'))
     ).exclude(
         user_coupons__user=request.user,
         user_coupons__is_used=True
-    ).prefetch_related('applicable_products').order_by('-created_at') 
-    highlighted_coupon = request.GET.get('highlight', None)
+    ).order_by('-created_at')
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        coupons_data = [{
+            'id': coupon.id,
+            'code': coupon.code,
+            'discount_percentage': float(coupon.discount_percentage),
+            'minimum_order_amount': float(coupon.minimum_order_amount),
+            'valid_from': coupon.valid_from.strftime('%Y-%m-%d %H:%M'),
+            'valid_to': coupon.valid_to.strftime('%Y-%m-%d %H:%M'),
+            'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
+        } for coupon in available_coupons]
+        return JsonResponse({'coupons': coupons_data})
+
+    highlighted_coupon = request.GET.get('highlight')
+    context = {
+        'coupons': available_coupons,
+        'highlighted_coupon': highlighted_coupon,
+        'now': now
+    }
+    return render(request, 'offer_and_coupon_app/available_coupons.html', context)
+
+@login_required
+def view_coupons(request):
+    now = timezone.now()
+    available_coupons = Coupon.objects.filter(
+        is_active=True,
+        valid_from__lte=now,
+        valid_to__gte=now
+    ).exclude(
+        user_coupons__user=request.user,
+        user_coupons__is_used=True
+    ).order_by('-created_at')
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        coupons_data = [{
+            'id': coupon.id,
+            'code': coupon.code,
+            'discount_percentage': float(coupon.discount_percentage),
+            'minimum_order_amount': float(coupon.minimum_order_amount),
+            'valid_from': coupon.valid_from.strftime('%Y-%m-%d %H:%M'),
+            'valid_to': coupon.valid_to.strftime('%Y-%m-%d %H:%M'),
+            'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
+        } for coupon in available_coupons]
+        return JsonResponse({'coupons': coupons_data})
+
+    highlighted_coupon = request.GET.get('highlight')
     context = {
         'coupons': available_coupons,
         'highlighted_coupon': highlighted_coupon,
@@ -377,75 +255,62 @@ def wallet_balance(request):
         logger.error(f"Error fetching wallet balance for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Unable to fetch wallet balance'}, status=500)
 
+@login_required
 def coupon_usage_report(request):
     coupons = Coupon.objects.annotate(
-        total_users=models.Count('user_usages', distinct=True),
-        total_discount=models.Sum('user_usages__order__discount_amount')
-    ).order_by('-usage_count')
-    return render(request, 'admin_coupon_usage_report.html', {'coupons': coupons})
+        total_users=models.Count('user_coupons', distinct=True),
+        total_discount=models.Sum('user_coupons__order__coupon_discount')
+    ).order_by('-total_users')
+    return render(request, 'offer_and_coupon_app/admin_coupon_usage_report.html', {'coupons': coupons})
 
 @login_required
+@require_POST
 def add_funds(request):
-    if request.method != 'POST':
-        logger.warning("Invalid request method for add_funds: %s", request.method)
-        return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
-    amount = request.POST.get('amount')
-    if not amount:  
-        logger.error("Amount is missing or empty")
-        return JsonResponse({'success': False, 'message': 'Amount is required.'}, status=400)
     try:
-        amount = Decimal(amount)
+        amount = Decimal(request.POST.get('amount', '0'))
         if amount <= 0:
-            logger.warning("Invalid amount for adding funds: %s", amount)
+            logger.warning(f"Invalid amount for add_funds by user {request.user.username}: {amount}")
             return JsonResponse({'success': False, 'message': 'Amount must be greater than zero.'}, status=400)
-        amount_in_paise = int(amount * 100)
-    except (ValueError, TypeError, InvalidOperation):
-        logger.error("Invalid amount format: %s", amount)
+    except (ValueError, TypeError):
+        logger.error(f"Invalid amount format for add_funds by user {request.user.username}")
         return JsonResponse({'success': False, 'message': 'Invalid amount format.'}, status=400)
+
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
     try:
         razorpay_order = client.order.create({
-            'amount': amount_in_paise,  
+            'amount': int(amount * 100),
             'currency': 'INR',
             'payment_capture': 1
         })
+        logger.info(f"Razorpay order created for add_funds by user {request.user.username}: {razorpay_order['id']}")
+        return JsonResponse({
+            'success': True,
+            'razorpay_order': razorpay_order,
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'amount': int(amount * 100),
+            'currency': 'INR',
+            'name': 'Core Fitness',
+            'description': 'Add Funds to Wallet',
+            'callback_url': request.build_absolute_uri(reverse('offer_and_coupon_app:add_funds_callback')),
+            'prefill': {
+                'name': request.user.get_full_name() or request.user.username,
+                'email': request.user.email,
+                'contact': ''
+            }
+        })
     except Exception as e:
-        logger.error("Razorpay order creation failed: %s", str(e))
+        logger.error(f"Razorpay order creation failed for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Failed to create payment order.'}, status=500)
 
-    return JsonResponse({
-        'success': True,
-        'razorpay_order': razorpay_order,
-        'razorpay_key': settings.RAZORPAY_KEY_ID,
-        'amount': amount_in_paise,
-        'currency': 'INR',
-        'name': 'Core Fitness',
-        'description': 'Add Funds to Wallet',
-        'callback_url': '/offer/add-funds-callback/',
-        'prefill': {
-            'name': request.user.get_full_name() or request.user.username,
-            'email': request.user.email,
-            'contact': ''
-        }
-    })
-
 @login_required
+@require_POST
 def add_funds_callback(request):
-    if request.method != 'POST':
-        logger.warning("Invalid request method for add_funds_callback: %s", request.method)
-        return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
-    
-    try:
-        data = json.loads(request.body.decode('utf-8'))
-        payment_id = data.get('razorpay_payment_id')
-        razorpay_order_id = data.get('razorpay_order_id')
-        signature = data.get('razorpay_signature')
-    except (json.JSONDecodeError, AttributeError) as e:
-        logger.error("Failed to parse JSON payload: %s", str(e))
-        return JsonResponse({'success': False, 'message': 'Invalid request data'}, status=400)
-    
+    payment_id = request.POST.get('razorpay_payment_id')
+    razorpay_order_id = request.POST.get('razorpay_order_id')
+    signature = request.POST.get('razorpay_signature')
+
     if not all([payment_id, razorpay_order_id, signature]):
-        logger.error("Missing Razorpay parameters: payment_id=%s, order_id=%s, signature=%s", payment_id, razorpay_order_id, signature)
+        logger.error(f"Missing Razorpay parameters for user {request.user.username}: payment_id={payment_id}, order_id={razorpay_order_id}")
         return JsonResponse({'success': False, 'message': 'Missing payment details'}, status=400)
 
     client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -457,12 +322,12 @@ def add_funds_callback(request):
     try:
         client.utility.verify_payment_signature(params_dict)
     except Exception as e:
-        logger.error("Payment verification failed: %s", str(e))
+        logger.error(f"Payment verification failed for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Payment verification failed'}, status=400)
-    
+
     try:
-        amount = Decimal(str(client.order.fetch(razorpay_order_id)['amount'])) / 100 
-        wallet = Wallet.objects.get(user=request.user)
+        amount = Decimal(client.order.fetch(razorpay_order_id)['amount']) / 100
+        wallet, created = Wallet.objects.get_or_create(user=request.user)
         with transaction.atomic():
             wallet.balance += amount
             wallet.save()
@@ -472,13 +337,13 @@ def add_funds_callback(request):
                 transaction_type='CREDIT',
                 description=f'Added funds via Razorpay (Order ID: {razorpay_order_id})'
             )
-            logger.info("Funds added successfully for user %s: %.2f", request.user.username, amount)
-            return JsonResponse({
-                'success': True,
-                'message': 'Funds added successfully!',
-                'redirect': '/wallet/'
-            })
+        logger.info(f"Funds added successfully for user {request.user.username}: {amount}")
+        return JsonResponse({
+            'success': True,
+            'message': 'Funds added successfully!',
+            'redirect': reverse('offer_and_coupon_app:wallet_dashboard')
+        })
     except Exception as e:
-        logger.error("Failed to add funds: %s", str(e))
+        logger.error(f"Failed to add funds for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Failed to add funds.'}, status=500)
     

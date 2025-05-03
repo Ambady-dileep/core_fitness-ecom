@@ -10,6 +10,10 @@ from urllib.parse import urlencode
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from user_app.models import CustomUser, UserProfile, Banner
 from django.shortcuts import render, redirect, get_object_or_404
+from django.core.mail import send_mail
+from django.conf import settings
+from .forms import ContactForm
+from .models import ContactMessage
 from django.db.models import Q, Count, Sum, F
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -40,10 +44,16 @@ def admin_login(request):
                 messages.error(request, "You are not authorized to access the admin panel.")
                 return render(request, 'admin_login.html')
             
-            if user_obj.profile.is_blocked: 
-                logger.warning(f"Blocked admin account attempted login: {username}")
-                messages.error(request, "Your account has been blocked. Please contact support.")
-                return render(request, 'admin_login.html')
+            # Only check is_blocked for non-superusers
+            if not user_obj.is_superuser:
+                try:
+                    if user_obj.profile.is_blocked:
+                        logger.warning(f"Blocked account attempted login: {username}")
+                        messages.error(request, "Your account has been blocked. Please contact support.")
+                        return render(request, 'admin_login.html')
+                except CustomUser.profile.RelatedObjectDoesNotExist:
+                    # Profile doesn't exist, assume not blocked
+                    pass
 
             user = authenticate(request, username=username, password=password)
             if user:
@@ -207,6 +217,10 @@ def toggle_user_block(request, user_id):
     logger = logging.getLogger(__name__)
     try:
         user = CustomUser.objects.get(id=user_id)
+        if user.is_superuser:
+            logger.warning(f"Attempt to block/unblock superuser {user.username} by admin {request.user.username}")
+            messages.error(request, "Superusers cannot be blocked or unblocked.")
+            return redirect('user_app:admin_customer_list')
         user_profile, created = UserProfile.objects.get_or_create(user=user)
         user_profile.is_blocked = not user_profile.is_blocked
         user_profile.save()
@@ -335,3 +349,46 @@ def admin_logout(request):
     logout(request)
     request.session.flush()
     return redirect('user_app:admin_login')
+
+
+def contact_us(request):
+    if request.method == 'POST':
+        form = ContactForm(request.POST)
+        if form.is_valid():
+            # Save the contact message to the database
+            contact_message = form.save()
+            
+            # Send email notification to admin
+            subject = f"New Contact Us Message: {contact_message.subject}"
+            message = (
+                f"New message from {contact_message.name} ({contact_message.email})\n\n"
+                f"Subject: {contact_message.subject}\n\n"
+                f"Message:\n{contact_message.message}\n\n"
+                f"Received on: {contact_message.created_at}"
+            )
+            try:
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [settings.DEFAULT_FROM_EMAIL],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                messages.error(request, "Message saved, but failed to send email notification. We'll get back to you soon.")
+                # Log the error for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Email sending failed: {str(e)}")
+            
+            messages.success(request, "Thank you for your message! We'll get back to you soon.")
+            return redirect('user_app:contact_us')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = ContactForm()
+
+    return render(request, 'contact_us.html', {
+        'form': form,
+        'title': 'Contact Us',
+    })

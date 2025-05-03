@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin/customer-list/', admin_views.admin_customer_list, name='admin_customer_list'),
     path('admin/logout/', admin_views.admin_logout, name='admin_logout'),
     path('admin/toggle_user_block/<int:user_id>/', admin_views.toggle_user_block, name='toggle_user_block'),
+    path('contact-us/', admin_views.contact_us, name='contact_us'),
 
     # Static Pages and Profile URLs
     path('faq/', user_views.faq, name='faq'),
@@ -35,6 +36,7 @@ urlpatterns = [
     path('edit-profile/', user_views.edit_profile, name='edit_profile'),
     path('contact-us/', user_views.contact_us, name='contact_us'),
     path('profile/', user_views.my_profile, name='my_profile'),
+
     # Password Reset and OTP URLs
     path('generate-otp/', user_views.generate_and_send_otp, name='generate_otp'), 
     path('validate-otp/', user_views.validate_otp, name='validate_otp'),

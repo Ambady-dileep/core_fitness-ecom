@@ -555,8 +555,8 @@ def admin_product_detail(request, slug):
         'variants_count': variants.count(),
         'active_variants': variants.filter(is_active=True).count(),
         'total_stock': product.total_stock(),
-        'avg_rating': product.average_rating,
-        'approved_review_count': reviews.filter(is_approved=True).count(),
+        'avg_rating': product.average_rating,  # Use stored value
+        'approved_review_count': product.review_count,  # Use property
         'pending_review_count': reviews.filter(is_approved=False).count(),
     }
     
@@ -753,57 +753,6 @@ def admin_toggle_variant_status(request, variant_id):
             'message': str(e)
         }, status=500)
 
-
-
-
-
-
-
-
-
-
-@login_required
-def get_product_variants(request, product_id):
-    try:
-        if not is_admin(request.user):
-            return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
-
-        product = get_object_or_404(Product, id=product_id)
-        variants = ProductVariant.objects.filter(product_id=product_id).select_related('product')
-        
-        variants_data = []
-        for variant in variants:
-            try:
-                image_url = variant.primary_image.image.url if variant.primary_image else None
-            except Exception as e:
-                image_url = None
-
-            # Calculate discounted price
-            discounted_price = variant.original_price * (1 - variant.discount_percentage / 100) if variant.discount_percentage else variant.original_price
-
-            variant_data = {
-                'id': variant.id,
-                'flavor': variant.flavor or 'Standard',
-                'size_weight': variant.size_weight or 'N/A',
-                'original_price': float(variant.original_price),
-                'discount_percentage': float(variant.discount_percentage),
-                'discounted_price': float(discounted_price),
-                'stock': variant.stock,
-                'is_active': variant.is_active,
-                'image_url': image_url
-            }
-            variants_data.append(variant_data)
-
-        response_data = {
-            'success': True,
-            'variants': variants_data,
-            'product_name': product.product_name,
-            'product_is_active': product.is_active
-        }
-        return JsonResponse(response_data)
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=400)
-
 @csrf_exempt
 @login_required
 @require_POST
@@ -835,11 +784,9 @@ def user_add_review(request):
             review.user = request.user
             review.is_verified_purchase = True 
             review.is_approved = True 
-            review.save()
+            review.save()  # This will trigger update_average_rating via the form's save method
             
-            product.update_average_rating()
-            reviews = product.reviews.filter(is_approved=True)
-            review_count = reviews.count()
+            review_count = product.review_count  # Use the property
             
             return JsonResponse({
                 'success': True,
@@ -853,7 +800,7 @@ def user_add_review(request):
                     'is_verified_purchase': True,
                     'is_approved': True
                 },
-                'average_rating': float(product.average_rating),
+                'average_rating': float(product.average_rating),  # Use stored value
                 'review_count': review_count,
                 'message': 'Thank you for your review!'
             })
@@ -877,7 +824,7 @@ def approve_review(request, review_id):
         review = Review.objects.get(id=review_id)
         review.is_approved = True
         review.save()
-        review.product.update_average_rating()
+        review.product.update_average_rating()  # Ensure the average rating is updated
         return JsonResponse({'success': True, 'message': 'Review approved'})
     except Review.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Review not found'}, status=404)
@@ -891,155 +838,201 @@ def delete_review(request, review_id):
         return JsonResponse({'success': False, 'message': 'Unauthorized'}, status=403)
     try:
         review = Review.objects.get(id=review_id)
+        product = review.product  # Store the product reference before deleting the review
         review.delete()
-        review.product.update_average_rating()
+        product.update_average_rating()  # Update the average rating after deletion
         return JsonResponse({'success': True, 'message': 'Review deleted'})
     except Review.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Review not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
-@require_GET
-def autocomplete(request):
-    term = request.GET.get('term', '')
-    if not term or len(term) < 2:
-        return JsonResponse([], safe=False)
-    suggestions = Product.objects.filter(
-        is_active=True,
-        variants__is_active=True
-    ).filter(
-        Q(product_name__icontains=term) |
-        Q(brand__icontains=term) |
-        Q(category__name__icontains=term)
-    ).values('product_name', 'brand', 'category__name', 'slug').distinct()[:10]
-    
-    results = [{
-        'label': f"{item['product_name']} ({item['brand']} - {item['category__name']})",
-        'value': item['product_name'],
-        'url': f"/products/{item['slug']}/"  
-    } for item in suggestions]
-    return JsonResponse(results, safe=False)
-
 ###################################################### User Views ###########################################################
 
 def user_product_list(request):
     # Initialize filter form
     filter_form = ProductFilterForm(request.GET or None)
+
+    user_wishlist_variants = []
+    if request.user.is_authenticated:
+        # Fetch the variant IDs that are in the user's wishlist
+        user_wishlist_variants = Wishlist.objects.filter(user=request.user).values_list('variant_id', flat=True)
     
-    # Fetch active products with related data
-    products = Product.objects.filter(is_active=True).prefetch_related(
-        'variants__images', 'category', 'brand', 'reviews'
-    ).annotate(
-        min_price=Min('variants__price'),
-        max_price=Max('variants__price'),
-        avg_rating=Avg('reviews__rating')
+    # Start with all active products, prefetch related data
+    products = Product.objects.filter(is_active=True).select_related(
+        'category', 'brand'
+    ).prefetch_related(
+        'variants',
+        'variants__variant_images',
     )
-
+    
+    # Get all form data
+    search_query = request.GET.get('search', '')
+    category_id = request.GET.get('category', '')
+    brand_id = request.GET.get('brand', '')
+    min_price = request.GET.get('min_price', '')
+    max_price = request.GET.get('max_price', '')
+    sort_by = request.GET.get('sort', '')
+    
+    # Validate price inputs
+    valid_min_price = None
+    valid_max_price = None
+    
+    if min_price:
+        try:
+            valid_min_price = float(min_price)
+            if valid_min_price < 0:
+                valid_min_price = None
+        except ValueError:
+            valid_min_price = None
+            
+    if max_price:
+        try:
+            valid_max_price = float(max_price)
+            if valid_max_price < 0:
+                valid_max_price = None
+        except ValueError:
+            valid_max_price = None
+    
     # Apply filters
-    if filter_form.is_valid():
-        search_query = filter_form.cleaned_data.get('search')
-        category = filter_form.cleaned_data.get('category')
-        brand = filter_form.cleaned_data.get('brand')
-        min_price = filter_form.cleaned_data.get('min_price')
-        max_price = filter_form.cleaned_data.get('max_price')
-
-        if search_query:
-            products = products.filter(
-                Q(product_name__icontains=search_query) |
-                Q(description__icontains=search_query)
-            )
-        if category:
-            products = products.filter(category=category)
-        if brand:
-            products = products.filter(brand=brand)
-        if min_price is not None:
-            products = products.filter(variants__price__gte=min_price)
-        if max_price is not None:
-            products = products.filter(variants__price__lte=max_price)
-
-    # Sorting
-    sort_by = request.GET.get('sort', 'new_arrivals')
-    if sort_by == 'price_low':
-        products = products.order_by('min_price')
-    elif sort_by == 'price_high':
-        products = products.order_by('-max_price')
-    elif sort_by == 'ratings':
-        products = products.order_by('-avg_rating')
-    elif sort_by == 'a_to_z':
-        products = products.order_by('product_name')
-    elif sort_by == 'z_to_a':
-        products = products.order_by('-product_name')
-    else:
-        products = products.order_by('-created_at')
-
-    # Prepare product data
+    if search_query:
+        products = products.filter(
+            Q(product_name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(brand__name__icontains=search_query)
+        )
+    
+    if category_id and category_id.isdigit():
+        products = products.filter(category_id=category_id)
+    
+    if brand_id and brand_id.isdigit():
+        products = products.filter(brand_id=brand_id)
+    
+    # Process products with their active variants
     product_data = []
     for product in products:
-        # Select primary variant or first active variant with stock
-        variant = product.primary_variant or product.variants.filter(
-            is_active=True, stock__gt=0
-        ).order_by('price').first() or product.variants.filter(
-            is_active=True
-        ).order_by('price').first()
-
-        if not variant:
+        # Get active variants with stock
+        active_variants = [v for v in product.variants.all() if v.is_active]
+        if not active_variants:
             continue
-
+        
+        # Calculate min and max prices across variants using best_price
+        variant_prices = [v.best_price['price'] for v in active_variants]
+        if not variant_prices:
+            continue
+            
+        product_min_price = min(variant_prices)
+        product_max_price = max(variant_prices)
+        
+        # Apply price range filter
+        if valid_min_price is not None and product_max_price < valid_min_price:
+            continue
+        if valid_max_price is not None and product_min_price > valid_max_price:
+            continue
+            
+        # Get primary variant for display
+        primary_variant = product.primary_variant
+        if not primary_variant or not primary_variant.is_active:
+            # Fallback to first active variant
+            primary_variant = next((v for v in active_variants), None)
+            if not primary_variant:
+                continue
+                
         # Get primary image
-        primary_image = variant.images.filter(is_primary=True).first()
-
-        # Calculate prices
-        discounted_price = variant.discounted_price if hasattr(variant, 'discounted_price') else variant.price
-        best_price = discounted_price
-        best_offer_percentage = 0
-        has_offer = False
-
-        # Check product offer
-        product_offer = product.offers.filter(is_active=True).first()
-        if product_offer:
-            offer_price = discounted_price * (1 - product_offer.discount_percentage / 100)
-            if offer_price < best_price:
-                best_price = offer_price
-                best_offer_percentage = product_offer.discount_percentage
-                has_offer = True
-
-        # Check category offer
-        category_offer = product.category.offers.filter(is_active=True).first()
-        if category_offer:
-            offer_price = discounted_price * (1 - category_offer.discount_percentage / 100)
-            if offer_price < best_price:
-                best_price = offer_price
-                best_offer_percentage = category_offer.discount_percentage
-                has_offer = True
-
+        primary_image = primary_variant.primary_image
+            
+        # Calculate discount percentage
+        discount_percentage = Decimal('0.00')
+        if primary_variant.best_price['price'] < primary_variant.original_price:
+            discount_percentage = ((primary_variant.original_price - primary_variant.best_price['price']) / 
+                                 primary_variant.original_price * 100).quantize(Decimal('0.01'))
+        
+        # Use stored review data
+        review_count = product.review_count
+        avg_rating = product.average_rating
+        whole_stars = int(avg_rating)
+        star_rating = {
+            'whole_stars': whole_stars,
+            'empty_stars': 5 - whole_stars
+        }
+        
+        # Enhanced logging for debugging
+        logger.debug(f"Product {product.product_name}: review_count={review_count}, avg_rating={avg_rating}, whole_stars={whole_stars}, empty_stars={star_rating['empty_stars']}")
+        
+        # Add product to filtered results
         product_data.append({
             'product': product,
-            'variant': variant,
+            'variant': primary_variant,
             'primary_image': primary_image,
-            'discounted_price': discounted_price,
-            'best_price': best_price,
-            'has_offer': has_offer,
-            'best_offer_percentage': best_offer_percentage,
-            'avg_rating': product.avg_rating or 0,
-            'review_count': product.reviews.filter(is_approved=True).count(),
-            'variant_name': variant.name if hasattr(variant, 'name') else None,  # Optional: variant name
-            'category_name': product.category.name if product.category else None,  # Optional: category name
-            'total_stock': sum(v.stock for v in product.variants.filter(is_active=True))  # Optional: total stock
+            'original_price': primary_variant.original_price,
+            'best_price': primary_variant.best_price['price'],
+            'min_price': product_min_price,  # For sorting
+            'max_price': product_max_price,  # For sorting
+            'has_offer': primary_variant.best_price['price'] < primary_variant.original_price,
+            'offer_type': primary_variant.best_price['applied_offer_type'],
+            'discount_percentage': discount_percentage,
+            'total_stock': sum(v.stock for v in active_variants),
+            'user_wishlist_variants': user_wishlist_variants,
+            'average_rating': avg_rating,
+            'review_count': review_count,
+            'star_rating': star_rating,
         })
-
+    
+    # Apply sorting to the processed products
+    if sort_by == 'price_low':
+        product_data = sorted(product_data, key=lambda x: x['min_price'])
+    elif sort_by == 'price_high':
+        product_data = sorted(product_data, key=lambda x: x['max_price'], reverse=True)
+    elif sort_by == 'a_to_z':
+        product_data = sorted(product_data, key=lambda x: x['product'].product_name.lower())
+    elif sort_by == 'z_to_a':
+        product_data = sorted(product_data, key=lambda x: x['product'].product_name.lower(), reverse=True)
+    else:
+        # Default sorting by most recent
+        product_data = sorted(product_data, key=lambda x: x['product'].created_at, reverse=True)
+    
     # Pagination
-    paginator = Paginator(product_data, 12)
-    page_number = request.GET.get('page')
+    paginator = Paginator(product_data, 12)  # 12 products per page
+    page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-
+    
+    # Calculate overall price range for filter options
+    all_products = Product.objects.filter(is_active=True)
+    all_variants = ProductVariant.objects.filter(is_active=True, product__in=all_products)
+    
+    if all_variants.exists():
+        price_range = {
+            'min': 0,  # Start from zero
+            'max': 9999  # Set a reasonable upper limit
+        }
+        
+        # Try to get actual min/max from active products
+        try:
+            # Use aggregate for approximate price range
+            min_original = all_variants.aggregate(Min('original_price'))['original_price__min'] or 0
+            max_original = all_variants.aggregate(Max('original_price'))['original_price__max'] or 9999
+            
+            # Round for cleaner UI
+            price_range['min'] = int(min_original)
+            price_range['max'] = int(max_original * 1.1)  # Give some headroom
+        except:
+            pass  # Use default values if anything fails
+    else:
+        price_range = {'min': 0, 'max': 1000}
+    
     context = {
         'filter_form': filter_form,
-        'products': page_obj,
-        'page_obj': page_obj,
+        'products': page_obj,  # Paginated product data
+        'page_obj': page_obj,  # For pagination controls
         'sort_by': sort_by,
+        'search_query': search_query,
+        'price_range': price_range,
+        'min_price': min_price,
+        'max_price': max_price,
+        'clear_filters': any([search_query, category_id, brand_id, min_price, max_price])
     }
+    
     return render(request, 'product_app/user_product_list.html', context)
-
 
 def user_product_detail(request, slug):
     product = get_object_or_404(
@@ -1047,78 +1040,142 @@ def user_product_detail(request, slug):
         .prefetch_related('variants', 'variants__variant_images', 'reviews'),
         slug=slug,
         is_active=True,
-        category__is_active=True,  
+        category__is_active=True,
         brand__is_active=True
     )
-    
+
     variants = product.variants.filter(is_active=True).prefetch_related('variant_images')
-    reviews = product.reviews.filter(is_approved=True).select_related('user').order_by('-created_at')
-    
-    can_review = False
-    has_reviewed = False
-    if request.user.is_authenticated:
-        can_review = OrderItem.objects.filter(
-            order__user=request.user,
-            order__status='Delivered',
-            variant__product=product
-        ).exists()
-        has_reviewed = product.has_user_reviewed(request.user)
-    
+
+    # Review permissions
+    can_review = request.user.is_authenticated
+    has_reviewed = product.has_user_reviewed(request.user) if request.user.is_authenticated else False
+
+    # Price and stock calculations
     min_price = product.min_price()
     max_price = product.max_price()
-    total_stock = product.total_stock() 
+    total_stock = product.total_stock()
+
+    # Related products
     related_products = Product.objects.filter(
         category=product.category,
         is_active=True,
         brand__is_active=True
     ).exclude(id=product.id).select_related('category', 'brand').prefetch_related('variants')[:4]
-    
+
+    # Wishlist status
     wishlist_variant_ids = set(Wishlist.objects.filter(user=request.user).values_list('variant_id', flat=True)) if request.user.is_authenticated else set()
-    variant_data = [
-        {
+
+    # Prepare variant data
+    variant_data = []
+    for variant in variants:
+        best_price_info = variant.best_price
+        best_price = best_price_info['price']
+        has_offer = best_price < variant.original_price
+        best_offer_percentage = Decimal('0.00')
+        if has_offer:
+            best_offer_percentage = ((variant.original_price - best_price) / variant.original_price * 100).quantize(Decimal('0.01'))
+
+        variant_data.append({
             'variant': variant,
             'images': variant.variant_images.all(),
-            'discounted_price': variant.discounted_price(),
-            'best_price': variant.best_price['price'], 
-            'has_offer': variant.has_offer,
-            'best_offer_percentage': variant.best_offer_percentage,
+            'discounted_price': best_price,
+            'best_price': best_price,
+            'has_offer': has_offer,
+            'best_offer_percentage': best_offer_percentage,
             'is_in_wishlist': variant.id in wishlist_variant_ids,
-        } for variant in variants
-    ]
-    
-    # Preprocess related products to include best_price
+        })
+
+    # Review data
+    reviews = product.approved_reviews().order_by('-created_at')[:5]
+    review_count = product.review_count  # Use property
+    avg_rating = product.average_rating  # Use stored value
+
+    # Related products data
     related_product_data = [
         {
             'product': rp,
             'best_price': rp.variants.first().best_price['price'] if rp.variants.exists() else 0,
+            'primary_image': rp.primary_variant.primary_image if rp.primary_variant else None,
         } for rp in related_products
     ]
-    
+
     context = {
         'product': product,
         'variants': variant_data,
         'min_price': min_price,
         'max_price': max_price,
         'total_stock': total_stock,
-        'reviews': reviews[:5],
-        'review_count': reviews.count(),
-        'avg_rating': product.average_rating,
+        'reviews': reviews,
+        'review_count': review_count,
+        'avg_rating': avg_rating,
         'can_review': can_review and not has_reviewed,
         'has_reviewed': has_reviewed,
-        'related_products': related_products,  
+        'related_products': related_product_data,
     }
     return render(request, 'product_app/user_product_detail.html', context)
 
-@require_GET
-def get_variant_images(request, variant_id):
-    try:
-        variant = get_object_or_404(ProductVariant, id=variant_id, is_active=True)
-        images = variant.variant_images.all()
-        image_data = [{'url': img.image.url, 'alt': img.alt_text} for img in images]
-        return JsonResponse({
-            'success': True,
-            'images': image_data,
-            'variant_name': f"{variant.product.product_name} - {variant.flavor or 'Standard'}"
-        })
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+@csrf_exempt
+@login_required
+@require_POST
+def submit_review(request, slug):
+    product = get_object_or_404(Product, slug=slug, is_active=True)
+
+    # Check if user has already reviewed
+    if product.has_user_reviewed(request.user):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': 'You have already reviewed this product'}, status=400)
+        return redirect('product_app:user_product_detail', slug=slug)
+
+    # Verify purchase
+    is_verified_purchase = OrderItem.objects.filter(
+        order__user=request.user,
+        order__status='Delivered',
+        variant__product=product
+    ).exists()
+    if not is_verified_purchase:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': 'You must purchase and receive this product to review it'}, status=400)
+        return redirect('product_app:user_product_detail', slug=slug)
+
+    # Handle AJAX and non-AJAX requests
+    form = ReviewForm(request.POST)
+    if form.is_valid():
+        try:
+            review = form.save(commit=False)
+            review.product = product
+            review.user = request.user
+            review.is_verified_purchase = is_verified_purchase
+            review.is_approved = True  # Auto-approve for verified purchases
+            review.save()  # This will trigger update_average_rating via the form's save method
+
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'review': {
+                        'id': review.id,
+                        'title': review.title,
+                        'rating': review.rating,
+                        'comment': review.comment,
+                        'username': review.user.username,
+                        'created_at': review.created_at.strftime('%B %d, %Y'),
+                        'is_verified_purchase': review.is_verified_purchase,
+                        'is_approved': review.is_approved
+                    },
+                    'average_rating': float(product.average_rating),  # Use stored value
+                    'review_count': product.review_count,  # Use property
+                    'message': 'Thank you for your review!'
+                })
+            return redirect('product_app:user_product_detail', slug=slug)
+        except Exception as e:
+            logger.error(f"Error saving review: {str(e)}", exc_info=True)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            form.add_error(None, str(e))
+    else:
+        logger.debug(f"Form errors: {form.errors.as_json()}")
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            errors = {field: error[0] for field, error in form.errors.items()}
+            return JsonResponse({'success': False, 'error': errors}, status=400)
+
+    # Fallback for non-AJAX invalid form
+    return redirect('product_app:user_product_detail', slug=slug)

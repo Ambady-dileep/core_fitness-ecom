@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from cloudinary.models import CloudinaryField
@@ -93,9 +93,13 @@ class Product(models.Model):
     description = models.TextField(blank=True, help_text="Detailed description including ingredients, usage instructions, etc.")
     country_of_manufacture = models.CharField(max_length=100, blank=True, help_text="Country where the product is manufactured.")
     is_active = models.BooleanField(default=True)
-    average_rating = models.FloatField(default=0.0)
+    average_rating = models.FloatField(default=0.0, validators=[MinValueValidator(0.0), MaxValueValidator(5.0)])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Product"
+        verbose_name_plural = "Products"
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -122,32 +126,28 @@ class Product(models.Model):
         return None
     
     @property
-    def calculated_average_rating(self):
-        return self.reviews.aggregate(avg=Avg('rating'))['avg'] or 0
-
+    def review_count(self):
+        """Return the number of approved reviews."""
+        return self.reviews.filter(is_approved=True).count()
+    
     def update_average_rating(self):
-        avg = self.reviews.filter(is_approved=True).aggregate(Avg('rating'))['rating__avg']
-        self.average_rating = avg if avg is not None else 0.0
+        approved_reviews = self.reviews.filter(is_approved=True)
+        avg_rating = approved_reviews.aggregate(Avg('rating'))['rating__avg'] or 0.0
+        # Update the average_rating field directly
+        self.average_rating = round(float(avg_rating), 1) if avg_rating else 0.0
         self.save(update_fields=['average_rating'])
 
-    @property
-    def average_rating(self):
-        avg = self.reviews.filter(is_approved=True).aggregate(avg=Avg('rating'))['avg']
-        return round(avg, 1) if avg else 0.0
-
-    @property
     def min_price(self):
-        if not self.variants.exists():
-            return Decimal('0.00')
-        min_price = min(variant.best_price.price for variant in self.variants.all())
-        return min_price.quantize(Decimal('0.01'))
+        variants = self.variants.filter(is_active=True)
+        if not variants.exists():
+            return 0
+        return min(variant.best_price['price'] for variant in variants)
 
-    @property
     def max_price(self):
-        if not self.variants.exists():
-            return Decimal('0.00')
-        max_price = max(variant.best_price.price for variant in self.variants.all())
-        return max_price.quantize(Decimal('0.01'))
+        variants = self.variants.filter(is_active=True)
+        if not variants.exists():
+            return 0
+        return max(variant.best_price['price'] for variant in variants)
 
     def total_stock(self):
         return self.variants.filter(is_active=True).aggregate(total_stock=Sum('stock'))['total_stock'] or 0
@@ -208,22 +208,28 @@ class ProductVariant(models.Model):
     
     @property
     def best_price(self):
-        # Get offer percentages as Decimal
-        category_offer = Decimal(str(self.product.category.offer_percentage or 0))
-        product_offer = Decimal(str(self.offer_percentage or 0))
-        # Find the maximum discount
+        category_offer = self.product.category.offer_percentage or 0
+        product_offer = self.offer_percentage or 0
+
+        # Keep all values as Decimal
+        category_offer = Decimal(category_offer)
+        product_offer = Decimal(product_offer)
         max_discount = max(category_offer, product_offer)
-        # Calculate discount multiplier (e.g., for 20% off, multiplier is 0.80)
+
         discount_multiplier = Decimal('1.0') - (max_discount / Decimal('100'))
-        # Calculate final price and round to 2 decimal places
-        price = (self.original_price * discount_multiplier).quantize(Decimal('0.01'))
-        # Determine which offer was applied
+
+        # ROUND UP to the nearest integer
+        price = (self.original_price * discount_multiplier).quantize(Decimal('1'), rounding=ROUND_UP)
+
         applied_offer_type = 'category' if category_offer >= product_offer else 'product'
+
         return {
-            'price': price,
+            'price': price,  
             'original_price': self.original_price,
             'applied_offer_type': applied_offer_type
         }
+    
+    
 
     @property
     def primary_image(self):
@@ -290,11 +296,15 @@ class VariantImage(models.Model):
         
     class Meta:
         ordering = ['-is_primary', 'created_at']
+ 
 
 class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    rating = models.FloatField()
+    rating = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="Rating from 1 to 5 stars"
+    )
     title = models.CharField(max_length=100, blank=True, null=True)
     comment = models.TextField(max_length=5000)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -304,52 +314,19 @@ class Review(models.Model):
     def __str__(self):
         return f"{self.product.product_name} - {self.rating} stars"
 
-    def clean(self):
-        if self.rating < 1.0 or self.rating > 5.0:
-            raise ValidationError({'rating': 'Rating must be between 1.0 and 5.0.'})
-
-    def clean_rating(self):
-        rating = self.cleaned_data.get('rating')
-        if rating is None:
-            raise forms.ValidationError("Rating is required.")
-        if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
-            raise forms.ValidationError("Rating must be a number between 1 and 5.")
-        return float(rating)
-
-    def clean_title(self):
-        title = self.cleaned_data.get('title', '')
-        if len(title) > 100:
-            raise forms.ValidationError("Title cannot exceed 100 characters.")
-        return title
-
-    def star_rating(self):
-        full_star = '★'
-        half_star = '½'
-        one_third_star = '⅓'
-        one_fourth_star = '¼'
-        one_fifth_star = '⅕'
-        empty_star = '☆'
-        whole_stars = int(self.rating)
-        fractional_part = self.rating - whole_stars
-        stars = full_star * whole_stars
-        if fractional_part >= 0.5:
-            stars += half_star
-        elif 0.3 <= fractional_part < 0.5:
-            stars += one_third_star
-        elif 0.25 <= fractional_part < 0.3:
-            stars += one_fourth_star
-        elif 0.2 <= fractional_part < 0.25:
-            stars += one_fifth_star
-
-        remaining_slots = 5 - whole_stars - (1 if fractional_part >= 0.2 else 0)
-        stars += empty_star * remaining_slots
-
-        return stars
-
     def excerpt(self, length=100):
         return self.comment[:length] + '...' if len(self.comment) > length else self.comment
 
+    @property
+    def star_rating(self):
+        """Return a dictionary for star rendering in templates."""
+        whole_stars = self.rating
+        return {
+            'whole_stars': whole_stars,
+            'empty_stars': 5 - whole_stars
+        }
 
+    @property
     def age(self):
         delta = timezone.now() - self.created_at
         if delta.days > 0:

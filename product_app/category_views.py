@@ -161,91 +161,72 @@ def admin_toggle_category_status(request, category_id):
 
 ################################################################### User Facing #############################################################################################
 
+
 @never_cache
 def user_category_list(request):
-    categories = Category.objects.filter(is_active=True).order_by('name')
+    # Fetch active categories with related data
+    categories = Category.objects.filter(is_active=True).prefetch_related('products')
+    
+    # Add annotations for better sorting and filtering
+    categories = categories.annotate(
+        product_count=Count('products', filter=Q(products__is_active=True)),
+        brands_count=Count('brands', distinct=True)
+    )
+    
+    # Handle search query
     query = request.GET.get('q', '').strip()
     if query:
         categories = categories.filter(
             Q(name__icontains=query) |
-            Q(description__icontains=query)
-        )
+            Q(description__icontains=query) |
+            Q(brands__name__icontains=query)
+        ).distinct()
 
+    # Handle sorting
     sort_by = request.GET.get('sort', '')
     sort_options = {
         'a_to_z': 'name',
         'z_to_a': '-name',
-        '': 'name'
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'popular': '-product_count',
+        'offers': '-offer_percentage',
+        '': 'name'  # Default sort
     }
-    categories = categories.order_by(sort_options.get(sort_by, 'name'))
+    
+    sort_field = sort_options.get(sort_by, 'name')
+    categories = categories.order_by(sort_field)
+    
+    # Get featured categories (those with the most products or highest offers)
+    featured_categories = Category.objects.filter(is_active=True)
+    featured_categories = featured_categories.annotate(
+        product_count=Count('products', filter=Q(products__is_active=True))
+    ).order_by('-offer_percentage', '-product_count')[:3]
 
-    paginator = Paginator(categories, per_page=12)
+    # Paginate results
+    per_page = int(request.GET.get('per_page', 12))  # Allow customizable items per page
+    paginator = Paginator(categories, per_page=per_page)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+
+    # Get popular brands for potential filtering
+    popular_brands = Brand.objects.filter(
+        is_active=True, 
+        categories__in=categories
+    ).annotate(
+        category_count=Count('categories', distinct=True)
+    ).order_by('-category_count')[:5]
 
     context = {
         'page_obj': page_obj,
-        'title': 'Shop by Category',
+        'title': 'Premium Supplements',
         'query': query,
         'sort_by': sort_by,
+        'featured_categories': featured_categories,
+        'popular_brands': popular_brands,
     }
+    
     return render(request, 'product_app/user_category_list.html', context)
-
-@never_cache
-def user_category_detail(request, slug):
-    category = get_object_or_404(Category, slug=slug, is_active=True)
-    products = category.products.filter(is_active=True)
-
-    brand_filter = request.GET.getlist('brand')
-    min_price = request.GET.get('min_price')
-    max_price = request.GET.get('max_price')
-    sort_by = request.GET.get('sort', 'newest')
-
-    if brand_filter:
-        products = products.filter(brand__name__in=brand_filter)
-
-    if min_price:
-        try:
-            min_price = float(min_price)
-            products = products.filter(variants__original_price__gte=min_price)
-        except ValueError:
-            pass
-
-    if max_price:
-        try:
-            max_price = float(max_price)
-            products = products.filter(variants__original_price__lte=max_price)
-        except ValueError:
-            pass
-
-    sort_options = {
-        'newest': '-created_at',
-        'oldest': 'created_at',
-        'price_low': 'min_price',
-        'price_high': '-min_price',
-        'name_az': 'product_name',
-        'name_za': '-product_name',
-        'rating': '-average_rating'
-    }
-    primary_ordering = sort_options.get(sort_by, '-created_at')
-    products = products.order_by(primary_ordering, 'id')
-    available_brands = products.values_list('brand__name', flat=True).distinct()
-
-    paginator = Paginator(products, per_page=12)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    context = {
-        'category': category,
-        'products': page_obj,
-        'available_brands': available_brands,
-        'selected_brands': brand_filter,
-        'min_price': min_price,
-        'max_price': max_price,
-        'sort_by': sort_by,
-        'title': category.name,
-    }
-    return render(request, 'product_app/user_category_detail.html', context)
 
 
 ###############################################################################################################################################################################
@@ -391,3 +372,5 @@ def admin_toggle_brand_status(request, brand_id):
             'message': f'Brand "{brand.name}" is now {"active" if brand.is_active else "inactive"}.'
         })
     return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
+
+

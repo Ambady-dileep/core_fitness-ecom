@@ -8,34 +8,79 @@ from datetime import timedelta
 class CouponForm(forms.ModelForm):
     class Meta:
         model = Coupon
-        fields = ['code', 'discount_percentage', 'minimum_order_amount', 'valid_from', 'valid_to', 'usage_limit', 'is_active']
+        fields = ['code', 'discount_percentage', 'minimum_order_amount', 'max_discount_amount', 'valid_from', 'valid_to']
         widgets = {
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'discount_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'minimum_order_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'valid_from': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
-            'valid_to': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
-            'usage_limit': forms.NumberInput(attrs={'class': 'form-control'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'code': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter coupon code (will be automatically uppercase)'
+            }),
+            'discount_percentage': forms.NumberInput(attrs={
+                'class': 'form-control', 
+                'step': '0.01',
+                'min': '0.01',
+                'max': '50',
+                'placeholder': 'Enter value between 0.01 and 50'
+            }),
+            'minimum_order_amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': 'Minimum order amount to apply coupon'
+            }),
+            'max_discount_amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': 'Enter 0 for no maximum limit'
+            }),
+            'valid_from': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            }),
+            'valid_to': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Set default values for new coupons
         if not self.instance.pk:
             self.initial['valid_from'] = timezone.now()
             self.initial['valid_to'] = timezone.now() + timedelta(days=30)
-            self.initial['is_active'] = True
+            # Don't set is_active here as we've removed it
+        
+        # Add help text and error messages
+        self.fields['code'].error_messages = {
+            'required': 'Please enter a coupon code',
+            'unique': 'This coupon code already exists'
+        }
+        self.fields['discount_percentage'].error_messages = {
+            'required': 'Please enter a discount percentage',
+            'min_value': 'Discount must be at least 0.01%',
+            'max_value': 'Discount cannot exceed 50%'
+        }
+        
+
+        today = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        self.fields['valid_from'].widget.attrs['min'] = today
 
     def clean_code(self):
         code = self.cleaned_data['code'].strip().upper()
         if not code:
             raise ValidationError("Coupon code cannot be empty.")
+        
+        # Check uniqueness but ignore the current instance if editing
+        if Coupon.objects.filter(code=code).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("This coupon code already exists.")
+            
         return code
 
     def clean_discount_percentage(self):
         discount = self.cleaned_data['discount_percentage']
-        if discount <= 0 or discount > 100:
-            raise ValidationError("Discount percentage must be between 0.01 and 100.")
+        if discount <= 0 or discount > 50: 
+            raise ValidationError("Discount percentage must be between 0.01 and 50.")
         return discount
 
     def clean_minimum_order_amount(self):
@@ -44,19 +89,40 @@ class CouponForm(forms.ModelForm):
             raise ValidationError("Minimum order amount cannot be negative.")
         return amount
 
-    def clean_usage_limit(self):
-        limit = self.cleaned_data['usage_limit']
-        if limit < 0:
-            raise ValidationError("Usage limit cannot be negative.")
-        return limit
+    def clean_max_discount_amount(self):
+        amount = self.cleaned_data['max_discount_amount']
+        if amount < 0:
+            raise ValidationError("Maximum discount amount cannot be negative.")
+        return amount
+    
+    def clean_valid_from(self):
+        valid_from = self.cleaned_data.get('valid_from')
+        if not self.instance.pk and valid_from and valid_from < timezone.now():
+            raise ValidationError("Valid from date cannot be in the past.")
+        return valid_from
 
     def clean(self):
         cleaned_data = super().clean()
         valid_from = cleaned_data.get('valid_from')
         valid_to = cleaned_data.get('valid_to')
+        
         if valid_from and valid_to and valid_to <= valid_from:
-            raise ValidationError("Valid to date must be after valid from date.")
+            self.add_error('valid_to', "Valid to date must be after valid from date.")
+            
+        # Auto-set is_active to True for new coupons or keep existing value
+        if not self.instance.pk:
+            cleaned_data['is_active'] = True
+            
         return cleaned_data
+
+    def save(self, commit=True):
+        coupon = super().save(commit=False)
+        # For new coupons, ensure is_active is set to True
+        if not self.instance.pk:
+            coupon.is_active = True
+        if commit:
+            coupon.save()
+        return coupon
 
 class UserCouponForm(forms.ModelForm):
     class Meta:
@@ -103,4 +169,10 @@ class CouponApplyForm(forms.Form):
 
     def clean_coupon_code(self):
         code = self.cleaned_data['coupon_code'].strip().upper()
+        try:
+            coupon = Coupon.objects.get(code=code)
+            if not coupon.is_valid():
+                raise ValidationError("This coupon is not valid or has expired.")
+        except Coupon.DoesNotExist:
+            raise ValidationError("Invalid coupon code.")
         return code

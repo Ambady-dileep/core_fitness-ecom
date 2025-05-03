@@ -5,8 +5,8 @@ def generate_otp():
     """Generate a 6-digit OTP."""
     return random.randint(100000, 999999)
 
-def store_otp(email_or_phone, otp, timeout=180):
-    """Store the OTP in Redis with a timeout (default: 3 minutes)."""
+def store_otp(email_or_phone, otp, timeout=120):
+    """Store the OTP in Redis with a timeout (default: 120 seconds)."""
     cache.set(f"otp:{email_or_phone}", otp, timeout=timeout)
 
 def get_otp(email_or_phone):
@@ -17,7 +17,7 @@ def delete_otp(email_or_phone):
     """Delete the OTP from Redis after successful validation."""
     cache.delete(f"otp:{email_or_phone}")
 
-def set_otp_cooldown(email_or_phone, timeout=180): 
+def set_otp_cooldown(email_or_phone, timeout=120):
     """Set a cooldown period for resending OTP."""
     cache.set(f"otp_cooldown:{email_or_phone}", "active", timeout=timeout)
 

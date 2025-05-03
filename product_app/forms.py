@@ -141,7 +141,6 @@ class ProductVariantForm(forms.ModelForm):
 # Variant Formset
 ProductVariantFormSet = formset_factory(ProductVariantForm, extra=1, can_delete=True)
 
-# Product Filter Form (unchanged)
 class ProductFilterForm(forms.Form):
     search = forms.CharField(
         required=False, 
@@ -159,8 +158,70 @@ class ProductFilterForm(forms.Form):
         empty_label="All Brands",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
-    min_price = forms.DecimalField(required=False, widget=forms.HiddenInput())
-    max_price = forms.DecimalField(required=False, widget=forms.HiddenInput())
+    min_price = forms.DecimalField(
+        required=False, 
+        min_value=0,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Min Price'})
+    )
+    max_price = forms.DecimalField(
+        required=False,
+        min_value=0, 
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max Price'})
+    )
+    sort = forms.ChoiceField(
+        required=False,
+        choices=[
+            ('', 'Default'),
+            ('price_low', 'Price: Low to High'),
+            ('price_high', 'Price: High to Low'),
+            ('a_to_z', 'A-Z'),
+            ('z_to_a', 'Z-A'),
+        ],
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+class ReviewForm(forms.ModelForm):
+    class Meta:
+        model = Review
+        fields = ['rating', 'title', 'comment']
+        widgets = {
+            'rating': forms.Select(
+                choices=[(i, str(i)) for i in range(1, 6)],
+                attrs={'class': 'form-control'}
+            ),
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter review title'}),
+            'comment': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Write your review here'}),
+        }
+
+    def clean_rating(self):
+        rating = self.cleaned_data.get('rating')
+        if rating is None:
+            raise forms.ValidationError("Rating is required.")
+        if not isinstance(rating, int) or rating < 1 or rating > 5:
+            raise forms.ValidationError("Rating must be an integer between 1 and 5.")
+        return rating
+
+    def clean_title(self):
+        title = self.cleaned_data.get('title', '')
+        if len(title) > 100:
+            raise forms.ValidationError("Title cannot exceed 100 characters.")
+        return title
+
+    def clean_comment(self):
+        comment = self.cleaned_data.get('comment')
+        if len(comment) < 10:
+            raise forms.ValidationError("Comment must be at least 10 characters long.")
+        if len(comment) > 5000:
+            raise forms.ValidationError("Comment cannot exceed 5000 characters.")
+        return comment
+
+    def save(self, commit=True):
+        review = super().save(commit=False)
+        if commit:
+            review.save()
+            # Update the product's average rating after saving the review
+            review.product.update_average_rating()
+        return review
 
 class CategoryForm(forms.ModelForm):
     image = CloudinaryFileField(
@@ -308,35 +369,3 @@ class BrandForm(forms.ModelForm):
             if len(website) > 200:
                 raise ValidationError("Website URL cannot exceed 200 characters.")
         return website
-
-class ReviewForm(forms.ModelForm):
-    class Meta:
-        model = Review
-        fields = ['rating', 'title', 'comment']
-        widgets = {
-            'rating': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '1.0', 'max': '5.0'}),
-            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter review title'}),
-            'comment': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Write your review here'}),
-        }
-
-    def clean_rating(self):
-        rating = self.cleaned_data.get('rating')  
-        if rating is None:
-            raise forms.ValidationError("Rating is required.")
-        if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
-            raise forms.ValidationError("Rating must be a number between 1 and 5.")
-        return float(rating)
-
-    def clean_title(self):
-        title = self.cleaned_data.get('title', '')
-        if len(title) > 100:
-            raise forms.ValidationError("Title cannot exceed 100 characters.")
-        return title
-
-    def clean_comment(self):
-        comment = self.cleaned_data['comment']
-        if len(comment) < 10:
-            raise forms.ValidationError("Comment must be at least 10 characters long.")
-        if len(comment) > 5000:
-            raise forms.ValidationError("Comment cannot exceed 5000 characters.")
-        return comment
