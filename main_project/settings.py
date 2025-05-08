@@ -102,7 +102,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    #'main_project.middleware.Custom404Middleware',
+    'main_project.middleware.Custom404Middleware',
     'social_django.middleware.SocialAuthExceptionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',

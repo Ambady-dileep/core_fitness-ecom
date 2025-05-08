@@ -859,7 +859,9 @@ def user_product_list(request):
         user_wishlist_variants = Wishlist.objects.filter(user=request.user).values_list('variant_id', flat=True)
     
     # Start with all active products, prefetch related data
-    products = Product.objects.filter(is_active=True).select_related(
+    products = Product.objects.filter(is_active=True,
+    category__is_active=True,
+    brand__is_active=True).select_related(
         'category', 'brand'
     ).prefetch_related(
         'variants',
@@ -997,7 +999,8 @@ def user_product_list(request):
     page_obj = paginator.get_page(page_number)
     
     # Calculate overall price range for filter options
-    all_products = Product.objects.filter(is_active=True)
+    all_products = Product.objects.filter(is_active=True, category__is_active=True,
+    brand__is_active=True)
     all_variants = ProductVariant.objects.filter(is_active=True, product__in=all_products)
     
     if all_variants.exists():

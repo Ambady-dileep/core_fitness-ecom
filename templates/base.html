@@ -593,6 +593,7 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'product_app:user_category_list' %}">Categories</a>
                 </li>
+                
             </ul>
             <ul class="navbar-nav ms-auto align-items-center">
                 {% if user.is_authenticated %}
@@ -666,10 +667,20 @@
                             </a></li>
                             <li><a class="dropdown-item" href="{% url 'offer_and_coupon_app:wallet_dashboard' %}">
                                 <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
-                                    <rect x="1" y="1" width="22" height="16" rx="2" ry="2"></rect>
+                                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
                                     <line x1="1" y1="10" x2="23" y2="10"></line>
                                 </svg>
                                 My Wallet
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'user_app:referral_dashboard' %}">
+                                <svg width="16" height="16" viewBox="0 0 24 24" class="me-2" stroke="currentColor" fill="none" stroke-width="2">
+                                    <circle cx="18" cy="5" r="3"></circle>
+                                    <circle cx="6" cy="12" r="3"></circle>
+                                    <circle cx="18" cy="19" r="3"></circle>
+                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                </svg>
+                                Referrals
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'user_app:user_logout' %}">

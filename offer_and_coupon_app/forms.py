@@ -45,12 +45,15 @@ class CouponForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Set default values for new coupons
-        if not self.instance.pk:
-            self.initial['valid_from'] = timezone.now()
-            self.initial['valid_to'] = timezone.now() + timedelta(days=30)
-            # Don't set is_active here as we've removed it
-        
+        # Set default values for valid_from and valid_to
+        current_time = timezone.now()
+        if not self.instance.pk:  # New coupon
+            self.initial['valid_from'] = current_time
+            self.initial['valid_to'] = current_time + timedelta(days=30)
+        else:  # Editing existing coupon
+            if self.instance.valid_to <= current_time:
+                self.initial['valid_to'] = current_time + timedelta(days=30)
+
         # Add help text and error messages
         self.fields['code'].error_messages = {
             'required': 'Please enter a coupon code',
@@ -61,10 +64,6 @@ class CouponForm(forms.ModelForm):
             'min_value': 'Discount must be at least 0.01%',
             'max_value': 'Discount cannot exceed 50%'
         }
-        
-
-        today = timezone.now().strftime('%Y-%m-%dT%H:%M')
-        self.fields['valid_from'].widget.attrs['min'] = today
 
     def clean_code(self):
         code = self.cleaned_data['code'].strip().upper()
@@ -97,7 +96,7 @@ class CouponForm(forms.ModelForm):
     
     def clean_valid_from(self):
         valid_from = self.cleaned_data.get('valid_from')
-        if not self.instance.pk and valid_from and valid_from < timezone.now():
+        if valid_from and valid_from < timezone.now():
             raise ValidationError("Valid from date cannot be in the past.")
         return valid_from
 
@@ -105,10 +104,18 @@ class CouponForm(forms.ModelForm):
         cleaned_data = super().clean()
         valid_from = cleaned_data.get('valid_from')
         valid_to = cleaned_data.get('valid_to')
-        
+        minimum_order_amount = cleaned_data.get('minimum_order_amount')
+        max_discount_amount = cleaned_data.get('max_discount_amount')
+
+        # Validate dates
         if valid_from and valid_to and valid_to <= valid_from:
             self.add_error('valid_to', "Valid to date must be after valid from date.")
-            
+
+        # Validate amounts: Minimum Order Amount must be greater than Maximum Discount Amount
+        if minimum_order_amount is not None and max_discount_amount is not None:
+            if max_discount_amount > 0 and minimum_order_amount < max_discount_amount:
+                self.add_error('minimum_order_amount', "Minimum order amount must be greater than maximum discount amount.")
+
         # Auto-set is_active to True for new coupons or keep existing value
         if not self.instance.pk:
             cleaned_data['is_active'] = True

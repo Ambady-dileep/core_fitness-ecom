@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST,require_GET
 from django.utils import timezone
-from .forms import CouponForm, CouponApplyForm
+from .forms import CouponApplyForm
 from django.core.paginator import Paginator
 from cart_and_orders_app.models import Cart, CartItem
 from decimal import Decimal
@@ -11,12 +11,10 @@ from django.db import models, transaction
 from .models import Coupon, UserCoupon, Wallet, WalletTransaction
 from django.contrib import messages
 from django.shortcuts import redirect, render
-from decimal import InvalidOperation
 from django.urls import reverse
 import json
 from django.contrib import messages
 from django.conf import settings
-from django.db.models import Q, F
 from django.views.decorators.csrf import csrf_exempt
 import razorpay
 from django.conf import settings
@@ -36,11 +34,20 @@ def apply_coupon(request):
         if not cart.items.exists():
             return JsonResponse({'success': False, 'message': 'Your cart is empty.'}, status=400)
 
-        # Check if user has already used this coupon
-        if UserCoupon.objects.filter(user=request.user, coupon=coupon, is_used=True).exists():
+        # Check if the coupon is valid
+        if not coupon.is_valid():
+            return JsonResponse({'success': False, 'message': 'This coupon is no longer valid.'}, status=400)
+
+        # Check if the user has already used this coupon
+        if UserCoupon.objects.filter(
+            user=request.user,
+            coupon=coupon,
+            is_used=True,
+            order__status__in=['Confirmed', 'Processing', 'Shipped', 'Delivered']
+        ).exists():
             return JsonResponse({'success': False, 'message': 'This coupon has already been used.'}, status=400)
 
-        # Use Cart.get_totals for consistent calculations
+        # Validate subtotal against minimum order amount
         totals = cart.get_totals(coupon=coupon)
         if totals['subtotal'] < coupon.minimum_order_amount:
             return JsonResponse({
@@ -48,13 +55,23 @@ def apply_coupon(request):
                 'message': f'This coupon requires a minimum order amount of ₹{coupon.minimum_order_amount}.'
             }, status=400)
 
-        # Create or get UserCoupon
-        UserCoupon.objects.get_or_create(
-            user=request.user,
-            coupon=coupon,
-            defaults={'is_used': False}
-        )
+        # Reset any previously applied coupon
+        if 'applied_coupon' in request.session:
+            old_coupon_data = request.session['applied_coupon']
+            try:
+                old_coupon = Coupon.objects.get(id=old_coupon_data['coupon_id'], code=old_coupon_data['code'])
+                UserCoupon.objects.filter(user=request.user, coupon=old_coupon).update(is_used=False, used_at=None, order=None)
+            except Coupon.DoesNotExist:
+                pass
+            del request.session['applied_coupon']
+            request.session.modified = True
 
+        # Create or update UserCoupon
+        user_coupon, created = UserCoupon.objects.get_or_create(user=request.user, coupon=coupon)
+        user_coupon.is_used = False
+        user_coupon.save()
+
+        # Store the applied coupon in the session
         request.session['applied_coupon'] = {
             'coupon_id': coupon.id,
             'code': coupon.code,
@@ -62,7 +79,6 @@ def apply_coupon(request):
         }
         request.session.modified = True
 
-        logger.info(f"Coupon {coupon.code} applied by user {request.user.username}")
         return JsonResponse({
             'success': True,
             'message': f'Coupon {coupon.code} applied successfully!',
@@ -71,15 +87,14 @@ def apply_coupon(request):
                 'offer_discount': float(totals['offer_discount']),
                 'coupon_discount': float(totals['coupon_discount']),
                 'coupon_code': coupon.code,
-                'shipping_cost': float(totals['shipping_cost']),
                 'total': float(totals['total'])
             }
         })
     except Coupon.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Invalid coupon code.'}, status=400)
     except Exception as e:
-        logger.error(f"Apply Coupon Error for user {request.user.username}: {str(e)}")
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+        logger.error(f"Error applying coupon for user {request.user.username}: {str(e)}")
+        return JsonResponse({'success': False, 'message': 'An error occurred while applying the coupon.'}, status=500)
     
 
 @login_required
@@ -137,8 +152,11 @@ def available_coupons(request):
             valid_to__gte=timezone.now(),
             minimum_order_amount__lte=subtotal
         ).exclude(
-            user_coupons__user=request.user,
-            user_coupons__is_used=True
+            id__in=UserCoupon.objects.filter(
+                user=request.user,
+                is_used=True,
+                order__status__in=['Confirmed', 'Processing', 'Shipped', 'Delivered']
+            ).values('coupon_id')
         ).order_by('-discount_percentage')
 
         coupons_data = [{
@@ -146,7 +164,8 @@ def available_coupons(request):
             'code': coupon.code,
             'discount_percentage': float(coupon.discount_percentage),
             'minimum_order_amount': float(coupon.minimum_order_amount),
-            'valid_to': coupon.valid_to.isoformat()
+            'valid_to': coupon.valid_to.isoformat(),
+            'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
         } for coupon in valid_coupons]
 
         response_data = {
@@ -171,77 +190,29 @@ def available_coupons(request):
         return JsonResponse({'success': False, 'message': 'Failed to load coupons.'}, status=500)
 
 @login_required
-def view_coupons(request):
-    now = timezone.now()
-    available_coupons = Coupon.objects.filter(
-        is_active=True,
-        valid_from__lte=now,
-        valid_to__gte=now
-    ).exclude(
-        user_coupons__user=request.user,
-        user_coupons__is_used=True
-    ).order_by('-created_at')
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        coupons_data = [{
-            'id': coupon.id,
-            'code': coupon.code,
-            'discount_percentage': float(coupon.discount_percentage),
-            'minimum_order_amount': float(coupon.minimum_order_amount),
-            'valid_from': coupon.valid_from.strftime('%Y-%m-%d %H:%M'),
-            'valid_to': coupon.valid_to.strftime('%Y-%m-%d %H:%M'),
-            'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
-        } for coupon in available_coupons]
-        return JsonResponse({'coupons': coupons_data})
-
-    highlighted_coupon = request.GET.get('highlight')
-    context = {
-        'coupons': available_coupons,
-        'highlighted_coupon': highlighted_coupon,
-        'now': now
-    }
-    return render(request, 'offer_and_coupon_app/available_coupons.html', context)
-
-@login_required
-def view_coupons(request):
-    now = timezone.now()
-    available_coupons = Coupon.objects.filter(
-        is_active=True,
-        valid_from__lte=now,
-        valid_to__gte=now
-    ).exclude(
-        user_coupons__user=request.user,
-        user_coupons__is_used=True
-    ).order_by('-created_at')
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        coupons_data = [{
-            'id': coupon.id,
-            'code': coupon.code,
-            'discount_percentage': float(coupon.discount_percentage),
-            'minimum_order_amount': float(coupon.minimum_order_amount),
-            'valid_from': coupon.valid_from.strftime('%Y-%m-%d %H:%M'),
-            'valid_to': coupon.valid_to.strftime('%Y-%m-%d %H:%M'),
-            'description': f"{coupon.discount_percentage}% off on orders above ₹{coupon.minimum_order_amount}"
-        } for coupon in available_coupons]
-        return JsonResponse({'coupons': coupons_data})
-
-    highlighted_coupon = request.GET.get('highlight')
-    context = {
-        'coupons': available_coupons,
-        'highlighted_coupon': highlighted_coupon,
-        'now': now
-    }
-    return render(request, 'offer_and_coupon_app/available_coupons.html', context)
-
-@login_required
 def wallet_dashboard(request):
-    wallet, created = Wallet.objects.get_or_create(user=request.user)
-    transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')[:10]  
-    return render(request, 'offer_and_coupon_app/user_wallet_dashboard.html', {
-        'wallet': wallet,
-        'transactions': transactions
-    })
+    try:
+        wallet, created = Wallet.objects.get_or_create(user=request.user)
+        transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')
+        
+        # Add pagination
+        paginator = Paginator(transactions, 10)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        return render(request, 'offer_and_coupon_app/user_wallet_dashboard.html', {
+            'wallet': wallet,
+            'transactions': page_obj,
+            'page_obj': page_obj,
+        })
+    except Exception as e:
+        logger.error(f"Error rendering wallet dashboard for user {request.user.username}: {str(e)}")
+        messages.error(request, "Unable to load wallet dashboard. Please try again.")
+        return render(request, 'offer_and_coupon_app/user_wallet_dashboard.html', {
+            'wallet': None,
+            'transactions': [],
+            'page_obj': None,
+        })
 
 @login_required
 @require_GET
@@ -302,48 +273,75 @@ def add_funds(request):
         logger.error(f"Razorpay order creation failed for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Failed to create payment order.'}, status=500)
 
+
 @login_required
 @require_POST
 def add_funds_callback(request):
-    payment_id = request.POST.get('razorpay_payment_id')
-    razorpay_order_id = request.POST.get('razorpay_order_id')
-    signature = request.POST.get('razorpay_signature')
-
-    if not all([payment_id, razorpay_order_id, signature]):
-        logger.error(f"Missing Razorpay parameters for user {request.user.username}: payment_id={payment_id}, order_id={razorpay_order_id}")
-        return JsonResponse({'success': False, 'message': 'Missing payment details'}, status=400)
-
-    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-    params_dict = {
-        'razorpay_order_id': razorpay_order_id,
-        'razorpay_payment_id': payment_id,
-        'razorpay_signature': signature
-    }
     try:
-        client.utility.verify_payment_signature(params_dict)
-    except Exception as e:
-        logger.error(f"Payment verification failed for user {request.user.username}: {str(e)}")
-        return JsonResponse({'success': False, 'message': 'Payment verification failed'}, status=400)
+        # Parse JSON body
+        data = json.loads(request.body)
+        payment_id = data.get('razorpay_payment_id')
+        razorpay_order_id = data.get('razorpay_order_id')
+        signature = data.get('razorpay_signature')
 
-    try:
-        amount = Decimal(client.order.fetch(razorpay_order_id)['amount']) / 100
-        wallet, created = Wallet.objects.get_or_create(user=request.user)
-        with transaction.atomic():
-            wallet.balance += amount
-            wallet.save()
-            WalletTransaction.objects.create(
-                wallet=wallet,
-                amount=amount,
-                transaction_type='CREDIT',
-                description=f'Added funds via Razorpay (Order ID: {razorpay_order_id})'
-            )
-        logger.info(f"Funds added successfully for user {request.user.username}: {amount}")
+        if not all([payment_id, razorpay_order_id, signature]):
+            logger.error(f"Missing Razorpay parameters for user {request.user.username}: payment_id={payment_id}, order_id={razorpay_order_id}")
+            return JsonResponse({
+                'success': False,
+                'message': 'Missing payment details. Please try again.'
+            }, status=400)
+
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        params_dict = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': payment_id,
+            'razorpay_signature': signature
+        }
+
+        try:
+            client.utility.verify_payment_signature(params_dict)
+            logger.info(f"Payment signature verified for user {request.user.username}, order_id={razorpay_order_id}")
+        except Exception as e:
+            logger.error(f"Payment verification failed for user {request.user.username}, order_id={razorpay_order_id}: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': 'Payment verification failed. Please contact support.'
+            }, status=400)
+
+        try:
+            amount = Decimal(client.order.fetch(razorpay_order_id)['amount']) / 100
+            wallet, created = Wallet.objects.get_or_create(user=request.user)
+            with transaction.atomic():
+                wallet.balance += amount
+                wallet.save()
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    amount=amount,
+                    transaction_type='CREDIT',
+                    description=f'Added funds via Razorpay'
+                )
+            logger.info(f"Funds added successfully for user {request.user.username}: {amount}")
+            return JsonResponse({
+                'success': True,
+                'message': 'Funds added successfully!',
+                'redirect': reverse('offer_and_coupon_app:wallet_dashboard')
+            })
+        except Exception as e:
+            logger.error(f"Failed to add funds for user {request.user.username}: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': 'Failed to add funds. Please try again.'
+            }, status=500)
+
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON payload for user {request.user.username} in add_funds_callback")
         return JsonResponse({
-            'success': True,
-            'message': 'Funds added successfully!',
-            'redirect': reverse('offer_and_coupon_app:wallet_dashboard')
-        })
+            'success': False,
+            'message': 'Invalid request data.'
+        }, status=400)
     except Exception as e:
-        logger.error(f"Failed to add funds for user {request.user.username}: {str(e)}")
-        return JsonResponse({'success': False, 'message': 'Failed to add funds.'}, status=500)
-    
+        logger.error(f"Unexpected error in add_funds_callback for user {request.user.username}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An unexpected error occurred. Please try again.'
+        }, status=500)    

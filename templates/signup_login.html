@@ -354,7 +354,7 @@
                 <input type="password" class="form-control" name="password2" placeholder="Confirm Password" required>
                 <div class="error-feedback" id="password2-error"></div>
         
-                <input type="text" class="form-control" name="referral_code" value="{{ form_data.referral_code|default:'' }}" placeholder="Referral Code (optional)">
+                <input type="text" class="form-control" id="referral_code" name="referral_code" value="{{ form_data.referral_code|default:'' }}" placeholder="Referral Code (optional)" data-tooltip="Enter a friend's referral code to earn ₹100 on signup!">
                 <div class="error-feedback" id="referral-code-error"></div>
         
                 <button type="submit" class="btn btn-custom">Sign Up</button>
@@ -472,7 +472,13 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error(`Alert element with ID ${elementId} not found`);
             return;
         }
-        alert.textContent = message; // Directly set textContent of the alert div
+        // Update the message span instead of the entire alert div
+        const messageSpan = alert.querySelector('span');
+        if (messageSpan) {
+            messageSpan.textContent = message;
+        } else {
+            console.error(`Message span not found in alert ${elementId}`);
+        }
         alert.className = `alert-inline ${type}`;
         alert.style.display = 'flex';
         alert.style.alignItems = 'center';
@@ -528,8 +534,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Validate Referral Code via AJAX
+    function validateReferralCode(code, input, errorId) {
+        if (!code.trim()) {
+            return Promise.resolve(true); // Optional field
+        }
+        return fetch("{% url 'user_app:verify_referral_code' %}", {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `referral_code=${encodeURIComponent(code)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showInlineAlert('signup-success', 'Valid referral code! You’ll earn ₹100 on signup.', 'success');
+                return true;
+            } else {
+                showError(input, errorId, data.error || 'Invalid referral code.');
+                return false;
+            }
+        })
+        .catch(() => {
+            showError(input, errorId, 'Error validating referral code.');
+            return false;
+        });
+    }
+
     // Signup Form Validation
-    signupForm.addEventListener('submit', function(e) {
+    signupForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         let isValid = true;
         clearErrors();
@@ -605,6 +641,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (password1.value !== password2.value) {
             showError(password2, 'password2-error', 'Passwords do not match');
             isValid = false;
+        }
+
+        const referralCode = signupForm.querySelector('[name="referral_code"]');
+        if (referralCode.value.trim()) {
+            const referralRegex = /^[A-Z0-9]{8}$/;
+            if (!referralRegex.test(referralCode.value)) {
+                showError(referralCode, 'referral-code-error', 'Referral code must be 8 alphanumeric characters');
+                isValid = false;
+            } else {
+                // Validate referral code via AJAX
+                isValid = await validateReferralCode(referralCode.value, referralCode, 'referral-code-error') && isValid;
+            }
         }
 
         if (isValid) {
@@ -742,7 +790,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showError(document.getElementById('otp_validate'), 'validate-error', 'An error occurred. Please try again.');
         });
     });
-    
 
     // Resend Cooldown Timer
     function startResendCooldown(seconds) {
@@ -788,6 +835,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 errorDiv.textContent = '';
             }
         });
+    });
+
+    // Real-time referral code validation
+    const referralInput = document.getElementById('referral_code');
+    referralInput.addEventListener('blur', function() {
+        if (this.value.trim()) {
+            validateReferralCode(this.value, this, 'referral-code-error');
+        }
     });
 });
 </script>

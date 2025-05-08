@@ -12,6 +12,7 @@ urlpatterns = [
     path('admin/update-stock/<int:variant_id>/', views.admin_update_stock, name='admin_update_stock'),
     path('admin/mark-shipped/<str:order_id>/', views.admin_mark_shipped, name='admin_mark_shipped'),
     path('admin/cancel-order/<str:order_id>/', views.admin_cancel_order, name='admin_cancel_order'),
+    path('admin/orders/<str:order_id>/cancel-items/', views.admin_cancel_order_item, name='admin_cancel_order_item'),
     path('admin/inventory/', views.admin_inventory_list, name='admin_inventory_list'),
     path('admin/orders/<str:order_id>/delivered/', views.admin_mark_delivered, name='admin_mark_delivered'),
 
@@ -38,10 +39,11 @@ urlpatterns = [
     path('orders/', views.user_order_list, name='user_order_list'),
     path('orders/<str:order_id>/', views.user_order_detail, name='user_order_detail'),
     path('orders/<str:order_id>/cancel/', views.user_cancel_order, name='user_cancel_order'),
-    path('orders/<str:order_id>/cancel-item/<int:item_id>/', views.user_cancel_order_item, name='user_cancel_order_item'),
+    path('orders/<str:order_id>/cancel-items/', views.user_cancel_order_item, name='user_cancel_order_item'),
     path('orders/<str:order_id>/return/', views.user_return_order, name='user_return_order'),
     path('orders/<str:order_id>/generate-pdf/', views.generate_pdf, name='generate_pdf'),
     path('orders/<str:order_id>/retry-payment/', views.retry_payment, name='retry_payment'),
+    path('orders/<str:order_id>/mark-payment-failed/', views.mark_payment_failed, name='mark_payment_failed'),
 
     # Sales Dashboard and Reports
     path('sales/dashboard/', views.sales_dashboard, name='sales_dashboard'),

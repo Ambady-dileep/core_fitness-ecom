@@ -55,5 +55,9 @@ urlpatterns = [
     path('admin/banners/delete/<int:banner_id>/', admin_views.admin_banner_delete, name='admin_banner_delete'),
     path('admin/banners/toggle-status/<int:banner_id>/', admin_views.admin_banner_toggle_status, name='admin_banner_toggle_status'),
 
+    path('referral/dashboard/', user_views.referral_dashboard, name='referral_dashboard'),
+    path('referral/<str:referral_code>/', user_views.referral_link, name='referral_link'),
+    path('verify-referral-code/', user_views.verify_referral_code, name='verify_referral_code')
+    
 ]
 

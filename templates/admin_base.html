@@ -650,8 +650,8 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if 'sales/report' in request.path %}active{% endif %}" href="{% url 'cart_and_orders_app:generate_sales_report' %}">
-                    <i class="fas fa-chart-pie"></i> <span>Sales Reports</span>
+                <a class="nav-link {% if request.path == '/sales/dashboard/' %}active{% endif %}" href="{% url 'cart_and_orders_app:sales_dashboard' %}">
+                    <i class="fas fa-chart-pie"></i> <span>Sales Dashboard</span>
                 </a>
             </li>
         </ul>

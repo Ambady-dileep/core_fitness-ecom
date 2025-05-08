@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_UP
 from datetime import timedelta
+from django.db import transaction
 
 
 User = get_user_model()
@@ -44,6 +45,7 @@ class Coupon(models.Model):
             raise ValidationError("Valid to date must be after valid from date")
         if self.discount_percentage <= 0:
             raise ValidationError("Discount percentage must be greater than 0")
+
 
     def is_valid(self):
         now = timezone.now()
@@ -117,11 +119,49 @@ class Wallet(models.Model):
     def __str__(self):
         return f"{self.user.username}'s Wallet - Balance: {self.balance}"
     
-    def add_funds(self, amount):
-        self.balance += Decimal(amount)  
-        self.save()
+    def add_funds(self, amount, description="Added funds"):
+        amount = Decimal(amount)
+        if amount <= 0:
+            raise ValidationError("Amount must be greater than 0.")
+        with transaction.atomic():
+            self.balance += amount
+            self.save()
+            WalletTransaction.objects.create(
+                wallet=self,
+                amount=amount,
+                transaction_type='CREDIT',
+                description=description
+            )
 
-    
+    def deduct_funds(self, amount, description="Payment deduction"):
+        amount = Decimal(amount)
+        if amount <= 0:
+            raise ValidationError("Amount must be greater than 0.")
+        if self.balance < amount:
+            raise ValidationError("Insufficient wallet balance.")
+        with transaction.atomic():
+            self.balance -= amount
+            self.save()
+            WalletTransaction.objects.create(
+                wallet=self,
+                amount=amount,
+                transaction_type='DEBIT',
+                description=description
+            )
+
+    def add_refunded_funds(self, amount, description="Refund"):
+        amount = Decimal(amount)
+        if amount <= 0:
+            raise ValidationError("Amount must be greater than 0.")
+        with transaction.atomic():
+            self.balance += amount
+            self.save()
+            WalletTransaction.objects.create(
+                wallet=self,
+                amount=amount,
+                transaction_type='REFUND',
+                description=description
+            )
 
 class WalletTransaction(models.Model):
     TRANSACTION_TYPES = (

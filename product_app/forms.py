@@ -234,27 +234,30 @@ class CategoryForm(forms.ModelForm):
         model = Category
         fields = ['name', 'description', 'image', 'brands', 'offer_percentage', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter category name'}),
-            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Enter category description'}),
-            'offer_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100', 'placeholder': 'Leave blank for no offer (0.00%)', 'value': '0.00'}),
+            'name': forms.TextInput(attrs={
+                'class': 'form-control', 
+                'placeholder': 'Enter category name',
+                'required': True,
+                'minlength': '2',
+                'maxlength': '100',
+                'pattern': r'^[A-Za-z0-9\s\-\&]+$'
+            }),
+            'description': forms.Textarea(attrs={
+                'rows': 3, 
+                'class': 'form-control', 
+                'placeholder': 'Enter category description',
+                'maxlength': '500'
+            }),
+            'offer_percentage': forms.NumberInput(attrs={
+                'class': 'form-control', 
+                'step': '0.01', 
+                'min': '0', 
+                'max': '100', 
+                'placeholder': 'Enter offer percentage (0-100)'
+            }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'brands': forms.SelectMultiple(attrs={'class': 'form-control'})
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['name'].widget.attrs.update({
-            'required': 'required',
-            'minlength': '2',
-            'maxlength': '100',
-            'pattern': r'^[A-Za-z0-9\s\-\&]+$'
-        })
-        self.fields['description'].widget.attrs.update({
-            'maxlength': '500'
-        })
-        self.fields['offer_percentage'].widget.attrs.update({
-            'placeholder': 'Enter offer percentage (0-100)',
-            'required': 'required'
-        })
 
     def clean_name(self):
         name = self.cleaned_data.get('name')
@@ -266,7 +269,7 @@ class CategoryForm(forms.ModelForm):
             raise ValidationError("Category name cannot exceed 100 characters.")
         if not re.match(r'^[A-Za-z0-9\s\-\&]+$', name):
             raise ValidationError("Category name can only contain letters, numbers, spaces, hyphens, and ampersands.")
-        if Category.objects.filter(name__iexact=name).exclude(pk=self.instance.pk).exists():
+        if Category.objects.filter(name__iexact=name).exclude(pk=self.instance.pk if self.instance.pk else None).exists():
             raise ValidationError("A category with this name already exists.")
         return name
 
@@ -288,7 +291,7 @@ class CategoryForm(forms.ModelForm):
 
     def clean_brands(self):
         brands = self.cleaned_data.get('brands')
-        if brands.count() > 50:
+        if brands and brands.count() > 50:
             raise ValidationError("Cannot associate more than 50 brands with a category.")
         return brands
 
@@ -296,6 +299,8 @@ class CategoryForm(forms.ModelForm):
         offer_percentage = self.cleaned_data.get('offer_percentage')
         if offer_percentage is None or offer_percentage == '':
             return 0.00
+        if offer_percentage < 0 or offer_percentage > 90:
+            raise ValidationError("Offer percentage must be between 0 and 90.")
         return offer_percentage
 
 class BrandForm(forms.ModelForm):

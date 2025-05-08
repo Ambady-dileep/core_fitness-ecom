@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from datetime import datetime, timedelta
 from django.core.exceptions import ValidationError
+import uuid
+
 import re
 from cloudinary.models import CloudinaryField
 from django.conf import settings
@@ -68,7 +70,7 @@ class CustomUser(AbstractUser):
         },
         db_index=True
     )
-
+    referral_code = models.CharField(max_length=10, unique=True, null=False)
     is_blocked = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
     login_attempts = models.IntegerField(default=0)
@@ -102,6 +104,8 @@ class CustomUser(AbstractUser):
         return f"{self.username} - {self.full_name or 'No name'}"
 
     def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = str(uuid.uuid4())[:8].upper()  # Generate unique 8-character code
         if self.is_superuser and not self.phone_number:
             self.phone_number = None
         self.email = self.email.lower()
@@ -119,6 +123,30 @@ class CustomUser(AbstractUser):
                     self.last_login_attempt = None
                     self.save()
         return True    
+
+class Referral(models.Model):
+    referrer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='referrals')
+    referred_user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='referred_by', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    referrer_rewarded = models.BooleanField(default=False)
+    referred_rewarded = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.referrer.username} referred {self.referred_user.username if self.referred_user else 'N/A'}"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    is_blocked = models.BooleanField(default=False)
+    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
 
 
 class Address(models.Model):
@@ -155,23 +183,6 @@ class Address(models.Model):
     def __str__(self):
         return f"{self.address_line1}, {self.city}, {self.country}"
 
-
-class UserProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-    is_blocked = models.BooleanField(default=False)
-    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
-    address_line1 = models.CharField(max_length=255, blank=True, null=True)
-    address_line2 = models.CharField(max_length=255, blank=True, null=True)
-    city = models.CharField(max_length=100, blank=True, null=True)
-    state = models.CharField(max_length=100, blank=True, null=True)
-    postal_code = models.CharField(max_length=20, blank=True, null=True)
-    country = models.CharField(max_length=100, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.user.username}'s Profile"
-
-
 class Banner(models.Model):
     title = models.CharField(max_length=100)
     subtitle = models.CharField(max_length=200, blank=True, null=True)
@@ -190,7 +201,6 @@ class Banner(models.Model):
     def __str__(self):
         return self.title
     
-
 class ContactMessage(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField()

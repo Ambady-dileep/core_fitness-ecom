@@ -98,9 +98,11 @@ def admin_add_category(request):
         form = CategoryForm(request.POST, request.FILES)
         if form.is_valid():
             category = form.save()
-            messages.success(request, f"Category '{category.name}' {'added' if action == 'Add' else 'updated'} successfully!")
+            messages.success(request, f"Category '{category.name}' added successfully!")
             return redirect('product_app:admin_category_list')
-        messages.error(request, "Please correct the errors below.")
+        else:
+            # Add an explicit error message when form validation fails
+            messages.error(request, "Please correct the errors in the form.")
     else:
         form = CategoryForm()
 
@@ -128,9 +130,11 @@ def admin_edit_category(request, category_id):
             if form.cleaned_data['offer_percentage'] is None or form.cleaned_data['offer_percentage'] == '':
                 category.offer_percentage = 0.00
             category.save()
-            messages.success(request, f"Category '{category.name}' {'added' if action == 'Add' else 'updated'} successfully!")
+            messages.success(request, f"Category '{category.name}' updated successfully!")
             return redirect('product_app:admin_category_list')
-        messages.error(request, "Please correct the errors below.")
+        else:
+            # Add an explicit error message when form validation fails
+            messages.error(request, "Please correct the errors in the form.")
     else:
         form = CategoryForm(instance=category)
 
@@ -169,8 +173,8 @@ def user_category_list(request):
     
     # Add annotations for better sorting and filtering
     categories = categories.annotate(
-        product_count=Count('products', filter=Q(products__is_active=True)),
-        brands_count=Count('brands', distinct=True)
+    product_count=Count('products', filter=Q(products__is_active=True, products__category__is_active=True, products__brand__is_active=True)),
+    brands_count=Count('brands', distinct=True, filter=Q(brands__is_active=True))
     )
     
     # Handle search query
@@ -179,7 +183,7 @@ def user_category_list(request):
         categories = categories.filter(
             Q(name__icontains=query) |
             Q(description__icontains=query) |
-            Q(brands__name__icontains=query)
+            Q(brands__name__icontains=query, brands__is_active=True)
         ).distinct()
 
     # Handle sorting
@@ -200,7 +204,7 @@ def user_category_list(request):
     # Get featured categories (those with the most products or highest offers)
     featured_categories = Category.objects.filter(is_active=True)
     featured_categories = featured_categories.annotate(
-        product_count=Count('products', filter=Q(products__is_active=True))
+        product_count=Count('products', filter=Q(products__is_active=True, products__category__is_active=True, products__brand__is_active=True))
     ).order_by('-offer_percentage', '-product_count')[:3]
 
     # Paginate results
@@ -214,7 +218,7 @@ def user_category_list(request):
         is_active=True, 
         categories__in=categories
     ).annotate(
-        category_count=Count('categories', distinct=True)
+        category_count=Count('categories', distinct=True, filter=Q(categories__is_active=True))
     ).order_by('-category_count')[:5]
 
     context = {

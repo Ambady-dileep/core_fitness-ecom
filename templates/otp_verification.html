@@ -80,9 +80,7 @@
         background-color: var(--accent);
         border-color: var(--accent);
         transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0,0,0, Grading Scale
-The following is the grading scale for this course:
-0.1);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
     .btn-resend {
@@ -160,7 +158,7 @@ The following is the grading scale for this course:
         </div>
     {% endif %}
 
-    <form id="verifyOtpForm" method="POST" action="{% url 'user_app:verify_otp_signup' %}" class="otp-form">
+    <form id="verifyOtpForm" method="POST" action="{% url 'user_app:verify_otp_signup_page' email=email %}" class="otp-form">
         {% csrf_token %}
         <input type="hidden" name="email" value="{{ email }}">
         <div class="mb-3">

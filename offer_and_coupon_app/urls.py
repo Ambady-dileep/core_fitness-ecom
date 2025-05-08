@@ -8,7 +8,6 @@ urlpatterns = [
     path('apply-coupon/', user_views.apply_coupon, name='apply_coupon'),
     path('remove-coupon/', user_views.remove_coupon, name='remove_coupon'),
     path('coupons/', user_views.available_coupons, name='available_coupons'),
-    path('view-coupons/', user_views.view_coupons, name='view_coupons'),
     path('wallet/', user_views.wallet_dashboard, name='wallet_dashboard'),
     path('wallet/balance/', user_views.wallet_balance, name='wallet_balance'),
     path('add-funds/', user_views.add_funds, name='add_funds'),

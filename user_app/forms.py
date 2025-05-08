@@ -75,16 +75,10 @@ class UserProfileForm(forms.ModelForm):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
-        fields = ['profile_image', 'is_blocked', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country']
+        fields = ['profile_image', 'is_blocked']
         widgets = {
             'profile_image': forms.FileInput(attrs={'class': 'form-control'}),
             'is_blocked': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'address_line1': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Address Line 1'}),
-            'address_line2': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Address Line 2 (Optional)'}),
-            'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'City'}),
-            'state': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'State'}),
-            'postal_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Postal Code'}),
-            'country': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Country'}),
         }
 
 
@@ -140,12 +134,23 @@ class CustomPasswordChangeForm(PasswordChangeForm):
         self.fields['new_password1'].widget.attrs.update({'style': 'border-radius: 8px; border: 1px solid #e2e8f0;'})
         self.fields['new_password2'].widget.attrs.update({'style': 'border-radius: 8px; border: 1px solid #e2e8f0;'})
 
+    def clean_old_password(self):
+        old_password = self.cleaned_data.get('old_password')
+        if not old_password:
+            raise ValidationError("Current password is required.")
+        if not self.user.check_password(old_password):
+            raise ValidationError("Current password is incorrect.")
+        return old_password
+
     def clean_new_password1(self):
         new_password1 = self.cleaned_data.get('new_password1')
         old_password = self.cleaned_data.get('old_password')
 
-        if new_password1 == old_password:
-            raise ValidationError("New password cannot be the same as the old password.")
+        if not new_password1:
+            raise ValidationError("New password is required.")
+
+        if old_password and new_password1 == old_password:
+            raise ValidationError("New password cannot be the same as the current password.")
 
         if not all([
             len(new_password1) >= 8,
@@ -158,7 +163,18 @@ class CustomPasswordChangeForm(PasswordChangeForm):
                 "Password must be at least 8 characters long and contain an uppercase letter, "
                 "a lowercase letter, a number, and a special character (e.g., !@#$%^&*)."
             )
+
+        # Check if password is too similar to username
+        if self.user.username.lower() in new_password1.lower() or new_password1.lower() in self.user.username.lower():
+            raise ValidationError("The password is too similar to the username.")
+
         return new_password1
+
+    def clean_new_password2(self):
+        new_password2 = self.cleaned_data.get('new_password2')
+        if not new_password2:
+            raise ValidationError("Please confirm your new password.")
+        return new_password2
 
     def clean(self):
         cleaned_data = super().clean()
@@ -166,7 +182,7 @@ class CustomPasswordChangeForm(PasswordChangeForm):
         new_password2 = cleaned_data.get('new_password2')
 
         if new_password1 and new_password2 and new_password1 != new_password2:
-            raise ValidationError("The new passwords do not match.")
+            raise ValidationError({"new_password2": "The new passwords do not match."})
         return cleaned_data
 
 
@@ -218,6 +234,30 @@ class CustomUserCreationForm(UserCreationForm):
     class Meta:
         model = CustomUser
         fields = ('username', 'email', 'full_name', 'phone_number', 'password1', 'password2')
+
+    def clean_password1(self):
+        password1 = self.cleaned_data.get('password1')
+        username = self.cleaned_data.get('username')
+
+        if not password1:
+            raise ValidationError("Password is required.")
+
+        if not all([
+            len(password1) >= 8,
+            any(char.isupper() for char in password1),
+            any(char.islower() for char in password1),
+            any(char.isdigit() for char in password1),
+            any(char in "!@#$%^&*()+-_=[]{};:,.<>?" for char in password1),
+        ]):
+            raise ValidationError(
+                "Password must be at least 8 characters long and contain an uppercase letter, "
+                "a lowercase letter, a number, and a special character (e.g., !@#$%^&*)."
+            )
+
+        if username and (username.lower() in password1.lower() or password1.lower() in username.lower()):
+            raise ValidationError("The password is too similar to the username.")
+
+        return password1
     
 
 class BannerForm(forms.ModelForm):

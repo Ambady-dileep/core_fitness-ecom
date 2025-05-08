@@ -58,6 +58,12 @@ class OrderItemCancellationForm(forms.Form):
         ('Other', 'Other'),
     ]
     
+    items = forms.ModelMultipleChoiceField(
+        queryset=OrderItem.objects.none(),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        required=True,
+        label="Select Items to Cancel"
+    )
     reason = forms.ChoiceField(
         choices=REASON_CHOICES,
         widget=forms.Select(attrs={'class': 'form-control'}),
@@ -70,16 +76,33 @@ class OrderItemCancellationForm(forms.Form):
         label="Additional Details (if Other is selected)"
     )
 
+    def __init__(self, *args, order=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if order:
+            self.fields['items'].queryset = order.items.filter(cancellations__isnull=True)
+            self.fields['items'].label = f"Select items to cancel from order {order.order_id}"
+
     def clean(self):
         cleaned_data = super().clean()
+        items = cleaned_data.get('items')
         reason = cleaned_data.get('reason')
         other_reason = cleaned_data.get('other_reason')
+
+        if not items:
+            raise forms.ValidationError("Please select at least one item to cancel.")
+        
+        for item in items:
+            if item.cancellations.exists():
+                raise forms.ValidationError(f"Item {item.variant.product.product_name} is already cancelled.")
+        
         if reason == "Other" and not other_reason:
             raise forms.ValidationError("Please provide additional details for 'Other' reason.")
+        
         if reason == "Other" and other_reason:
             cleaned_data['combined_reason'] = f"Other: {other_reason}"
         else:
             cleaned_data['combined_reason'] = reason
+        
         return cleaned_data
 
 class ReturnRequestForm(forms.ModelForm):

@@ -4,16 +4,20 @@ from .forms import AddressForm, GenerateOTPForm, ValidateOTPForm
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.contrib import messages
-from django.db.models import Q, Min, Count, Avg, Max
+from django.db.models import Q
 from product_app.models import Product, Category
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import CustomUser as User
 from decimal import Decimal
+from django.db import transaction
+from user_app.models import UserProfile, Referral
 from django.views.decorators.http import require_POST, require_http_methods
 from .models import Address
 from .forms import UserProfileForm, ProfileForm, CustomPasswordChangeForm, CustomUserCreationForm
 from .models import Banner
 from django.conf import settings
+from offer_and_coupon_app.models import Wallet, WalletTransaction
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from product_app.models import Product, Category, Review
 from django.urls import reverse
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
@@ -22,7 +26,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.http import JsonResponse
-from cart_and_orders_app.models import Order  
+from cart_and_orders_app.models import Order
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.cache import cache_control,never_cache
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
@@ -115,15 +119,16 @@ def user_signup(request):
         password1 = request.POST.get('password1', '')
         password2 = request.POST.get('password2', '')
         full_name = request.POST.get('full_name', '').strip()
-        referral_code = request.POST.get('referral_code', request.session.get('referral_code', '')).strip()
+        referral_code = request.POST.get('referral_code', request.session.get('referral_code', '')).strip().upper()
 
-        logger.debug(f"Received signup form data: username={username}, email={email}, phone_number={phone_number}, full_name={full_name}")
+        logger.debug(f"Received signup form data: username={username}, email={email}, phone_number={phone_number}, full_name={full_name}, referral_code={referral_code}")
 
         context['form_data'] = {
             'username': username,
             'email': email,
             'phone_number': phone_number,
-            'full_name': full_name
+            'full_name': full_name,
+            'referral_code': referral_code
         }
         
         # Validation checks
@@ -158,6 +163,14 @@ def user_signup(request):
             messages.error(request, error_message)
             return render(request, 'signup_login.html', context)
         
+        # Check if password is too similar to username
+        if username.lower() in password1.lower() or password1.lower() in username.lower():
+            error_message = "The password is too similar to the username."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
+            return render(request, 'signup_login.html', context)
+        
         if not re.match(r'^[6-9]\d{9}$', phone_number):
             error_message = "Invalid phone number. Must be 10 digits starting with 6-9."
             if is_ajax:
@@ -177,7 +190,7 @@ def user_signup(request):
         
         stored_otp = get_otp(email)
         if stored_otp and 'signup_data' in request.session and request.session['signup_data'].get('email') == email:
-            error_message = "A signup process is already in progress for this email. Please verify the OTP or wait 3 minutes to try again."
+            error_message = "A signup process is already in progress for this email. Please verify the OTP or wait 1.5 minutes to try again."
             if is_ajax:
                 return JsonResponse({'success': False, 'error': error_message})
             messages.error(request, error_message)
@@ -185,7 +198,7 @@ def user_signup(request):
 
         # Generate and send OTP
         if get_otp_cooldown(email):
-            error_message = "Please wait 3 minutes before requesting a new OTP."
+            error_message = "Please wait 1.5 minutes before requesting a new OTP."
             if is_ajax:
                 return JsonResponse({'success': False, 'error': error_message})
             messages.error(request, error_message)
@@ -197,11 +210,11 @@ def user_signup(request):
             logger.debug(f"Generated OTP: {otp}")
 
             logger.debug("Storing OTP...")
-            store_otp(email, otp, timeout=180)  # Store OTP for 3 minutes
+            store_otp(email, otp, timeout=90)  # Store OTP for 1.5 minutes
             logger.debug("OTP stored successfully")
 
             logger.debug("Setting OTP cooldown...")
-            set_otp_cooldown(email, timeout=180)  # Set cooldown for 3 minutes
+            set_otp_cooldown(email, timeout=90)  # Set cooldown for 1.5 minutes
             logger.debug("OTP cooldown set successfully")
 
             logger.info(f"Attempting to send OTP to {email} with OTP: {otp}")
@@ -209,7 +222,7 @@ def user_signup(request):
 
             send_mail(
                 subject="Core Fitness - Verify Your Email",
-                message=f"Your OTP for signup is: {otp}. It expires in 3 minutes.",
+                message=f"Your OTP for signup is: {otp}. It expires in 1.5 minutes.",
                 from_email=settings.EMAIL_HOST_USER,
                 recipient_list=[email],
                 fail_silently=False,
@@ -259,22 +272,47 @@ def user_logout(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+@csrf_protect
 def change_password(request):
     if request.method == 'POST':
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+        
         if form.is_valid():
-            form.save()
-            update_session_auth_hash(request, form.user)  # Keep user logged in
-            messages.success(request, "Your password was successfully updated!")
-            return redirect('user_app:my_profile')
+            try:
+                form.save()
+                update_session_auth_hash(request, form.user)
+                if is_ajax:
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Your password was successfully updated!'
+                    })
+                messages.success(request, "Your password was successfully updated!")
+                return redirect('user_app:my_profile')
+            except Exception as e:
+                logger.error(f"Error saving new password for user {request.user.username}: {str(e)}")
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'An error occurred while updating your password.'
+                    }, status=500)
+                messages.error(request, "An error occurred while updating your password.")
+                return redirect('user_app:my_profile')
         else:
-            # Pass form errors as messages
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, error)
+            errors = {}
+            for field, error_list in form.errors.items():
+                errors[field] = error_list[0] if isinstance(error_list, list) else error_list
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'errors': errors,
+                    'message': 'Please correct the errors below.'
+                }, status=400)
+            for error in errors.values():
+                messages.error(request, error)
             return redirect('user_app:my_profile')
+    
     return redirect('user_app:my_profile')
-
 
 def user_home(request):
     # Fetch active banners
@@ -288,7 +326,7 @@ def user_home(request):
         annotated_products = []
         for product in products:
             primary_variant = product.primary_variant
-            if primary_variant:
+            if primary_variant and primary_variant.is_active:
                 best_price_info = primary_variant.best_price
                 original_price = best_price_info['original_price']
                 sales_price = best_price_info['price']
@@ -304,25 +342,25 @@ def user_home(request):
                     'discount': discount
                 })
             else:
-                annotated_products.append({
-                    'product': product,
-                    'sales_price': Decimal('0'),
-                    'original_price': Decimal('0'),
-                    'discount': Decimal('0')
-                })
+                # Skip products without active primary variants
+                continue
         return annotated_products
 
-    # Fetch featured products
+    # Fetch featured products, ensuring category and brand are active
     featured_products = Product.objects.filter(
         is_active=True,
-        variants__is_active=True
+        variants__is_active=True,
+        category__is_active=True,
+        brand__is_active=True
     ).distinct()[:8]
     featured_products = annotate_products(featured_products)
 
-    # Fetch new arrivals
+    # Fetch new arrivals, ensuring category and brand are active
     new_arrivals = Product.objects.filter(
         is_active=True,
-        variants__is_active=True
+        variants__is_active=True,
+        category__is_active=True,
+        brand__is_active=True
     ).order_by('-created_at').distinct()[:8]
     new_arrivals = annotate_products(new_arrivals)
 
@@ -366,7 +404,6 @@ def my_profile(request):
 @require_http_methods(["GET", "POST"])
 def edit_profile(request):
     user = request.user
-    # Use the correct related_name 'profile' from UserProfile model
     profile = getattr(user, 'profile', None)
 
     if request.method == 'POST':
@@ -376,11 +413,12 @@ def edit_profile(request):
         if user_form.is_valid() and profile_form.is_valid():
             user_form.save()
             profile = profile_form.save(commit=False)
-            profile.user = user  # Ensure the user is set
+            profile.user = user
             profile.save()
             return JsonResponse({
                 'success': True,
-                'message': 'Profile updated successfully'
+                'message': 'Profile updated successfully',
+                'profile_image_url': profile.profile_image.url if profile.profile_image else None
             })
         else:
             errors = {}
@@ -405,7 +443,6 @@ def edit_profile(request):
 @login_required
 @csrf_protect
 def add_address(request):
-    """Add a new address via AJAX."""
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = AddressForm(request.POST)
         if form.is_valid():
@@ -726,30 +763,178 @@ def password_reset_confirm(request, uidb64, token):
     else:
         return render(request, 'password_reset.html', {'validlink': False})
 
-@require_http_methods(["GET"])
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
+
+@require_http_methods(["GET", "POST"])
 def verify_otp_signup_page(request, email):
-    logger.info(f"Accessing verify_otp_signup_page for email: {email}")
-    try:
-        if 'signup_data' not in request.session:
-            logger.warning("Session expired: 'signup_data' not found in session")
-            messages.error(request, 'Session expired. Please sign up again.')
-            return redirect('user_app:user_signup')
-        signup_data = request.session['signup_data']
-        logger.debug(f"Session signup_data: {signup_data}")
-        if signup_data.get('email') != email:
-            logger.warning(f"Email mismatch: session email={signup_data.get('email')}, URL email={email}")
-            messages.error(request, 'Invalid email. Please sign up again.')
-            return redirect('user_app:user_signup')
-        context = {'email': email}
-        logger.info(f"Rendering otp_verification.html with context: {context}")
-        response = render(request, 'otp_verification.html', context)
-        logger.info(f"Response rendered, content length: {len(response.content)}")
-        return response
-    except Exception as e:
-        logger.error(f"Error in verify_otp_signup_page: {str(e)}", exc_info=True)
-        messages.error(request, f"An error occurred: {str(e)}. Please try again.")
+    if request.user.is_authenticated:
+        return redirect('user_app:user_home')
+    
+    signup_data = request.session.get('signup_data')
+    if not signup_data or signup_data.get('email') != email:
+        messages.error(request, "Invalid signup session or email.")
         return redirect('user_app:user_signup')
+    
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
+    if request.method == 'POST':
+        user_otp = request.POST.get('otp')
+        stored_otp = get_otp(email)
+        
+        if not stored_otp:
+            error_message = "OTP has expired. Please request a new one."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
+            return render(request, 'otp_verification.html', {'email': email})
+        
+        try:
+            if int(user_otp) == stored_otp:
+                try:
+                    with transaction.atomic():
+                        # Create user
+                        user = User.objects.create_user(
+                            username=signup_data['username'],
+                            email=signup_data['email'],
+                            password=signup_data['password'],
+                            full_name=signup_data['full_name'],
+                            phone_number=signup_data['phone_number'],
+                            is_verified=True
+                        )
+                        
+                        # Create user profile
+                        UserProfile.objects.create(user=user)
+                        
+                        # Create user wallet
+                        wallet = Wallet.objects.create(user=user)
+                        
+                        # Handle referral if code provided
+                        referral_code = signup_data.get('referral_code')
+                        if referral_code:
+                            try:
+                                referrer = User.objects.get(referral_code=referral_code, is_active=True, is_blocked=False)
+                                if referrer == user:
+                                    raise ValidationError("Cannot use own referral code.")
+                                apply_referral_bonuses(referrer, user)
+                            except (User.DoesNotExist, ValidationError) as e:
+                                logger.warning(f"Invalid referral code {referral_code} during signup: {str(e)}")
+                                messages.warning(request, "Referral code is invalid, but your account was created.")
+                
+                    # Clean up
+                    delete_otp(email)
+                    if 'signup_data' in request.session:
+                        del request.session['signup_data']
+                    if 'referral_code' in request.session:
+                        del request.session['referral_code']
+                
+                    # Log in user
+                    user = authenticate(request, username=signup_data['username'], password=signup_data['password'])
+                    if user:
+                        login(request, user)
+                
+                    success_message = "Account created successfully!"
+                    if is_ajax:
+                        return JsonResponse({'success': True, 'redirect': reverse('user_app:user_home')})
+                    messages.success(request, success_message)
+                    return redirect('user_app:user_home')
+                
+                except Exception as e:
+                    logger.error(f"Error creating user: {str(e)}", exc_info=True)
+                    error_message = "An error occurred during account creation. Please try again."
+                    if is_ajax:
+                        return JsonResponse({'success': False, 'error': error_message})
+                    messages.error(request, error_message)
+                    return render(request, 'otp_verification.html', {'email': email})
+            else:
+                error_message = "Invalid OTP. Please try again."
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_message})
+                messages.error(request, error_message)
+        except ValueError:
+            error_message = "OTP must be a number."
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_message})
+            messages.error(request, error_message)
+    
+    return render(request, 'otp_verification.html', {'email': email})
+
+@login_required
+def referral_dashboard(request):
+    referral_code = request.user.referral_code
+    referral_url = request.build_absolute_uri(
+        reverse('user_app:referral_link', kwargs={'referral_code': referral_code})
+    )
+    
+    referrals = Referral.objects.filter(referrer=request.user).select_related('referred_user')
+    wallet, _ = Wallet.objects.get_or_create(user=request.user)
+    transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')[:20]
+    
+    context = {
+        'referral_code': referral_code,
+        'referral_url': referral_url,
+        'referrals': referrals,
+        'wallet': wallet,
+        'transactions': transactions,
+    }
+    
+    return render(request, 'user_app/referral_dashboard.html', context)
+
+def referral_link(request, referral_code):
+    """Store the referral code in session and redirect to signup page"""
+    try:
+        referrer = User.objects.get(referral_code=referral_code, is_active=True, is_blocked=False)
+        request.session['referral_code'] = referral_code
+        if request.user.is_authenticated:
+            messages.info(request, "You are already logged in. Referral codes can only be used when signing up.")
+            return redirect('user_app:user_home')
+        messages.info(request, "You're signing up with a referral. Both you and your friend will receive bonuses!")
+        return redirect('user_app:user_signup')
+    except User.DoesNotExist:
+        messages.error(request, "Invalid or inactive referral code.")
+        return redirect('user_app:user_signup')
+
+def ensure_wallet_exists(user):
+    """Ensure the user has a wallet, creating one if necessary"""
+    wallet, created = Wallet.objects.get_or_create(user=user)
+    return wallet
+
+def apply_referral_bonuses(referrer, referred_user):
+    """Apply referral bonuses to both referrer and referred user"""
+    from decimal import Decimal
+    
+    with transaction.atomic():
+        # Get or create wallets for both users
+        referrer_wallet = ensure_wallet_exists(referrer)
+        referred_wallet = ensure_wallet_exists(referred_user)
+        
+        # Add 200 rupees to referrer's wallet
+        referrer_wallet.add_funds(
+            Decimal('200.00'), 
+            f"Referral bonus for {referred_user.username} signup"
+        )
+        
+        # Add 100 rupees to referred user's wallet
+        referred_wallet.add_funds(
+            Decimal('100.00'),
+            f"Welcome bonus from referral by {referrer.username}"
+        )
+        
+        # Get or create referral record
+        referral, created = Referral.objects.get_or_create(
+            referrer=referrer,
+            referred_user=referred_user,
+            defaults={
+                'referrer_rewarded': True,
+                'referred_rewarded': True
+            }
+        )
+        
+        # If not created, update the reward status
+        if not created:
+            referral.referrer_rewarded = True
+            referral.referred_rewarded = True
+            referral.save()
+        
+        return True
 
 @require_http_methods(["POST"])
 def verify_otp_signup(request):
@@ -757,16 +942,15 @@ def verify_otp_signup(request):
         email = request.POST.get('email')
         user_otp = request.POST.get('otp')
         signup_data = request.session.get('signup_data')
+        
         if not signup_data or signup_data.get('email') != email:
             messages.error(request, 'Invalid session or email. Please sign up again.')
             return redirect('user_app:user_signup')
+        
         stored_otp = get_otp(email)
         try:
             if stored_otp and int(user_otp) == stored_otp:
                 delete_otp(email)
-                del request.session['signup_data']
-                if 'referral_code' in request.session:
-                    del request.session['referral_code']
                 
                 form_data = {
                     'username': signup_data['username'],
@@ -777,20 +961,44 @@ def verify_otp_signup(request):
                     'full_name': signup_data['full_name'],
                     'referral_code': signup_data.get('referral_code', '')
                 }
+                
                 form = CustomUserCreationForm(form_data)
                 if form.is_valid():
                     user = form.save(commit=False)
                     user.is_active = True
                     user.is_verified = True
                     user.save()
+                    
+                    # Clear session data after successful user creation
+                    del request.session['signup_data']
+                    if 'referral_code' in request.session:
+                        del request.session['referral_code']
+                    
                     authenticated_user = authenticate(request, username=signup_data['username'], password=signup_data['password'])
                     if authenticated_user:
                         login(request, authenticated_user)
+                        
                     messages.success(request, "Account created successfully! Welcome to Core Fitness.")
                     return redirect('user_app:user_home')
                 else:
-                    context = {'email': email, 'form_errors': form.errors}
-                    return render(request, 'otp_verification.html', context)
+                    # Instead of showing form errors on OTP page, redirect back to signup with errors
+                    for field, errors in form.errors.items():
+                        for error in errors:
+                            messages.error(request, f"{field}: {error}")
+                    
+                    # Preserve form data for repopulating the signup form
+                    request.session['form_data'] = {
+                        'username': signup_data['username'],
+                        'email': signup_data['email'],
+                        'phone_number': signup_data['phone_number'],
+                        'full_name': signup_data['full_name'],
+                        'referral_code': signup_data.get('referral_code', '')
+                    }
+                    
+                    # Clean up OTP and signup data
+                    del request.session['signup_data']
+                    
+                    return redirect('user_app:user_signup')
             else:
                 messages.error(request, "Invalid or expired OTP. Please try again.")
                 return redirect('user_app:verify_otp_signup_page', email=email)
@@ -801,6 +1009,7 @@ def verify_otp_signup(request):
             logger.error(f"Error creating user after OTP verification: {str(e)}")
             messages.error(request, "An error occurred while creating your account. Please try again.")
             return redirect('user_app:user_signup')
+    
     return redirect('user_app:user_signup')
 
 
@@ -831,3 +1040,29 @@ def resend_otp_signup(request):
             logger.error(f"Failed to resend OTP for signup: {str(e)}")
             return JsonResponse({'success': False, 'error': 'Failed to resend OTP. Please try again.'}, status=500)
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+
+@require_POST
+def verify_referral_code(request):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        referral_code = request.POST.get('referral_code', '').strip().upper()
+        if not referral_code:
+            return JsonResponse({'success': False, 'error': 'Referral code is required.'}, status=400)
+        
+        if not re.match(r'^[A-Z0-9]{8}$', referral_code):
+            return JsonResponse({'success': False, 'error': 'Referral code must be 8 alphanumeric characters.'}, status=400)
+        
+        try:
+            referrer = User.objects.get(referral_code=referral_code, is_active=True, is_blocked=False)
+            # Prevent self-referral by checking email if signup data exists
+            signup_data = request.session.get('signup_data', {})
+            if signup_data.get('email', '').lower() == referrer.email.lower():
+                return JsonResponse({'success': False, 'error': 'You cannot use your own referral code.'}, status=400)
+            return JsonResponse({'success': True, 'message': 'Valid referral code!'})
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Invalid or inactive referral code.'}, status=400)
+        except Exception as e:
+            logger.error(f"Error verifying referral code {referral_code}: {str(e)}", exc_info=True)
+            return JsonResponse({'success': False, 'error': 'An error occurred while verifying the referral code.'}, status=500)
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request.'}, status=400)
