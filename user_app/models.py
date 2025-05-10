@@ -70,7 +70,7 @@ class CustomUser(AbstractUser):
         },
         db_index=True
     )
-    referral_code = models.CharField(max_length=10, unique=True, null=False)
+    referral_code = models.CharField(max_length=50, unique=True, null=False)
     is_blocked = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
     login_attempts = models.IntegerField(default=0)
