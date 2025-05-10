@@ -10,11 +10,8 @@ from decimal import Decimal
 from django.db import models, transaction
 from .models import Coupon, UserCoupon, Wallet, WalletTransaction
 from django.contrib import messages
-from django.shortcuts import redirect, render
 from django.urls import reverse
 import json
-from django.contrib import messages
-from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 import razorpay
 from django.conf import settings

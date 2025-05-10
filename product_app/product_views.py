@@ -946,8 +946,7 @@ def user_product_list(request):
         # Calculate discount percentage
         discount_percentage = Decimal('0.00')
         if primary_variant.best_price['price'] < primary_variant.original_price:
-            discount_percentage = ((primary_variant.original_price - primary_variant.best_price['price']) / 
-                                 primary_variant.original_price * 100).quantize(Decimal('0.01'))
+            discount_percentage = ((primary_variant.original_price - primary_variant.best_price['price']) /primary_variant.original_price * 100).quantize(Decimal('0.01'))
         
         # Use stored review data
         review_count = product.review_count
@@ -1032,7 +1031,8 @@ def user_product_list(request):
         'price_range': price_range,
         'min_price': min_price,
         'max_price': max_price,
-        'clear_filters': any([search_query, category_id, brand_id, min_price, max_price])
+        'clear_filters': any([search_query, category_id, brand_id, min_price, max_price]),
+        'debug': True
     }
     
     return render(request, 'product_app/user_product_list.html', context)

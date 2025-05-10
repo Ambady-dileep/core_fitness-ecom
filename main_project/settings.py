@@ -31,7 +31,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1','13.126.134.132','www.corefitness.site','corefitness.site']
 
 AUTH_USER_MODEL = 'user_app.CustomUser'
 
