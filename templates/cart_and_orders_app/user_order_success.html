@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order Success - Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+  .success-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+  
+  .order-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    overflow: hidden;
+    background-color: #fff;
+    margin-bottom: 2rem;
+  }
+  
+  .order-header {
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .order-body {
+    padding: 1.5rem;
+  }
+  
+  .success-icon {
+    width: 80px;
+    height: 80px;
+    background-color: #28a745;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    color: white;
+    font-size: 2rem;
+  }
+  
+  .order-detail {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0.75rem 0;
+  }
+  
+  .order-detail:last-child {
+    border-bottom: none;
+  }
+  
+  .congratulations {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    opacity: 0;
+    color: #28a745;
+  }
+  
+  .buttons {
+    margin-top: 2rem;
+  }
+  
+  .btn {
+    padding: 0.6rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="success-container">
+  <div class="text-center mb-4">
+    <h1 class="congratulations">Congratulations!</h1>
+    <div class="success-icon">
+      <i class="fas fa-check"></i>
+    </div>
+    <h2 class="mb-2">Order Placed Successfully</h2>
+    <p class="text-muted">Thank you for shopping with Core Fitness!</p>
+  </div>
+  
+  <div class="order-card">
+    <div class="order-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Order #{{ order.order_id }}</h5>
+        <span class="badge bg-success">{{ order.status }}</span>
+      </div>
+      <small class="text-muted">Placed on {{ order.created_at|date:"d M Y, h:i A" }}</small>
+    </div>
+    
+    <div class="order-body">
+      <div class="order-detail">
+        <span>Customer</span>
+        <span><strong>{{ order.user.get_full_name|default:order.user.username }}</strong></span>
+      </div>
+      
+      <div class="order-detail">
+        <span>Payment Method</span>
+        <span><strong>{{ order.payment_method }}</strong></span>
+      </div>
+      
+      <div class="order-detail">
+        <span>Payment Status</span>
+        <span><strong>{{ order.payment_status }}</strong></span>
+      </div>
+      
+      <div class="order-detail">
+        <span>Shipping Address</span>
+        <div class="text-end">
+          <strong>{{ order.shipping_address.full_name }}</strong><br>
+          {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %},
+          {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }},
+          {{ order.shipping_address.country }}
+        </div>
+      </div>
+      
+      <!-- Order Financial Breakdown -->
+      <div class="order-detail">
+        <span>Subtotal</span>
+        <span><strong>₹{{ subtotal|floatformat:2 }}</strong></span>
+      </div>
+      
+      {% if coupon_discount > 0 %}
+      <div class="order-detail">
+        <span>Coupon Discount</span>
+        <span><strong>-₹{{ coupon_discount|floatformat:2 }}</strong></span>
+      </div>
+      {% endif %}
+      
+      <div class="order-detail">
+        <span>Shipping Cost</span>
+        <span>
+            {% if shipping_cost == 0 %}
+                <strong class="text-success">Free Shipping!</strong>
+            {% else %}
+                <strong>₹{{ shipping_cost|floatformat:2 }}</strong>
+            {% endif %}
+        </span>
+    </div>
+      <div class="order-detail">
+        <span><strong>Total Amount Paid</strong></span>
+        <span><strong>₹{{ order.total_amount|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="buttons text-center">
+    <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" class="btn btn-primary me-2">View Order Details</a>
+    <a href="{% url 'user_app:user_home' %}" class="btn btn-outline-dark">Continue Shopping</a>
+  </div>
+</div>
+
+<div id="confetti-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // GSAP animation for congratulations text
+    gsap.fromTo(".congratulations", 
+      {opacity: 0, y: -50}, 
+      {opacity: 1, y: 0, duration: 1, ease: "elastic.out(1, 0.5)"}
+    );
+    
+    // GSAP animation for the order card
+    gsap.fromTo(".order-card", 
+      {opacity: 0, y: 50}, 
+      {opacity: 1, y: 0, duration: 0.8, delay: 0.3}
+    );
+    
+    // GSAP animation for buttons
+    gsap.fromTo(".buttons", 
+      {opacity: 0}, 
+      {opacity: 1, duration: 0.5, delay: 0.8}
+    );
+    
+    // Trigger confetti
+    const duration = 3 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    function randomInRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval = setInterval(function() {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      
+      // Use different shapes and colors
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+        colors: ['#28a745', '#007bff', '#ffc107', '#dc3545'],
+        shapes: ['circle', 'square']
+      });
+      
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+        colors: ['#28a745', '#007bff', '#ffc107', '#dc3545'],
+        shapes: ['circle', 'square']
+      });
+    }, 250);
+  });
+</script>
+{% endblock %}

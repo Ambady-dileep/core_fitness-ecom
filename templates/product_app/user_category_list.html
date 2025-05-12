@@ -1,0 +1,605 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Shop by Category - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="premium-container py-5">
+    <!-- Premium Header -->
+    <div class="premium-header">
+        <h1>{{ title }}</h1>
+        <div class="premium-divider"></div>
+        <p>Explore our premium fitness supplement categories, designed to support your performance and recovery goals.</p>
+    </div>
+
+    <!-- Error Message -->
+    {% if error_message %}
+    <div class="alert alert-danger d-flex align-items-center mb-5" role="alert">
+        <i class="fas fa-exclamation-circle me-3"></i>
+        <span>{{ error_message }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Filters -->   
+    <div class="category-filters">
+        <div class="search-container">
+            <form method="GET" action="" id="searchForm">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" name="q" placeholder="Search categories..." value="{{ query }}" aria-label="Search categories">
+                {% if query %}
+                <button type="button" class="clear-search" id="clearSearch">
+                    <i class="fas fa-times"></i>
+                </button>
+                {% endif %}
+            </form>
+        </div>
+        
+        <div class="sort-container">
+            <span class="sort-label">Sort by:</span>
+            <form method="GET" action="" id="sortForm">
+                {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+                <select name="sort" id="sort" class="sort-select">
+                    <option value="" {% if not sort_by %}selected{% endif %}>Featured</option>
+                    <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>A to Z</option>
+                    <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Z to A</option>
+                </select>
+            </form>
+        </div>
+    </div>
+
+    <!-- Categories Count -->
+    <div class="categories-count">
+        Showing <span>{{ page_obj.paginator.count }}</span> categories
+    </div>
+
+    <!-- Categories Grid -->
+    <div class="categories-grid">
+        {% for category in page_obj %}
+        <div class="category-card" data-index="{{ forloop.counter0 }}">
+            <div class="category-image">
+                {% if category.image %}
+                <img src="{{ category.image.url }}" alt="{{ category.name }}">
+                {% else %}
+                <img src="{% static 'images/placeholder-category.jpg' %}" alt="{{ category.name }}">
+                {% endif %}
+                
+                {% if category.offer_percentage > 0 %}
+                <div class="category-offer">{{ category.offer_percentage }}% OFF</div>
+                {% endif %}
+            </div>
+            
+            <div class="category-content">
+                <h3 class="category-title">{{ category.name }}</h3>
+                {% if category.description %}
+                <p class="category-description">{{ category.description|truncatewords:12 }}</p>
+                {% else %}
+                <p class="category-description">Premium quality supplements to support your fitness journey.</p>
+                {% endif %}
+                
+                <a href="{% url 'product_app:user_product_list' %}?category={{ category.id }}" class="category-button">
+                    Explore Collection
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-search"></i>
+            </div>
+            <h3 class="empty-state-title">No Categories Found</h3>
+            <p class="empty-state-text">We couldn't find any categories matching your search criteria. Please try a different search term or browse our collection.</p>
+            <a href="{% url 'product_app:user_category_list' %}" class="empty-state-button">View All Categories</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination-container">
+        <ul class="pagination">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="fas fa-chevron-left"></i></span>
+            </li>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+            </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link"><i class="fas fa-chevron-right"></i></span>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    /* Premium Minimalist Styling */
+    :root {
+        --premium-black: #111111;
+        --premium-white: #ffffff;
+        --premium-gray: #f8f8f8;
+        --premium-text: #333333;
+        --premium-accent: #d4af37;
+        --premium-border: #eeeeee;
+        --transition: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    
+    .premium-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+    }
+    
+    .premium-header {
+        text-align: center;
+        margin-bottom: 4rem;
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    
+    .premium-header h1 {
+        font-size: 2.5rem;
+        font-weight: 300;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+        color: var(--premium-text);
+    }
+    
+    .premium-header p {
+        font-size: 1rem;
+        color: #666;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+    
+    .premium-divider {
+        width: 40px;
+        height: 2px;
+        background-color: var(--premium-accent);
+        margin: 1.5rem auto;
+    }
+    
+    .category-filters {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        opacity: 0;
+    }
+    
+    .search-container {
+        position: relative;
+        flex: 1;
+        max-width: 400px;
+    }
+    
+    .search-container input {
+        width: 100%;
+        padding: 0.8rem 1rem 0.8rem 3rem;
+        border: 1px solid var(--premium-border);
+        border-radius: 0;
+        font-size: 0.9rem;
+        background-color: var(--premium-white);
+        transition: all var(--transition);
+    }
+    
+    .search-container input:focus {
+        outline: none;
+        border-color: var(--premium-accent);
+        box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
+    }
+    
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #888;
+    }
+    
+    .clear-search {
+        position: absolute;
+        right: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        padding: 0;
+        font-size: 0.9rem;
+    }
+    
+    .sort-container {
+        display: flex;
+        align-items: center;
+    }
+    
+    .sort-label {
+        font-size: 0.85rem;
+        margin-right: 0.75rem;
+        color: #666;
+    }
+    
+    .sort-select {
+        padding: 0.5rem 2rem 0.5rem 1rem;
+        border: 1px solid var(--premium-border);
+        border-radius: 0;
+        background-color: var(--premium-white);
+        color: var(--premium-text);
+        font-size: 0.85rem;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.5rem center;
+        background-size: 1em;
+    }
+    
+    .sort-select:focus {
+        outline: none;
+        border-color: var(--premium-accent);
+    }
+    
+    .categories-count {
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: #666;
+        opacity: 0;
+    }
+    
+    .categories-count span {
+        font-weight: 500;
+        color: var(--premium-text);
+    }
+    
+    .categories-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 3rem;
+    }
+    
+    .category-card {
+        position: relative;
+        background-color: var(--premium-white);
+        border: 1px solid var(--premium-border);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        transition: all var(--transition);
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    
+    .category-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+    }
+    
+    .category-image {
+        position: relative;
+        height: 220px;
+        overflow: hidden;
+    }
+    
+    .category-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    
+    .category-card:hover .category-image img {
+        transform: scale(1.05);
+    }
+    
+    .category-offer {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        background-color: var(--premium-accent);
+        color: var(--premium-white);
+        padding: 0.35rem 0.75rem;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        font-weight: 500;
+    }
+    
+    .category-content {
+        padding: 1.5rem;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .category-title {
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-bottom: 0.75rem;
+        color: var(--premium-text);
+    }
+    
+    .category-description {
+        font-size: 0.9rem;
+        color: #666;
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+        flex-grow: 1;
+    }
+    
+    .category-button {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background-color: transparent;
+        color: var(--premium-text);
+        border: 1px solid var(--premium-border);
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        text-decoration: none;
+        text-align: center;
+        transition: all var(--transition);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .category-button:before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 0;
+        height: 100%;
+        background-color: var(--premium-accent);
+        transition: width 0.3s ease;
+        z-index: -1;
+    }
+    
+    .category-button:hover {
+        color: var(--premium-white);
+        border-color: var(--premium-accent);
+    }
+    
+    .category-button:hover:before {
+        width: 100%;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 5rem 0;
+        opacity: 0;
+    }
+    
+    .empty-state-icon {
+        font-size: 3rem;
+        color: #ddd;
+        margin-bottom: 1.5rem;
+    }
+    
+    .empty-state-title {
+        font-size: 1.5rem;
+        font-weight: 300;
+        margin-bottom: 1rem;
+        color: var(--premium-text);
+    }
+    
+    .empty-state-text {
+        font-size: 0.95rem;
+        color: #666;
+        margin-bottom: 1.5rem;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .empty-state-button {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background-color: transparent;
+        color: var(--premium-text);
+        border: 1px solid var(--premium-border);
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: all var(--transition);
+    }
+    
+    .empty-state-button:hover {
+        background-color: var(--premium-text);
+        color: var(--premium-white);
+    }
+    
+    /* Pagination styling */
+    .pagination-container {
+        margin-top: 3rem;
+        display: flex;
+        justify-content: center;
+        opacity: 0;
+    }
+    
+    .pagination {
+        display: flex;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        gap: 0.5rem;
+    }
+    
+    .page-item {
+        margin: 0;
+    }
+    
+    .page-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        color: var(--premium-text);
+        border: 1px solid var(--premium-border);
+        text-decoration: none;
+        transition: all var(--transition);
+    }
+    
+    .page-link:hover {
+        border-color: var(--premium-accent);
+        color: var(--premium-accent);
+    }
+    
+    .page-item.active .page-link {
+        background-color: var(--premium-accent);
+        border-color: var(--premium-accent);
+        color: var(--premium-white);
+    }
+    
+    .page-item.disabled .page-link {
+        color: #ccc;
+        pointer-events: none;
+    }
+    
+    /* Responsive styles */
+    @media (max-width: 768px) {
+        .category-filters {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+        }
+        
+        .search-container {
+            max-width: 100%;
+        }
+        
+        .sort-container {
+            justify-content: flex-end;
+        }
+        
+        .categories-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .premium-header h1 {
+            font-size: 2rem;
+        }
+        
+        .categories-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize GSAP
+        gsap.registerPlugin(ScrollTrigger);
+        
+        // Animate header
+        gsap.to('.premium-header', {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            ease: 'power2.out'
+        });
+        
+        // Animate filters
+        gsap.to('.category-filters', {
+            opacity: 1,
+            duration: 0.6,
+            delay: 0.3,
+            ease: 'power2.out'
+        });
+        
+        // Animate categories count
+        gsap.to('.categories-count', {
+            opacity: 1,
+            duration: 0.6,
+            delay: 0.4,
+            ease: 'power2.out'
+        });
+        
+        // Animate category cards with stagger
+        gsap.to('.category-card', {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            stagger: 0.1,
+            delay: 0.5,
+            ease: 'power2.out'
+        });
+        
+        // Animate pagination
+        gsap.to('.pagination-container', {
+            opacity: 1,
+            duration: 0.6,
+            delay: 0.7,
+            ease: 'power2.out'
+        });
+        
+        // Animate empty state if present
+        if (document.querySelector('.empty-state')) {
+            gsap.to('.empty-state', {
+                opacity: 1,
+                duration: 0.6,
+                delay: 0.5,
+                ease: 'power2.out'
+            });
+        }
+        
+        // Initialize event handlers
+        const sortSelect = document.getElementById('sort');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', function() {
+                document.getElementById('sortForm').submit();
+            });
+        }
+        
+        const clearSearchBtn = document.getElementById('clearSearch');
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', function() {
+                document.querySelector('#searchForm input[name="q"]').value = '';
+                document.getElementById('searchForm').submit();
+            });
+        }
+        
+        // Optional: Initialize search form submission on Enter key
+        const searchInput = document.querySelector('#searchForm input[name="q"]');
+        if (searchInput) {
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('searchForm').submit();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,769 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Wallet - Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Wallet-specific styles */
+    .wallet-card {
+        border-radius: 4px;
+        overflow: hidden;
+        background: var(--bg);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        transition: all 0.4s ease;
+        position: relative;
+    }
+
+    .wallet-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+    }
+
+    .wallet-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+        color: white;
+        padding: 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .wallet-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    }
+
+    .balance-display {
+        font-size: 2.5rem;
+        font-weight: 300;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+    }
+
+    .balance-container {
+        position: relative;
+        padding: 2rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .transaction-table {
+        margin-top: 2rem;
+    }
+
+    .transaction-table th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--light-text);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .transaction-table td {
+        vertical-align: middle;
+        font-size: 0.9rem;
+        color: var(--text);
+        transition: all 0.3s ease;
+    }
+
+    .transaction-table tr {
+        transition: all 0.3s ease;
+    }
+
+    .transaction-table tr:hover {
+        background-color: var(--light-bg);
+        transform: translateX(5px);
+    }
+
+    .badge-credit, .badge-debit, .badge-refunded {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 2px;
+        transition: all 0.3s ease;
+    }
+
+    .badge-credit {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+
+    .badge-debit {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+
+    .badge-refunded {
+        background-color: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+    }
+
+    .about-wallet {
+        background: var(--light-bg);
+        border-radius: 4px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .about-wallet h5 {
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text);
+        margin-bottom: 1.5rem;
+    }
+
+    .about-wallet ul {
+        list-style: none;
+        padding: 0;
+    }
+
+    .about-wallet li {
+        font-size: 0.9rem;
+        color: var(--text);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .about-wallet li svg {
+        width: 16px;
+        height: 16px;
+        stroke: var(--accent);
+        margin-right: 0.75rem;
+    }
+
+    .modal-content {
+        border-radius: 4px;
+        border: none;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        background: var(--bg);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--border);
+        background: var(--light-bg);
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--border);
+    }
+
+    .form-control {
+        border-radius: 2px;
+        border: 1px solid var(--border);
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+        background: var(--bg);
+        color: var(--text);
+    }
+
+    .form-control:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 0.2rem rgba(255, 0, 0, 0.1);
+    }
+
+    .btn-add-funds {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .btn-add-funds::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: all 0.5s ease;
+    }
+
+    .btn-add-funds:hover::after {
+        width: 200px;
+        height: 200px;
+    }
+
+    .pagination {
+        justify-content: center;
+        margin-top: 2rem;
+    }
+
+    .page-link {
+        border-radius: 2px;
+        font-size: 0.85rem;
+        color: var(--text);
+        background-color: var(--bg);
+        border: 1px solid var(--border);
+        margin: 0 0.2rem;
+        transition: all 0.3s ease;
+    }
+
+    .page-link:hover {
+        background-color: var(--accent);
+        color: white;
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    .page-item.disabled .page-link {
+        color: var(--light-text);
+        background-color: var(--light-bg);
+        border-color: var(--border);
+    }
+
+    [data-theme="dark"] .wallet-card,
+    [data-theme="dark"] .about-wallet,
+    [data-theme="dark"] .modal-content,
+    [data-theme="dark"] .form-control,
+    [data-theme="dark"] .page-link {
+        background: var(--light-bg);
+        color: var(--text);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 767px) {
+        .balance-display {
+            font-size: 2rem;
+        }
+
+        .transaction-table th, .transaction-table td {
+            font-size: 0.8rem;
+        }
+
+        .about-wallet li {
+            font-size: 0.85rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <h2 class="section-title">My Wallet</h2>
+    <div class="minimal-divider mx-auto"></div>
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <!-- Wallet Card -->
+            <div class="card wallet-card">
+                <div class="wallet-header">
+                    <h4 class="mb-0">Wallet Dashboard</h4>
+                </div>
+                <div class="card-body">
+                    {% if wallet %}
+                    <div class="balance-container text-center">
+                        <h2 class="balance-display" id="balance-amount">₹{{ wallet.balance|floatformat:2 }}</h2>
+                        <p class="text-muted mb-4">Available Balance</p>
+                        <button class="btn btn-primary btn-add-funds" data-bs-toggle="modal" data-bs-target="#addFundsModal">
+                            <svg class="me-2" width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="16"></line>
+                                <line x1="8" y1="12" x2="16" y2="12"></line>
+                            </svg>
+                            Add Funds
+                        </button>
+                    </div>
+
+                    <!-- Transactions -->
+                    <div class="transaction-table">
+                        <h5 class="card-title">Recent Transactions</h5>
+                        {% if page_obj %}
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Description</th>
+                                            <th>Amount</th>
+                                            <th>Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for transaction in page_obj %}
+                                        <tr>
+                                            <td>{{ transaction.created_at|date:"d M Y, h:i A" }}</td>
+                                            <td>{{ transaction.description }}</td>
+                                            <td>₹{{ transaction.amount|floatformat:2 }}</td>
+                                            <td>
+                                                {% if transaction.transaction_type == 'CREDIT' %}
+                                                <span class="badge badge-credit">
+                                                    <svg class="me-1" width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                                        <path d="M12 5v14m-7-7h14"></path>
+                                                    </svg>
+                                                    Credit
+                                                </span>
+                                                {% elif transaction.transaction_type == 'DEBIT' %}
+                                                <span class="badge badge-debit">
+                                                    <svg class="me-1" width="12" height="12" viewBox="0 0 24 241393
+                                                        <path d="M5 12h14"></path>
+                                                    </svg>
+                                                    Debit
+                                                </span>
+                                                {% elif transaction.transaction_type == 'REFUND' %}
+                                                <span class="badge badge-refunded">
+                                                    <svg class="me-1" width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                                        <path d="M9 14l2 2 4-4"></path>
+                                                    </svg>
+                                                    Refund
+                                                </span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Pagination -->
+                            {% if page_obj.has_other_pages %}
+                            <nav aria-label="Transaction pagination">
+                                <ul class="pagination">
+                                    {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                                            <span aria-hidden="true">«</span>
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">«</span>
+                                    </li>
+                                    {% endif %}
+                                    {% for num in page_obj.paginator.page_range %}
+                                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                        <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                                            <span aria-hidden="true">»</span>
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">»</span>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-info d-flex align-items-center">
+                                <svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                No transactions yet.
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning text-center">
+                        <svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                        </svg>
+                        Wallet not found. Please contact support.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- About Wallet -->
+            <div class="about-wallet">
+                <h5>About Your Wallet</h5>
+                <div class="minimal-divider"></div>
+                <ul>
+                    <li>
+                        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                            <circle cx="9" cy="21" r="1"></circle>
+                            <circle cx="20" cy="21" r="1"></circle>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                        </svg>
+                        Make purchases seamlessly on our website.
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                            <path d="M4 12V8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v4"></path>
+                            <path d="M4 12h16"></path>
+                            <path d="M10 16h4"></path>
+                        </svg>
+                        Receive instant refunds for returned items.
+                    </li>
+                    <li>
+                        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <path d="M9 14l2 2 4-4"></path>
+                        </svg>
+                        Store payment information securely.
+                    </li>
+                </ul>
+                <p class="mt-3 mb-0">
+                    <small class="text-muted">Contact our support team for any wallet-related queries.</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Funds Modal -->
+<div class="modal fade" id="addFundsModal" tabindex="-1" aria-labelledby="addFundsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addFundsModalLabel">Add Funds to Wallet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addFundsForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Amount (₹)</label>
+                        <input type="number" class="form-control" id="amount" name="amount" min="1" step="1" required>
+                        <div class="form-text">Minimum amount: ₹1</div>
+                    </div>
+                    <div class="alert alert-danger d-none" id="errorMessage"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-add-funds" id="processPaymentBtn">
+                    <span id="processPaymentText">Proceed to Payment</span>
+                    <span class="spinner-border spinner-border-sm d-none" id="paymentSpinner"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include Razorpay JS -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // GSAP Animations
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Animate balance display with counter effect
+    const balanceElement = document.getElementById('balance-amount');
+    const balanceValue = parseFloat(balanceElement.textContent.replace('₹', '')) || 0;
+    gsap.fromTo(balanceElement, 
+        { textContent: 0 }, 
+        { 
+            textContent: balanceValue,
+            duration: 2,
+            ease: 'power3.out',
+            snap: { textContent: 0.01 },
+            onUpdate: function() {
+                balanceElement.textContent = `₹${parseFloat(balanceElement.textContent).toFixed(2)}`;
+            },
+            scrollTrigger: {
+                trigger: balanceElement,
+                start: 'top 80%',
+                toggleActions: 'play none none none'
+            }
+        }
+    );
+
+    // Animate wallet card
+    gsap.fromTo('.wallet-card', 
+        { opacity: 0, y: 30 }, 
+        { 
+            opacity: 1, 
+            y: 0, 
+            duration: 0.8, 
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: '.wallet-card',
+                start: 'top 80%',
+                toggleActions: 'play none none none'
+            }
+        }
+    );
+
+    // Animate transaction rows
+    gsap.utils.toArray('.transaction-table tr').forEach(row => {
+        gsap.fromTo(row, 
+            { opacity: 0, x: -20 }, 
+            { 
+                opacity: 1, 
+                x: 0, 
+                duration: 0.5, 
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: row,
+                    start: 'top 85%',
+                    toggleActions: 'play none none none'
+                }
+            }
+        );
+    });
+
+    // Animate pagination links
+    gsap.utils.toArray('.page-link').forEach(link => {
+        gsap.fromTo(link, 
+            { opacity: 0, y: 10 }, 
+            { 
+                opacity: 1, 
+                y: 0, 
+                duration: 0.5, 
+                ease: 'power2.out',
+                scrollTrigger: {
+                    trigger: link,
+                    start: 'top 90%',
+                    toggleActions: 'play none none none'
+                }
+            }
+        );
+    });
+
+    // Animate about wallet section
+    gsap.fromTo('.about-wallet', 
+        { opacity: 0, y: 30 }, 
+        { 
+            opacity: 1, 
+            y: 0, 
+            duration: 0.8, 
+            ease: 'power3.out',
+            scrollTrigger: {
+                trigger: '.about-wallet',
+                start: 'top 80%',
+                toggleActions: 'play none none none'
+            }
+        }
+    );
+
+    // Modal animation
+    const addFundsModal = document.getElementById('addFundsModal');
+    addFundsModal.addEventListener('show.bs.modal', function() {
+        gsap.fromTo('.modal-content', 
+            { scale: 0.8, opacity: 0 }, 
+            { scale: 1, opacity: 1, duration: 0.4, ease: 'power3.out' }
+        );
+    });
+
+    addFundsModal.addEventListener('hide.bs.modal', function() {
+        gsap.to('.modal-content', 
+            { scale: 0.8, opacity: 0, duration: 0.3, ease: 'power3.in' }
+        );
+    });
+
+    // Utility function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Show alert messages
+    function showAlert(message, type) {
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type} alert-dismissible fade show`;
+        alert.role = 'alert';
+        alert.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.querySelector('.transaction-table').prepend(alert);
+        setTimeout(() => {
+            alert.classList.remove('show');
+            setTimeout(() => alert.remove(), 300);
+        }, 3000);
+    }
+
+    // Fetch wallet balance dynamically
+    function fetchWalletBalance() {
+        fetch('{% url "offer_and_coupon_app:wallet_balance" %}', {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const balanceElement = document.getElementById('balance-amount');
+                const newBalance = parseFloat(data.balance).toFixed(2);
+                gsap.to(balanceElement, {
+                    textContent: newBalance,
+                    duration: 1,
+                    ease: 'power3.out',
+                    snap: { textContent: 0.01 },
+                    onUpdate: function() {
+                        balanceElement.textContent = `₹${parseFloat(balanceElement.textContent).toFixed(2)}`;
+                    }
+                });
+            } else {
+                showAlert('Failed to fetch wallet balance.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching wallet balance:', error);
+            showAlert('Error fetching wallet balance.', 'danger');
+        });
+    }
+
+    // Add Funds Form Handling
+    const addFundsForm = document.getElementById('addFundsForm');
+    const processPaymentBtn = document.getElementById('processPaymentBtn');
+    const processPaymentText = document.getElementById('processPaymentText');
+    const paymentSpinner = document.getElementById('paymentSpinner');
+    const errorMessage = document.getElementById('errorMessage');
+    const amountInput = document.getElementById('amount');
+
+    processPaymentBtn.addEventListener('click', function() {
+        if (!addFundsForm.checkValidity()) {
+            addFundsForm.reportValidity();
+            return;
+        }
+
+        errorMessage.classList.add('d-none');
+        processPaymentBtn.disabled = true;
+        processPaymentText.classList.add('d-none');
+        paymentSpinner.classList.remove('d-none');
+
+        const formData = new FormData(addFundsForm);
+        fetch('{% url "offer_and_coupon_app:add_funds" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const options = {
+                    key: data.razorpay_key,
+                    amount: data.amount,
+                    currency: data.currency,
+                    name: data.name,
+                    description: data.description,
+                    order_id: data.razorpay_order.id,
+                    handler: function(response) {
+                        handlePaymentSuccess(response);
+                    },
+                    prefill: data.prefill,
+                    theme: { color: '#ff0000' },
+                    modal: {
+                        ondismiss: function() {
+                            processPaymentBtn.disabled = false;
+                            processPaymentText.classList.remove('d-none');
+                            paymentSpinner.classList.add('d-none');
+                            showAlert('Payment cancelled.', 'info');
+                        }
+                    }
+                };
+
+                const rzp = new Razorpay(options);
+                rzp.on('payment.failed', function(response) {
+                    showAlert('Payment failed. Please try again.', 'danger');
+                    processPaymentBtn.disabled = false;
+                    processPaymentText.classList.remove('d-none');
+                    paymentSpinner.classList.add('d-none');
+                });
+                rzp.open();
+            } else {
+                errorMessage.textContent = data.message;
+                errorMessage.classList.remove('d-none');
+                processPaymentBtn.disabled = false;
+                processPaymentText.classList.remove('d-none');
+                paymentSpinner.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            errorMessage.textContent = 'An error occurred. Please try again.';
+            errorMessage.classList.remove('d-none');
+            processPaymentBtn.disabled = false;
+            processPaymentText.classList.remove('d-none');
+            paymentSpinner.classList.add('d-none');
+        });
+    });
+
+    function handlePaymentSuccess(response) {
+        fetch('{% url "offer_and_coupon_app:add_funds_callback" %}', {
+            method: 'POST',
+            body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+            }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                bootstrap.Modal.getInstance(addFundsModal).hide();
+                showAlert(data.message, 'success');
+                fetchWalletBalance();
+                if (data.redirect) {
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1500);
+                }
+            } else {
+                errorMessage.textContent = data.message;
+                errorMessage.classList.remove('d-none');
+                processPaymentBtn.disabled = false;
+                processPaymentText.classList.remove('d-none');
+                paymentSpinner.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            errorMessage.textContent = 'An error occurred. Please try again.';
+            errorMessage.classList.remove('d-none');
+            processPaymentBtn.disabled = false;
+            processPaymentText.classList.remove('d-none');
+            paymentSpinner.classList.add('d-none');
+        });
+    }
+
+    // Reset form and error message when modal is closed
+    addFundsModal.addEventListener('hidden.bs.modal', function() {
+        addFundsForm.reset();
+        errorMessage.classList.add('d-none');
+        processPaymentBtn.disabled = false;
+        processPaymentText.classList.remove('d-none');
+        paymentSpinner.classList.add('d-none');
+    });
+
+    // Input validation
+    amountInput.addEventListener('input', function() {
+        if (this.value < 1) {
+            this.value = 1;
+        }
+    });
+
+    // Initial fetch of wallet balance
+    fetchWalletBalance();
+});
+</script>
+{% endblock %}

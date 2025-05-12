@@ -1,0 +1,388 @@
+{% extends 'admin_base.html' %}
+{% load static humanize %}
+
+{% block title %}{{ product.product_name }} - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4">Product Details</h1>
+        <div>
+            <a href="{% url 'product_app:admin_edit_product' product.slug %}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Edit Product
+            </a>
+            <a href="{% url 'product_app:admin_product_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <!-- Product Overview Card -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <div>
+                <h5 class="mb-0"><i class="fas fa-info-circle me-1"></i> Product Overview</h5>
+            </div>
+            <div>
+                {% if product.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% else %}
+                <span class="badge bg-danger">Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    {% if product.primary_image %}
+                    <a href="{{ product.primary_image.image.url }}" data-lightbox="product" data-title="{{ product.product_name }}">
+                        <img src="{{ product.primary_image.image.url }}" alt="{{ product.product_name }}" class="img-fluid rounded shadow">
+                    </a>
+                    {% else %}
+                    <div class="text-center p-5 bg-light rounded shadow">
+                        <i class="fas fa-image fa-5x text-secondary"></i>
+                        <p class="mt-2">No image available</p>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-8">
+                    <h2>{{ product.product_name }}</h2>
+                    <div class="mb-3">
+                        <span class="badge bg-primary">{{ product.category.name }}</span>
+                        {% if product.brand %}
+                        <span class="badge bg-info">{{ product.brand.name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="small text-muted">SKU:</div>
+                            <div>{{ primary_variant.sku|default:"N/A" }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Price Range:</div>
+                            <div>
+                                ₹{{ min_price|floatformat:2 }}
+                                {% if min_price != max_price %}
+                                - ₹{{ max_price|floatformat:2 }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="small text-muted">Total Stock:</div>
+                            <div>{{ stats.total_stock }} units</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Rating:</div>
+                            <div>
+                                {% if product.average_rating > 0 %}
+                                <span class="text-warning">
+                                    {% with rating=product.average_rating|floatformat:"1"|add:"0" %}
+                                        {% for i in "12345" %}
+                                            {% if forloop.counter <= rating|add:"0"|floatformat:"0" %}
+                                                ★
+                                            {% elif forloop.counter <= rating|add:"0.5"|floatformat:"0" %}
+                                                ½
+                                            {% else %}
+                                                ☆
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endwith %}
+                                </span>
+                                <span class="ms-1">{{ product.average_rating|floatformat:1 }} ({{ stats.approved_review_count }} reviews)</span>
+                                {% else %}
+                                <span class="text-muted">No ratings yet</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="small text-muted">Created / Updated:</div>
+                        <div>{{ product.created_at|date:"M d, Y" }} / {{ product.updated_at|date:"M d, Y H:i" }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="small text-muted">Country of Manufacture:</div>
+                        <div>{{ product.country_of_manufacture|default:"Not specified" }}</div>
+                    </div>
+                    <div>
+                        <div class="small text-muted">In Wishlists:</div>
+                        <div>{{ wishlist_count }} users</div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <h5>Description</h5>
+                <div class="p-3 bg-light rounded">
+                    {{ product.description|linebreaks|default:"No description provided" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards Row -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="h3 mb-0">{{ sales_stats.total_units_sold }}</div>
+                            <div>Units Sold (30 days)</div>
+                        </div>
+                        <div><i class="fas fa-shopping-cart fa-2x opacity-50"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="h3 mb-0">₹{{ sales_stats.total_revenue|floatformat:2 }}</div>
+                            <div>Revenue (30 days)</div>
+                        </div>
+                        <div><i class="fas fa-dollar-sign fa-2x opacity-50"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="h3 mb-0">{{ stats.variants_count }}</div>
+                            <div>Total Variants</div>
+                        </div>
+                        <div><i class="fas fa-tags fa-2x opacity-50"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="h3 mb-0">{{ sales_stats.total_orders }}</div>
+                            <div>Orders (30 days)</div>
+                        </div>
+                        <div><i class="fas fa-file-invoice fa-2x opacity-50"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Variants Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-cubes me-1"></i> Product Variants</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>SKU</th>
+                            <th>Flavor</th>
+                            <th>Size/Weight</th>
+                            <th>Original Price</th>
+                            <th>Offer (%)</th>
+                            <th>Final Price</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                            <th>Images</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for variant in variants %}
+                        <tr>
+                            <td>{{ variant.sku }}</td>
+                            <td>{{ variant.flavor|default:"Standard" }}</td>
+                            <td>{{ variant.size_weight|default:"N/A" }}</td>
+                            <td>₹{{ variant.original_price|floatformat:2 }}</td>
+                            <td>
+                                {% if variant.discount_percentage > 0 %}
+                                    {{ variant.best_price.applied_offer_type|title }}: {{ variant.discount_percentage|floatformat:2 }}%
+                                {% else %}
+                                    None: 0.00%
+                                {% endif %}
+                            </td>
+                            <td>₹{{ variant.best_price.price|floatformat:2 }}</td>
+                            <td>
+                                {% if variant.stock <= 0 %}
+                                <span class="badge bg-danger">Out of Stock</span>
+                                {% elif variant.stock <= 5 %}
+                                <span class="badge bg-warning text-dark">Low Stock ({{ variant.stock }})</span>
+                                {% else %}
+                                {{ variant.stock }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if variant.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex">
+                                    {% for image in variant.variant_images.all %}
+                                    <div class="me-1">
+                                        <a href="{{ image.image.url }}" data-lightbox="variant-{{ variant.id }}" data-title="{{ image.alt_text }}">
+                                            <img src="{{ image.image.url }}" alt="{{ image.alt_text }}" class="img-thumbnail" style="height: 40px; width: 40px; object-fit: cover;">
+                                        </a>
+                                    </div>
+                                    {% empty %}
+                                    <span class="text-muted">No images</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center">No variants found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reviews Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-comments me-1"></i> Customer Reviews ({{ stats.approved_review_count }} Approved, {{ stats.pending_review_count }} Pending)</h5>
+        </div>
+        <div class="card-body">
+            {% if reviews %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Rating</th>
+                            <th>Comment</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in reviews %}
+                        <tr>
+                            <td>{{ review.user.username }}</td>
+                            <td>
+                                <span class="text-warning">{{ review.star_rating }}</span>
+                                <span class="ms-1">{{ review.rating|floatformat:1 }}</span>
+                            </td>
+                            <td>
+                                {% if review.title %}<strong>{{ review.title }}</strong><br>{% endif %}
+                                {{ review.excerpt|truncatechars:50 }}
+                            </td>
+                            <td>{{ review.age }}</td>
+                            <td>
+                                {% if review.is_approved %}
+                                <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                                {% if review.is_verified_purchase %}
+                                <span class="badge bg-info">Verified</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-comment-slash fa-3x text-muted mb-3"></i>
+                <p>No reviews yet for this product.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Review Detail Modal -->
+<div class="modal fade" id="reviewModal" tabindex="-1" aria-labelledby="reviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reviewModalLabel">Review Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <h5 id="review-title"></h5>
+                        <div class="text-muted">By <span id="review-user"></span> on <span id="review-date"></span></div>
+                    </div>
+                    <div>
+                        <span class="text-warning" id="review-stars"></span>
+                        <span id="review-rating"></span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div id="review-badges">
+                        <span class="badge bg-info me-1" id="review-verified-badge" style="display: none;">Verified Purchase</span>
+                        <span class="badge bg-success me-1" id="review-approved-badge" style="display: none;">Approved</span>
+                        <span class="badge bg-warning text-dark" id="review-pending-badge" style="display: none;">Pending Approval</span>
+                    </div>
+                </div>
+                <div class="p-3 bg-light rounded">
+                    <p id="review-comment"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CSRF Token Form -->
+<form id="csrfForm" style="display: none;">
+    {% csrf_token %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+$(document).ready(function() {
+    // View Review Modal
+    $('.view-review').click(function() {
+        const reviewId = $(this).data('id');
+        const user = $(this).data('user');
+        const rating = parseFloat($(this).data('rating'));
+        const title = $(this).data('title');
+        const comment = $(this).data('comment');
+        const date = $(this).data('date');
+        const verified = $(this).data('verified') === 'true';
+        const approved = $(this).data('approved') === 'true';
+        const stars = $(this).data('stars');
+
+        $('#review-title').text(title || 'Untitled Review');
+        $('#review-user').text(user);
+        $('#review-date').text(date);
+        $('#review-rating').text(rating.toFixed(1));
+        $('#review-comment').text(comment);
+        $('#review-stars').html(stars);
+
+        // Set badges
+        $('#review-verified-badge').toggle(verified);
+        $('#review-approved-badge').toggle(approved);
+        $('#review-pending-badge').toggle(!approved);
+    });
+});
+</script>
+{% endblock %}

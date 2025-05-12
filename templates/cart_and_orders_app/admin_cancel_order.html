@@ -1,0 +1,140 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Cancel Order{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card glass shadow">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">Cancel Order #{{ order.order_id }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if order.status == 'Cancelled' %}
+                        <div class="alert alert-danger">
+                            This order is already cancelled.
+                        </div>
+                        <a href="{% url 'cart_and_orders_app:admin_order_detail' order.order_id %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Order Details
+                        </a>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Are you sure you want to cancel this order? This action cannot be undone.
+                        </div>
+                        
+                        <div class="order-details mb-4">
+                            <h5>Order Details:</h5>
+                            <table class="table table-bordered">
+                                <tr>
+                                    <th width="30%">Order ID:</th>
+                                    <td>{{ order.order_id }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Customer:</th>
+                                    <td>{{ order.user.full_name|default:order.user.username }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Order Date:</th>
+                                    <td>{{ order.order_date|date:"M d, Y H:i" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Current Status:</th>
+                                    <td>
+                                        <span class="badge 
+                                            {% if order.status == 'Pending' %}bg-warning
+                                            {% elif order.status == 'Processing' %}bg-info
+                                            {% elif order.status == 'Shipped' %}bg-primary
+                                            {% elif order.status == 'Out for Delivery' %}bg-primary
+                                            {% elif order.status == 'Delivered' %}bg-success
+                                            {% elif order.status == 'Cancelled' %}bg-danger{% endif %}">
+                                            {{ order.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Total Amount:</th>
+                                    <td>
+                                        {% if order.get_cancelled_items_count > 0 %}
+                                            <span class="text-muted text-decoration-line-through" data-bs-toggle="tooltip" title="Original total before cancellations">
+                                                ₹{{ order.get_original_total_amount|floatformat:2 }}
+                                            </span>
+                                            <br>
+                                            <span class="text-success">₹{{ order.total_amount|floatformat:2 }}</span>
+                                        {% else %}
+                                            ₹{{ order.total_amount|floatformat:2 }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Coupon Discount:</th>
+                                    <td>₹{{ order.coupon_discount|floatformat:2 }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <div class="order-items mb-4">
+                            <h5>Order Items:</h5>
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Variant</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in order.items.all %}
+                                    <tr>
+                                        <td>{{ item.variant.product.product_name }}</td>
+                                        <td>
+                                            {{ item.variant.flavor|default:"Standard" }}
+                                            {% if item.variant.size_weight %}
+                                                ({{ item.variant.size_weight }})
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ item.quantity }}</td>
+                                        <td>₹{{ item.price|floatformat:2 }}</td>
+                                        <td>₹{{ item.total_price|floatformat:2 }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center">No active items found.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <form method="POST" class="mt-4" onsubmit="return confirm('Are you sure you want to cancel this order? This action cannot be undone.');">
+                            {% csrf_token %}
+                            {{ form.as_p }}
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'cart_and_orders_app:admin_order_detail' order.order_id %}" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i>Back to Order Details
+                                </a>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-times-circle me-2"></i>Confirm Cancellation
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endblock %}

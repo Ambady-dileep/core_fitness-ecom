@@ -1,0 +1,259 @@
+
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order Payment Failed - Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+  .failure-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+  
+  .order-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    overflow: hidden;
+    background-color: #fff;
+    margin-bottom: 2rem;
+  }
+  
+  .order-header {
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .order-body {
+    padding: 1.5rem;
+  }
+
+  .failure-icon {
+    width: 80px;
+    height: 80px;
+    background-color: #dc3545;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    color: white;
+    font-size: 2rem;
+  }
+  
+  .order-detail {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0.75rem 0;
+  }
+  
+  .order-detail:last-child {
+    border-bottom: none;
+  }
+  
+  .buttons {
+    margin-top: 2rem;
+  }
+  
+  .btn {
+    padding: 0.6rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="failure-container">
+  <div class="text-center mb-4">
+    <div class="failure-icon">
+      <i class="fas fa-times"></i>
+    </div>
+    <h2 class="mb-2">Payment Failed</h2>
+    <p class="text-muted">We're sorry, but the payment for your order <strong>#{{ order.order_id }}</strong> could not be processed.</p>
+  </div>
+  
+  <div class="order-card">
+    <div class="order-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Order #{{ order.order_id }}</h5>
+        <span class="badge bg-danger">{{ order.status }}</span>
+      </div>
+      <small class="text-muted">Placed on {{ order.created_at|date:"d M Y, h:i A" }}</small>
+    </div>
+    <div class="order-body">
+      <div class="order-detail">
+        <span>Customer</span>
+        <span><strong>{{ order.user.get_full_name|default:order.user.username }}</strong></span>
+      </div>
+      <div class="order-detail">
+        <span>Payment Method</span>
+        <span><strong>{{ order.payment_method }}</strong></span>
+      </div>
+      <div class="order-detail">
+        <span>Payment Status</span>
+        <span><strong>{{ order.payment_status }}</strong></span>
+      </div>
+      <div class="order-detail">
+        <span>Shipping Address</span>
+        <div class="text-end">
+          <strong>{{ order.shipping_address.full_name }}</strong><br>
+          {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %},
+          {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }},
+          {{ order.shipping_address.country }}
+        </div>
+      </div>
+      <!-- Order Financial Breakdown -->
+      <div class="order-detail">
+        <span>Subtotal</span>
+        <span><strong>₹{{ subtotal|floatformat:2 }}</strong></span>
+      </div>
+      {% if total_offer_discount > 0 %}
+      <div class="order-detail">
+        <span>Offer Discount</span>
+        <span><strong>-₹{{ total_offer_discount|floatformat:2 }}</strong></span>
+      </div>
+      {% endif %}
+      {% if coupon_discount > 0 %}
+      <div class="order-detail">
+        <span>Coupon Discount ({{ coupon_code }})</span>
+        <span><strong>-₹{{ coupon_discount|floatformat:2 }}</strong></span>
+      </div>
+      {% endif %}
+      <div class="order-detail">
+        <span>Shipping Cost</span>
+        <span>
+            {% if shipping_cost == 0 %}
+                <strong class="text-success">Free Shipping!</strong>
+            {% else %}
+                <strong>₹{{ shipping_cost|floatformat:2 }}</strong>
+            {% endif %}
+        </span>
+      </div>
+      <div class="order-detail">
+        <span><strong>Total Amount</strong></span>
+        <span><strong>₹{{ order.total_amount|floatformat:2 }}</strong></span>
+      </div>
+    </div>
+    
+  
+  <div class="buttons text-center">
+    {% if order.payment_method == 'CARD' and order.payment_status == 'FAILED' and order.status == 'Pending' %}
+    <button class="btn btn-warning retry-payment-btn" data-order-id="{{ order.order_id }}">Retry Payment</button>
+    {% endif %}
+    <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="btn btn-outline-dark">Back to Orders</a>
+    <a href="{% url 'user_app:user_home' %}" class="btn btn-outline-dark">Continue Shopping</a>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.retry-payment-btn').forEach(button => {
+          button.addEventListener('click', function() {
+              const orderId = this.getAttribute('data-order-id');
+              Swal.fire({
+                  title: 'Retry Payment',
+                  text: `Retrying payment for Order #${orderId}`,
+                  icon: 'info',
+                  showCancelButton: true,
+                  confirmButtonText: 'Proceed',
+                  cancelButtonText: 'Cancel'
+              }).then((result) => {
+                  if (result.isConfirmed) {
+                    fetch(`/orders/${orderId}/retry-payment/`, {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'X-CSRFToken': '{{ csrf_token }}',
+                          'X-Requested-With': 'XMLHttpRequest'
+                      },
+                      body: JSON.stringify({ order_id: orderId })
+                  })
+                  .then(response => response.json())
+                  .then(data => {
+                      console.log('Retry payment response:', data);
+                      if (data.success) {
+                          const options = {
+                              key: data.key,
+                              amount: data.amount,
+                              currency: data.currency,
+                              name: "Core Fitness",
+                              description: data.description,
+                              order_id: data.razorpay_order_id,
+                              callback_url: data.callback_url,
+                              prefill: {
+                                  name: data.prefill.name,
+                                  email: data.prefill.email,
+                                  contact: data.prefill.contact
+                              },
+                              theme: { color: "#3399cc" },
+                              handler: function(response) {
+                                  console.log('Payment successful:', response);
+                                  // Update cart count to 0 and dispatch cart-updated event
+                                  const cartCountBadge = document.getElementById('cart-count');
+                                  if (cartCountBadge) {
+                                      cartCountBadge.textContent = '0';
+                                      cartCountBadge.style.display = 'none';
+                                  }
+                                  localStorage.setItem('cartCount', '0');
+                                  document.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: 0 } }));
+                                  // Redirect to success page
+                                  window.location.href = `/order/${orderId}/success/`;
+                              },
+                              modal: {
+                                  ondismiss: function() {
+                                      Swal.fire({
+                                          icon: 'info',
+                                          title: 'Payment Cancelled',
+                                          text: 'You cancelled the payment. You can retry again later.'
+                                      });
+                                  }
+                              }
+                          };
+                          const rzp = new Razorpay(options);
+                          rzp.on('payment.failed', function(response) {
+                              console.log('Payment failed:', response);
+                              Swal.fire({
+                                  icon: 'error',
+                                  title: 'Payment Failed',
+                                  text: 'Payment failed. Please try again.'
+                              }).then(() => {
+                                  window.location.href = `/order/${orderId}/failure/`;
+                              });
+                          });
+                          rzp.open();
+                      } else {
+                          Swal.fire({
+                              icon: 'error',
+                              title: 'Error',
+                              text: data.message || 'Failed to initiate retry payment.'
+                          }).then(() => {
+                              if (data.redirect) {
+                                  window.location.href = data.redirect;
+                              }
+                          });
+                      }
+                  })
+                  .catch(error => {
+                      console.error('Error initiating retry payment:', error);
+                      Swal.fire({
+                          icon: 'error',
+                          title: 'Error',
+                          text: 'An error occurred while initiating retry payment.'
+                      });
+                  });
+                  }
+              });
+          });
+      });
+  });
+</script>
+{% endblock %}

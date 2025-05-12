@@ -1,0 +1,233 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+<style>
+.invalid-feedback.d-block {
+    display: block !important;
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+</style
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="h4 mb-4">{{ title }}</h2>
+                    
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <form id="brandForm" method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Name Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.name.id_for_label }}" class="form-label fw-semibold">Brand Name<span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.name.errors %}
+                                        {{ error }}<br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Description Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">Description</label>
+                            {{ form.description }}
+                            <div class="form-text">Enter a description (max 500 characters)</div>
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.description.errors %}
+                                        {{ error }}<br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Logo Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.logo.id_for_label }}" class="form-label fw-semibold">Logo</label>
+                            {{ form.logo }}
+                            <div class="form-text">Upload a logo (max 5MB, JPEG/PNG, recommended 300x300px)</div>
+                            {% if form.logo.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.logo.errors %}
+                                        {{ error }}<br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if brand.logo %}
+                                <div class="mt-2">
+                                    <img src="{{ brand.logo.url }}" alt="Current logo" class="img-fluid" style="max-height: 100px;">
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Website Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.website.id_for_label }}" class="form-label fw-semibold">Website URL</label>
+                            {{ form.website }}
+                            <div class="form-text">Enter a valid URL (e.g., https://example.com)</div>
+                            {% if form.website.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.website.errors %}
+                                        {{ error }}<br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Is Active Field -->
+                        <div class="mb-4 form-check">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="form-check-label fw-semibold">Active</label>
+                            {% if form.is_active.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.is_active.errors %}
+                                        {{ error }}<br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between pt-3">
+                            <a href="{% url 'product_app:admin_brand_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" id="submitBtn" class="btn btn-primary">
+                                <span id="submitText">Save Brand</span>
+                                <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const brandForm = document.getElementById('brandForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    
+    // Remove is-valid/is-invalid classes on input change to reset validation state
+    brandForm.querySelectorAll('input, textarea').forEach(input => {
+        input.addEventListener('input', function() {
+            this.classList.remove('is-valid', 'is-invalid');
+        });
+    });
+
+    // Client-side validation
+    brandForm.addEventListener('submit', function(event) {
+        let valid = true;
+
+        // Name validation
+        const name = document.getElementById('id_name').value.trim();
+        if (!name || name.length < 2 || name.length > 100 || !/^[A-Za-z0-9\s\-\&]+$/.test(name)) {
+            document.getElementById('id_name').classList.add('is-invalid');
+            valid = false;
+        } else {
+            document.getElementById('id_name').classList.add('is-valid');
+        }
+
+        // Description validation
+        const description = document.getElementById('id_description').value;
+        if (description.length > 500) {
+            document.getElementById('id_description').classList.add('is-invalid');
+            valid = false;
+        } else {
+            document.getElementById('id_description').classList.add('is-valid');
+        }
+
+        // Logo validation
+        const logo = document.getElementById('id_logo').files[0];
+        if (logo) {
+            const maxSize = 5 * 1024 * 1024; 
+            if (logo.size > maxSize) {
+                document.getElementById('id_logo').classList.add('is-invalid');
+                valid = false;
+                Swal.fire({
+                    icon: 'error',
+                    title: 'File Too Large',
+                    text: 'Logo file must not exceed 5MB.',
+                });
+            } else if (!logo.type.startsWith('image/')) {
+                document.getElementById('id_logo').classList.add('is-invalid');
+                valid = false;
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid File',
+                    text: 'Please upload a valid image file (JPEG, PNG, etc.).',
+                });
+            } else {
+                document.getElementById('id_logo').classList.add('is-valid');
+            }
+        }
+
+        // Website validation
+        const website = document.getElementById('id_website').value;
+        if (website && !/^https?:\/\/[^\s<>"]+|www\.[^\s<>"]+$/.test(website)) {
+            document.getElementById('id_website').classList.add('is-invalid');
+            valid = false;
+        } else {
+            document.getElementById('id_website').classList.add('is-valid');
+        }
+
+        if (!valid) {
+            event.preventDefault();
+            event.stopPropagation();
+            const firstInvalid = document.querySelector('.is-invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        brandForm.classList.add('was-validated');
+    });
+    
+    // Show loading state on submit
+    brandForm.addEventListener('submit', function(e) {
+        if (brandForm.checkValidity()) {
+            submitText.textContent = 'Saving...';
+            loadingSpinner.classList.remove('d-none');
+            submitBtn.disabled = true;
+        }
+    });
+    
+    // Handle SweetAlert2 messages from context
+    {% if messages %}
+        {% for message in messages %}
+            Swal.fire({
+                title: '{{ message.tags|capfirst }}!',
+                text: '{{ message }}',
+                icon: '{{ message.tags }}',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#0d6efd'
+            }).then(() => {
+                {% if message.tags == 'success' %}
+                    window.location.href = "{% url 'product_app:admin_brand_list' %}";
+                {% endif %}
+            });
+        {% endfor %}
+    {% endif %}
+});
+</script>
+{% endblock %}

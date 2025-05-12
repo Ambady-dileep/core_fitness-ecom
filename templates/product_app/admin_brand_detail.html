@@ -1,0 +1,279 @@
+{% extends 'admin_base.html' %}
+{% block title %}Brand: {{ brand.name }}{% endblock %}
+
+{% block content %}
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- FontAwesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<div class="container py-4">
+    <!-- Header with breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'product_app:admin_category_list' %}">Admin</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'product_app:admin_brand_list' %}">Brands</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ brand.name|truncatechars:20 }}</li>
+        </ol>
+    </nav>
+
+    <!-- Brand Info Card -->
+    <div class="card shadow-sm mb-5">
+        <div class="card-header bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">{{ brand.name }}</h2>
+                <div>
+                    <span class="badge rounded-pill {% if brand.is_active %}bg-success{% else %}bg-warning{% endif %}">
+                        {{ brand.is_active|yesno:"Active,Inactive" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Logo Column -->
+                <div class="col-md-4 mb-4 mb-md-0">
+                    <div class="d-flex flex-column align-items-center">
+                        {% if brand.logo %}
+                        <img src="{{ brand.logo.url }}" alt="{{ brand.name }} logo" 
+                             class="img-fluid rounded mb-3" style="max-height: 200px;">
+                        {% else %}
+                        <div class="text-center text-muted p-4 border rounded">
+                            <i class="fas fa-image fa-3x mb-2"></i>
+                            <p>No Logo Available</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Details Column -->
+                <div class="col-md-8">
+                    <div class="mb-4">
+                        <h5 class="mb-2">Description</h5>
+                        <p class="text-muted">{{ brand.description|default:"No description provided" }}</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5 class="mb-2">Website</h5>
+                        {% if brand.website %}
+                        <a href="{{ brand.website }}" target="_blank" class="text-decoration-none">
+                            <i class="fas fa-external-link-alt me-2"></i>{{ brand.website|truncatechars:40 }}
+                        </a>
+                        {% else %}
+                        <p class="text-muted">No website provided</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h5 class="mb-2">Created</h5>
+                            <p class="text-muted">{{ brand.created_at|date:"M d, Y H:i" }}</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h5 class="mb-2">Last Updated</h5>
+                            <p class="text-muted">{{ brand.updated_at|date:"M d, Y H:i" }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-4">
+                        <a href="{% url 'product_app:admin_brand_edit' brand.id %}" 
+                           class="btn btn-outline-primary">
+                            <i class="fas fa-edit me-2"></i>Edit Brand
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Section -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">Products ({{ products_count }})</h2>
+                <a href="{% url 'product_app:admin_add_product' %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i>Add Product
+                </a>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            {% if products %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'product_app:admin_product_detail' product.slug %}" 
+                                   class="text-decoration-none">
+                                    {{ product.product_name }}
+                                </a>
+                            </td>
+                            <td>{{ product.category.name|default:"-" }}</td>
+                            <td>
+                                <span class="badge rounded-pill {% if product.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ product.is_active|yesno:"Active,Inactive" }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'product_app:admin_product_detail' product.slug %}" 
+                                       class="btn btn-sm btn-outline-primary" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'product_app:admin_edit_product' product.slug %}" 
+                                       class="btn btn-sm btn-outline-secondary" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No products found for this brand</h5>
+                <a href="{% url 'product_app:admin_add_product' %}" class="btn btn-primary mt-3">
+                    <i class="fas fa-plus me-2"></i>Add New Product
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if products.has_other_pages %}
+        <div class="card-footer bg-white">
+            <nav aria-label="Product pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if products.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1" aria-label="First">
+                            <span aria-hidden="true">««</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ products.previous_page_number }}" aria-label="Previous">
+                            <span aria-hidden="true">«</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in products.paginator.page_range %}
+                        {% if products.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if products.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ products.next_page_number }}" aria-label="Next">
+                            <span aria-hidden="true">»</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ products.paginator.num_pages }}" aria-label="Last">
+                            <span aria-hidden="true">»»</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Back Button -->
+    <div class="mt-4 text-center">
+        <a href="{% url 'product_app:admin_brand_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Brands
+        </a>
+    </div>
+</div>
+
+<!-- JavaScript for SweetAlert2 messages and actions -->
+<script>
+    // Handle Django messages with SweetAlert2
+    {% if messages %}
+        {% for message in messages %}
+            Swal.fire({
+                title: '{{ message.tags|title }}',
+                text: '{{ message }}',
+                icon: '{{ message.tags }}',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '{% if message.tags == "success" %}#198754{% elif message.tags == "error" %}#dc3545{% else %}#0d6efd{% endif %}'
+            });
+        {% endfor %}
+    {% endif %}
+
+    // CSRF Token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrfToken = getCookie('csrftoken');
+
+    // Toggle Status
+    function toggleStatus(brandId, brandName) {
+        Swal.fire({
+            title: `Toggle status for ${brandName}?`,
+            text: `This will ${brandName} active status.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Toggle',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch(`/product/admin/brands/${brandId}/toggle-status/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken,
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: data.is_active ? 'Activated' : 'Deactivated',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                });
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.3/sweetalert2.min.css">
+<style>
+    .switch { position: relative; display: inline-block; width: 60px; height: 30px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #dc3545; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #28a745; }
+    input:checked + .slider:before { transform: translateX(30px); }
+    .status-label { margin-left: 10px; font-weight: bold; }
+</style>
+
+<div class="container-fluid">
+    <h1 class="h2 mb-4 text-gray-800">User Management</h1>
+
+    <!-- Stats Overview -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-users"></i> Total Users</h5>
+                    <p class="card-text">{{ total_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-user-check"></i> Active Users</h5>
+                    <p class="card-text">{{ active_users }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-user-slash"></i> Blocked Users</h5>
+                    <p class="card-text">{{ blocked_users }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3" style="background-color: #007bff;">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-users me-2"></i>User List
+            </h6>
+        </div>
+        <div class="card-body">
+
+            <!-- Search Form -->
+            <form method="GET" action="{% url 'user_app:admin_customer_list' %}" class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" name="search" class="form-control" placeholder="Search users..." value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    {% if search_query %}
+                        <a href="{% url 'user_app:admin_customer_list' %}" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</a>
+                    {% endif %}
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Date Joined</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.full_name|default:"N/A" }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.date_joined|date:"M d, Y" }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <label class="switch me-2">
+                                        <input type="checkbox" {% if not user.profile.is_blocked %}checked{% endif %}
+                                               class="user-toggle-switch" data-user-id="{{ user.id }}"
+                                               data-username="{{ user.username }}"
+                                               data-status="{% if user.profile.is_blocked %}blocked{% else %}active{% endif %}">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="status-label">
+                                        {% if user.profile.is_blocked %}<span class="text-danger">Blocked</span>
+                                        {% else %}<span class="text-success">Active</span>{% endif %}
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center">No users found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Hidden Form for Toggle -->
+            <form id="toggleForm" action="" method="post" style="display: none;">
+                {% csrf_token %}
+                <input type="hidden" name="search_query" value="{{ search_query }}">
+                <input type="hidden" name="page" value="{{ users.number }}">
+            </form>
+
+            <!-- Pagination -->
+            {% if users.paginator.num_pages > 1 %}
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if users.has_previous %}
+                        <li class="page-item"><a class="page-link" href="{% url 'user_app:admin_customer_list' %}?page=1{% if search_query %}&search={{ search_query }}{% endif %}" aria-label="First">««</a></li>
+                        <li class="page-item"><a class="page-link" href="{% url 'user_app:admin_customer_list' %}?page={{ users.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" aria-label="Previous">«</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">««</span></li>
+                        <li class="page-item disabled"><span class="page-link">«</span></li>
+                    {% endif %}
+                    {% for page_num in users.paginator.page_range %}
+                        {% if users.number == page_num %}
+                            <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                        {% elif page_num > users.number|add:'-3' and page_num < users.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="{% url 'user_app:admin_customer_list' %}?page={{ page_num }}{% if search_query %}&search={{ search_query }}{% endif %}">{{ page_num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if users.has_next %}
+                        <li class="page-item"><a class="page-link" href="{% url 'user_app:admin_customer_list' %}?page={{ users.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" aria-label="Next">»</a></li>
+                        <li class="page-item"><a class="page-link" href="{% url 'user_app:admin_customer_list' %}?page={{ users.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}" aria-label="Last">»»</a></li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">»</span></li>
+                        <li class="page-item disabled"><span class="page-link">»»</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.3/sweetalert2.all.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+        // Toggle switch
+        var toggleSwitches = document.querySelectorAll('.user-toggle-switch');
+        var toggleForm = document.getElementById('toggleForm');
+        toggleSwitches.forEach(function(checkbox) {
+            checkbox.addEventListener('change', function(event) {
+                event.preventDefault();
+                var userId = this.getAttribute('data-user-id');
+                var username = this.getAttribute('data-username');
+                var currentStatus = this.getAttribute('data-status');
+                var isCurrentlyActive = currentStatus === 'active';
+                var self = this;
+
+                let title = isCurrentlyActive ? 'Block User' : 'Unblock User';
+                let text = isCurrentlyActive ? `Are you sure you want to block user "${username}"?` : `Are you sure you want to unblock user "${username}"?`;
+                let confirmButtonText = isCurrentlyActive ? 'Yes, Block User' : 'Yes, Unblock User';
+                let confirmButtonColor = isCurrentlyActive ? '#dc3545' : '#28a745';
+                let icon = isCurrentlyActive ? 'warning' : 'question';
+
+                Swal.fire({
+                    title: title,
+                    html: text,
+                    icon: icon,
+                    showCancelButton: true,
+                    confirmButtonColor: confirmButtonColor,
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: confirmButtonText,
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        toggleForm.action = "{% url 'user_app:toggle_user_block' 0 %}".replace('0', userId);
+                        toggleForm.submit();
+                        Swal.fire({
+                            title: 'Processing...',
+                            text: 'Please wait while we update the user status.',
+                            allowOutsideClick: false,
+                            allowEscapeKey: false,
+                            didOpen: () => { Swal.showLoading(); }
+                        });
+                    } else {
+                        self.checked = isCurrentlyActive; // Reset to original state
+                    }
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}

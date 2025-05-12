@@ -1,0 +1,1588 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ product.product_name }} | Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+.product-container { padding: 3rem 0; }
+.product-gallery { position: relative; margin-bottom: 2rem; }
+.main-image-container { 
+    position: relative; 
+    overflow: hidden; 
+    border-radius: 8px; 
+    background: var(--light-bg); 
+    aspect-ratio: 1/1; 
+    cursor: crosshair; 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+.main-image { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: contain; 
+    transition: opacity 0.3s; 
+}
+.zoom-lens { 
+    position: absolute; 
+    border: 1px solid #ccc; 
+    width: 80px; 
+    height: 80px; 
+    background-color: rgba(255, 255, 255, 0.4); 
+    cursor: crosshair; 
+    display: none; 
+    z-index: 1001; 
+}
+.breadcrumb {
+    background: transparent;
+    padding: 0.5rem 0;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+}
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--light-text);
+    font-size: 1rem;
+    margin: 0 0.5rem;
+}
+.breadcrumb-item a {
+    color: var(--light-text);
+    text-decoration: none;
+    transition: color 0.3s;
+}
+.breadcrumb-item a:hover {
+    color: var(--accent);
+}
+.breadcrumb-item.active {
+    color: var(--text);
+    font-weight: 500;
+}
+.zoom-result { 
+    position: fixed; 
+    right: 20px; 
+    border: 1px solid #ccc; 
+    width: 300px; 
+    height: 300px; 
+    background-repeat: no-repeat; 
+    background-color: white; 
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); 
+    z-index: 1000; 
+    display: none; 
+    border-radius: 3px; 
+    pointer-events: none; 
+}
+.thumbnail-nav { 
+    width: 50px; 
+    height: 50px; 
+    object-fit: cover; 
+    cursor: pointer; 
+    border: 1px solid #ddd; 
+    border-radius: 4px; 
+    transition: all 0.3s; 
+}
+.thumbnail-nav:hover { 
+    border-color: var(--accent); 
+    opacity: 0.8; 
+}
+.row.g-2 { gap: 0.5rem; }
+.product-title { 
+    font-size: 1.8rem; 
+    font-weight: 500; 
+    margin-bottom: 0.5rem; 
+    color: var(--text); 
+}
+.product-meta { 
+    display: flex; 
+    align-items: center; 
+    gap: 1rem; 
+    margin-bottom: 1rem; 
+    flex-wrap: wrap; 
+}
+.product-meta-item { 
+    display: flex; 
+    align-items: center; 
+    color: var(--light-text); 
+    font-size: 0.85rem; 
+}
+.product-meta-item svg { 
+    margin-right: 0.5rem; 
+    width: 14px; 
+    height: 14px; 
+    stroke: var(--light-text); 
+}
+.product-description { 
+    margin-bottom: 1.5rem; 
+    color: var(--text); 
+    line-height: 1.6; 
+    font-size: 0.95rem; 
+}
+.variant-card-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.variant-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--bg);
+    text-align: center;
+}
+.variant-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+.variant-card.active {
+    border-color: var(--accent);
+    background: var(--light-bg);
+}
+.variant-card-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+.variant-card-price {
+    font-size: 0.85rem;
+    color: var(--accent);
+}
+.variant-card-stock {
+    font-size: 0.8rem;
+    color: var(--light-text);
+}
+.price-container { 
+    display: flex; 
+    align-items: baseline; 
+    gap: 0.8rem; 
+    margin-bottom: 1rem; 
+}
+.current-price { 
+    font-size: 1.8rem; 
+    font-weight: 500; 
+    color: var(--text); 
+}
+.original-price { 
+    font-size: 1.1rem; 
+    text-decoration: line-through; 
+    color: var(--light-text); 
+}
+.discount-badge { 
+    background: var(--accent); 
+    color: white; 
+    padding: 0.3rem 0.6rem; 
+    border-radius: 2px; 
+    font-size: 0.75rem; 
+    font-weight: 500; 
+}
+.quantity-selector { 
+    display: flex; 
+    align-items: center; 
+    margin-bottom: 1.5rem; 
+}
+.quantity-btn { 
+    width: 36px; 
+    height: 36px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    background: var(--light-bg); 
+    border: none; 
+    border-radius: 2px; 
+    cursor: pointer; 
+    transition: all 0.3s; 
+}
+.quantity-btn:hover { 
+    background: var(--accent); 
+    color: white; 
+}
+.quantity-input { 
+    width: 50px; 
+    height: 36px; 
+    text-align: center; 
+    border: 1px solid var(--border); 
+    border-radius: 2px; 
+    margin: 0 5px; 
+    font-size: 0.9rem; 
+    background: var(--bg); 
+}
+.product-actions {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.action-btn {
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.action-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.3s ease;
+}
+.btn-add-cart {
+    background: var(--primary);
+    color: white;
+    border: none;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+.btn-add-cart:hover {
+    background: var(--accent);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+.btn-add-cart:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+.btn-buy-now {
+    background: transparent;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    flex: 1;
+}
+.btn-buy-now:hover {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+.btn-buy-now:disabled {
+    border-color: #ccc;
+    color: #ccc;
+    cursor: not-allowed;
+}
+.btn-wishlist {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+    padding: 0.8rem 1rem;
+}
+.btn-wishlist:hover, .btn-wishlist.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+.btn-wishlist.active svg {
+    fill: var(--accent);
+    transform: scale(1.1);
+}
+.btn-wishlist:hover svg {
+    transform: scale(1.1);
+}
+.stock-status { 
+    display: flex; 
+    align-items: center; 
+    gap: 0.5rem; 
+    margin-bottom: 1rem; 
+    font-size: 0.85rem; 
+}
+.in-stock { color: #28a745; }
+.low-stock { color: #ffc107; }
+.out-of-stock { color: #dc3545; }
+.product-tabs { 
+    margin: 3rem 0; 
+}
+.tab-buttons { 
+    display: flex; 
+    border-bottom: 1px solid var(--border); 
+    margin-bottom: 1.5rem; 
+}
+.tab-btn { 
+    padding: 0.8rem 1.2rem; 
+    background: none; 
+    border: none; 
+    border-bottom: 2px solid transparent; 
+    font-size: 0.9rem; 
+    font-weight: 500; 
+    color: var(--light-text); 
+    cursor: pointer; 
+    transition: all 0.3s; 
+}
+.tab-btn.active { 
+    color: var(--text); 
+    border-bottom-color: var(--accent); 
+}
+.tab-content { 
+    display: none; 
+}
+.tab-content.active { 
+    display: block; 
+    animation: fadeIn 0.5s; 
+}
+.reviews-container { 
+    margin-bottom: 2rem; 
+}
+.review-summary { 
+    display: flex; 
+    align-items: center; 
+    gap: 1.5rem; 
+    margin-bottom: 1.5rem; 
+}
+.average-rating { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+}
+.rating-value { 
+    font-size: 2.5rem; 
+    font-weight: 500; 
+    color: var(--text); 
+}
+.rating-stars { 
+    margin: 0.5rem 0; 
+}
+.star-rating {
+    display: inline-flex;
+    font-size: 1.1rem;
+    color: #ccc;
+}
+.star-rating .star {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    position: relative;
+}
+.star-rating .star::before {
+    content: '\f005';
+    color: #ccc;
+}
+.star-rating .star.filled::before {
+    content: '\f005';
+    color: #ffc107;
+}
+.star-rating .star.half-filled {
+    position: relative;
+}
+.star-rating .star.half-filled::before {
+    content: '\f005';
+    color: #ccc;
+}
+.star-rating .star.half-filled::after {
+    content: '\f005';
+    color: #ffc107;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 50%;
+    overflow: hidden;
+}
+.review-item { 
+    padding: 1.2rem; 
+    border: 1px solid var(--border); 
+    border-radius: 4px; 
+    margin-bottom: 1rem; 
+    transition: all 0.3s; 
+}
+.review-item:hover { 
+    transform: translateY(-3px); 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+}
+.reviewer-name { 
+    font-weight: 500; 
+    color: var(--text); 
+}
+.review-date { 
+    font-size: 0.8rem; 
+    color: var(--light-text); 
+}
+.review-content { 
+    color: var(--text); 
+    line-height: 1.6; 
+    font-size: 0.9rem; 
+}
+.verified-badge { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 0.3rem; 
+    font-size: 0.8rem; 
+    color: #28a745; 
+}
+.review-form { 
+    padding: 1.5rem; 
+    border: 1px solid var(--border); 
+    border-radius: 4px; 
+    margin-top: 1.5rem; 
+}
+.form-title { 
+    font-size: 1.1rem; 
+    font-weight: 500; 
+    margin-bottom: 1rem; 
+    color: var(--text); 
+}
+.star-rating-input { 
+    display: flex; 
+    gap: 0.3rem; 
+    margin-bottom: 1rem; 
+}
+.star-input { 
+    display: none; 
+}
+.star-label { 
+    cursor: pointer; 
+    font-size: 1.3rem; 
+    color: #ccc; 
+    transition: all 0.2s; 
+}
+.star-label:hover, .star-label.active { 
+    color: #ffc107; 
+}
+.form-group { 
+    margin-bottom: 1rem; 
+}
+.form-label { 
+    display: block; 
+    margin-bottom: 0.3rem; 
+    font-weight: 500; 
+    color: var(--text); 
+}
+.form-control { 
+    width: 100%; 
+    padding: 0.6rem 0.8rem; 
+    border: 1px solid var(--border); 
+    border-radius: 2px; 
+    background: var(--bg); 
+    color: var(--text); 
+    transition: all 0.3s; 
+}
+.form-control:focus { 
+    border-color: var(--accent); 
+    outline: none; 
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.1); 
+}
+.related-products { 
+    margin-top: 3rem; 
+}
+.related-title { 
+    font-size: 1.3rem; 
+    font-weight: 500; 
+    margin-bottom: 1.5rem; 
+    text-align: center; 
+    color: var(--text); 
+}
+.product-card { 
+    border: 1px solid var(--border); 
+    border-radius: 8px; 
+    overflow: hidden; 
+    transition: all 0.3s; 
+}
+.product-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
+}
+.product-card-img { 
+    aspect-ratio: 1/1; 
+    overflow: hidden; 
+}
+.product-card-img img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    transition: transform 0.5s; 
+}
+.product-card:hover .product-card-img img { 
+    transform: scale(1.05); 
+}
+.product-card-body { 
+    padding: 1rem; 
+}
+.product-card-title { 
+    font-size: 0.95rem; 
+    font-weight: 500; 
+    color: var(--text); 
+    margin-bottom: 0.5rem; 
+}
+.product-card-price { 
+    font-size: 1rem; 
+    font-weight: 500; 
+    color: var(--accent); 
+}
+@media (max-width: 991px) {
+    .product-title { font-size: 1.5rem; }
+    .current-price { font-size: 1.6rem; }
+    .original-price { font-size: 1rem; }
+}
+@media (max-width: 767px) {
+    .product-actions { flex-direction: column; }
+    .action-btn { width: 100%; }
+    .variant-card-container { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container product-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'user_app:user_home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'product_app:user_product_list' %}">Products</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'product_app:user_product_list' %}?category={{ product.category.id }}">{{ product.category.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.product_name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Product Gallery -->
+        <div class="col-lg-6 mb-4">
+            <div id="productCarousel" class="carousel slide" data-bs-ride="carousel">
+                <div class="carousel-indicators">
+                    {% for variant_data in variants %}
+                        {% for image in variant_data.images %}
+                            {% with forloop.counter0 as slide_index %}
+                                <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ slide_index }}"
+                                        {% if slide_index == 0 %}class="active" aria-current="true"{% endif %}
+                                        aria-label="Slide {{ forloop.counter }}"></button>
+                            {% endwith %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+                <div class="carousel-inner rounded">
+                    {% for variant_data in variants %}
+                        {% for image in variant_data.images %}
+                            {% with forloop.counter0 as slide_index %}
+                                <div class="carousel-item {% if slide_index == 0 %}active{% endif %}">
+                                    <div class="main-image-container zoom-container">
+                                        <img src="{{ image.image.url }}" class="main-image zoom-image" alt="{{ product.product_name }} - {{ variant_data.variant.flavor|default:'Standard' }}">
+                                        <div class="zoom-lens"></div>
+                                        <div class="zoom-result"></div>
+                                    </div>
+                                </div>
+                            {% endwith %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Next</span>
+                </button>
+            </div>
+            <div class="row mt-2 g-2 d-none d-md-flex">
+                {% for variant_data in variants %}
+                    {% for image in variant_data.images %}
+                        {% with forloop.counter0 as slide_index %}
+                            <div class="col-2">
+                                <img src="{{ image.image.url }}" class="img-thumbnail thumbnail-nav" alt="Thumbnail {{ forloop.counter }}"
+                                     data-bs-target="#productCarousel" data-bs-slide-to="{{ slide_index }}">
+                            </div>
+                        {% endwith %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            <small class="text-muted d-block mt-1"><i class="bi bi-zoom-in"></i> Hover to zoom, click to enlarge</small>
+        </div>
+
+        <!-- Product Info -->
+        <div class="col-lg-6">
+            <h1 class="product-title">{{ product.product_name }}</h1>
+            <div class="product-meta">
+                <div class="product-meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                    {{ product.category.name }}
+                </div>
+                <div class="product-meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                    </svg>
+                    {{ product.brand.name }}
+                </div>
+                <div class="product-meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                    {{ product.country_of_manufacture }}
+                </div>
+                <div class="product-meta-item">
+                    <div class="rating-stars">
+                        {% if review_count > 0 %}
+                            <div class="star-rating" data-rating="{{ avg_rating }}">
+                                {% for i in "12345"|make_list %}
+                                    <span class="star"></span>
+                                {% endfor %}
+                            </div>
+                            <span class="ms-1">{{ avg_rating|floatformat:1 }} ({{ review_count }})</span>
+                        {% else %}
+                            <span>No reviews yet</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="product-description">
+                {{ product.description|linebreaks }}
+            </div>
+
+            <form id="addToCartForm" method="post" action="{% url 'cart_and_orders_app:add_to_cart' %}">
+                {% csrf_token %}
+                <input type="hidden" name="variant_id" id="selectedVariantId" value="{{ variants.0.variant.id }}">
+
+                <!-- Variant Selection -->
+                {% if variants|length > 1 %}
+                    <div class="variant-card-container" id="variantOptions">
+                        {% for variant_data in variants %}
+                            <div class="variant-card {% if forloop.first %}active{% endif %}" 
+                                 data-variant-id="{{ variant_data.variant.id }}"
+                                 data-flavor="{{ variant_data.variant.flavor|default:'' }}"
+                                 data-size="{{ variant_data.variant.size_weight|default:'' }}">
+                                <div class="variant-card-title">
+                                    {% if variant_data.variant.flavor %}
+                                        {{ variant_data.variant.flavor }}<br>
+                                    {% endif %}
+                                    {% if variant_data.variant.size_weight %}
+                                        {{ variant_data.variant.size_weight }}
+                                    {% endif %}
+                                </div>
+                                <div class="variant-card-price">
+                                    ₹{{ variant_data.best_price|floatformat:2 }}
+                                </div>
+                                <div class="variant-card-stock">
+                                    {% if variant_data.variant.stock > 10 %}
+                                        In Stock
+                                    {% elif variant_data.variant.stock > 0 %}
+                                        Only {{ variant_data.variant.stock }} left
+                                    {% else %}
+                                        Out of Stock
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Price Display -->
+                <div class="price-container" id="priceContainer">
+                    {% if min_price == max_price %}
+                        <span class="current-price" id="currentPrice">₹{{ min_price|floatformat:2 }}</span>
+                    {% else %}
+                        <span class="current-price" id="currentPrice">₹{{ min_price|floatformat:2 }} - ₹{{ max_price|floatformat:2 }}</span>
+                    {% endif %}
+                    {% if variants.0.has_offer %}
+                        <span class="original-price" id="originalPrice">₹{{ variants.0.variant.original_price|floatformat:2 }}</span>
+                        <span class="discount-badge" id="discountBadge">{{ variants.0.best_offer_percentage|floatformat:0 }}% OFF</span>
+                    {% endif %}
+                </div>
+
+                <!-- Stock Status -->
+                <div class="stock-status" id="stockStatus">
+                    {% if total_stock > 5 %}
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#28a745" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <span class="in-stock">In Stock</span>
+                    {% elif total_stock > 0 %}
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ffc107" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <span class="low-stock">Limited Stock</span>
+                    {% else %}
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#dc3545" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        <span class="out-of-stock">Out of Stock</span>
+                    {% endif %}
+                </div>
+
+                <!-- Quantity Selector -->
+                <div class="quantity-selector">
+                    <button type="button" class="quantity-btn" id="decreaseQuantity">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                    <input type="number" name="quantity" id="quantity" class="quantity-input" value="1" min="1" max="5" readonly>
+                    <button type="button" class="quantity-btn" id="increaseQuantity">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="product-actions">
+                    <button type="button" class="action-btn btn-add-cart" id="addToCartBtn" {% if total_stock == 0 %}disabled{% endif %}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="9" cy="21" r="1"></circle>
+                            <circle cx="20" cy="21" r="1"></circle>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                        </svg>
+                        Add to Cart
+                    </button>
+                    <button type="button" class="action-btn btn-buy-now" id="buyNowBtn" {% if total_stock == 0 %}disabled{% endif %}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                            <path d="M3 6h18"></path>
+                            <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        </svg>
+                        Buy Now
+                    </button>
+                    <button type="button" class="action-btn btn-wishlist" id="wishlistBtn" data-variant-id="{{ variants.0.variant.id }}" {% if variants.0.is_in_wishlist %}data-in-wishlist="true"{% endif %}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        Add to Wishlist
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Tabs -->
+    <div class="product-tabs">
+        <div class="tab-buttons">
+            <button class="tab-btn active" data-tab="description">Description</button>
+            <button class="tab-btn" data-tab="reviews">Reviews ({{ review_count }})</button>
+        </div>
+
+        <div class="tab-content active" id="description">
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <h3 class="section-title">Product Details</h3>
+                    <p>{{ product.description|linebreaks }}</p>
+
+                    {% if product.variants.first.flavor %}
+                        <h4>Available Flavors</h4>
+                        <ul>
+                            {% for variant in product.variants.all %}
+                                {% if variant.flavor %}
+                                    <li>{{ variant.flavor }}</li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    {% if product.variants.first.size_weight %}
+                        <h4>Available Sizes</h4>
+                        <ul>
+                            {% for variant in product.variants.all %}
+                                {% if variant.size_weight %}
+                                    <li>{{ variant.size_weight }}</li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="reviews">
+            <div class="reviews-container">
+                <div class="review-summary">
+                    <div class="average-rating">
+                        <div class="rating-value">{{ avg_rating|floatformat:1 }}</div>
+                        <div class="rating-stars">
+                            <div class="star-rating" data-rating="{{ avg_rating }}">
+                                {% for i in "12345"|make_list %}
+                                    <span class="star"></span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="rating-count">{{ review_count }} review{{ review_count|pluralize }}</div>
+                    </div>
+
+                    {% if can_review %}
+                        <button class="btn btn-primary" id="writeReviewBtn">Write a Review</button>
+                    {% elif has_reviewed %}
+                        <div class="alert alert-info">You have already reviewed this product.</div>
+                    {% elif not user.is_authenticated %}
+                        <a href="{% url 'user_app:user_login' %}?next={{ request.path }}" class="btn btn-outline-primary">Login to Write a Review</a>
+                    {% endif %}
+                </div>
+
+                <div class="reviews-list">
+                    {% for review in reviews %}
+                        <div class="review-item">
+                            <div class="review-header d-flex justify-content-between">
+                                <div class="reviewer-info">
+                                    <span class="reviewer-name">{{ review.user.username }}</span>
+                                    <span class="review-date">{{ review.created_at|date:"F d, Y" }}</span>
+                                    {% if review.is_verified_purchase %}
+                                        <span class="verified-badge">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                            </svg>
+                                            Verified Purchase
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="review-rating">
+                                    <div class="star-rating" data-rating="{{ review.rating }}">
+                                        {% for i in "12345"|make_list %}
+                                            <span class="star"></span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if review.title %}
+                                <h4 class="review-title mt-2">{{ review.title }}</h4>
+                            {% endif %}
+                            <div class="review-content">
+                                {{ review.comment|linebreaks }}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="alert alert-info">No reviews yet. Be the first to review this product!</div>
+                    {% endfor %}
+                </div>
+
+                {% if can_review %}
+                    <div class="review-form" id="reviewForm" style="display: none;">
+                        <h3 class="form-title">Write Your Review</h3>
+                        <form id="submitReviewForm" method="post" action="{% url 'product_app:submit_review' product.slug %}">
+                            {% csrf_token %}
+                            <div class="form-group">
+                                <label class="form-label">Rating</label>
+                                <div class="star-rating-input" id="ratingStars">
+                                    <input type="radio" name="rating" id="star5" class="star-input" value="5">
+                                    <label for="star5" class="star-label"><i class="fas fa-star"></i></label>
+                                    <input type="radio" name="rating" id="star4" class="star-input" value="4">
+                                    <label for="star4" class="star-label"><i class="fas fa-star"></i></label>
+                                    <input type="radio" name="rating" id="star3" class="star-input" value="3">
+                                    <label for="star3" class="star-label"><i class="fas fa-star"></i></label>
+                                    <input type="radio" name="rating" id="star2" class="star-input" value="2">
+                                    <label for="star2" class="star-label"><i class="fas fa-star"></i></label>
+                                    <input type="radio" name="rating" id="star1" class="star-input" value="1">
+                                    <label for="star1" class="star-label"><i class="fas fa-star"></i></label>
+                                </div>
+                                <div class="invalid-feedback" id="ratingError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="reviewTitle" class="form-label">Title (Optional)</label>
+                                <input type="text" name="title" id="reviewTitle" class="form-control" maxlength="100" placeholder="Summarize your review">
+                            </div>
+                            <div class="form-group">
+                                <label for="reviewComment" class="form-label">Review</label>
+                                <textarea name="comment" id="reviewComment" class="form-control" rows="4" placeholder="Share your experience with this product" required></textarea>
+                                <div class="invalid-feedback" id="commentError"></div>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="submitReviewBtn">Submit Review</button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" id="cancelReviewBtn">Cancel</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Products -->
+    {% if related_products %}
+        <div class="related-products">
+            <h2 class="related-title">You May Also Like</h2>
+            <div class="row">
+                {% for related in related_products %}
+                    <div class="col-md-3 col-sm-6 mb-4">
+                        <div class="product-card">
+                            <a href="{% url 'product_app:user_product_detail' related.product.slug %}" class="product-card-img">
+                                {% if related.primary_image %}
+                                    <img src="{{ related.primary_image.image.url }}" alt="{{ related.product.product_name }}">
+                                {% else %}
+                                    <img src="/placeholder.svg?height=300&width=300" alt="{{ related.product.product_name }}">
+                                {% endif %}
+                            </a>
+                            <div class="product-card-body">
+                                <h3 class="product-card-title">{{ related.product.product_name }}</h3>
+                                <div class="product-card-price">₹{{ related.best_price }}</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize variables
+    const thumbnailsContainer = document.querySelectorAll('.thumbnail-nav');
+    const variantOptions = document.getElementById('variantOptions');
+    const quantityInput = document.getElementById('quantity');
+    const decreaseQuantityBtn = document.getElementById('decreaseQuantity');
+    const increaseQuantityBtn = document.getElementById('increaseQuantity');
+    const addToCartBtn = document.getElementById('addToCartBtn');
+    const buyNowBtn = document.getElementById('buyNowBtn');
+    const wishlistBtn = document.getElementById('wishlistBtn');
+    const selectedVariantIdInput = document.getElementById('selectedVariantId');
+    const priceContainer = document.getElementById('priceContainer');
+    const stockStatus = document.getElementById('stockStatus');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const writeReviewBtn = document.getElementById('writeReviewBtn');
+    const reviewForm = document.getElementById('reviewForm');
+    const cancelReviewBtn = document.getElementById('cancelReviewBtn');
+    const submitReviewForm = document.getElementById('submitReviewForm');
+
+    // Product variants data
+    const variantsData = [
+        {% for variant_data in variants %}
+        {
+            id: {{ variant_data.variant.id }},
+            flavor: "{{ variant_data.variant.flavor|default:'' }}",
+            size: "{{ variant_data.variant.size_weight|default:'' }}",
+            price: {{ variant_data.best_price|floatformat:2 }},
+            originalPrice: {{ variant_data.variant.original_price|floatformat:2 }},
+            hasOffer: {% if variant_data.has_offer %}true{% else %}false{% endif %},
+            offerPercentage: "{{ variant_data.best_offer_percentage|floatformat:0 }}",
+            stock: {{ variant_data.variant.stock }},
+            isInWishlist: {% if variant_data.is_in_wishlist %}true{% else %}false{% endif %},
+            images: [
+                {% for image in variant_data.images %}
+                "{{ image.image.url }}",
+                {% endfor %}
+            ]
+        },
+        {% endfor %}
+    ];
+
+    // Render Star Ratings
+    function renderStars() {
+        document.querySelectorAll('.star-rating[data-rating]').forEach(ratingEl => {
+            const rating = parseFloat(ratingEl.dataset.rating);
+            const wholeStars = Math.floor(rating);
+            const fractionalPart = rating - wholeStars;
+            const stars = ratingEl.querySelectorAll('.star');
+            
+            stars.forEach((star, index) => {
+                star.classList.remove('filled', 'half-filled');
+                if (index < wholeStars) {
+                    star.classList.add('filled');
+                } else if (index === wholeStars && fractionalPart >= 0.3 && fractionalPart <= 0.7) {
+                    star.classList.add('half-filled');
+                } else if (index === wholeStars && fractionalPart > 0.7) {
+                    star.classList.add('filled');
+                }
+            });
+        });
+    }
+    renderStars();
+
+    // Thumbnail Navigation
+    thumbnailsContainer.forEach(thumb => {
+        thumb.addEventListener('click', function() {
+            const slideIndex = this.getAttribute('data-bs-slide-to');
+            const carousel = new bootstrap.Carousel(document.getElementById('productCarousel'));
+            carousel.to(parseInt(slideIndex));
+        });
+    });
+
+    // Variant selection
+    function selectVariant(variantId) {
+        const variant = variantsData.find(v => v.id == variantId);
+        if (!variant) return;
+    
+        selectedVariantIdInput.value = variantId;
+    
+        if (variantOptions) {
+            variantOptions.querySelectorAll('.variant-card').forEach(card => {
+                card.classList.remove('active');
+                if (card.dataset.variantId == variantId) {
+                    card.classList.add('active');
+                    gsap.fromTo(card, 
+                        { scale: 0.95 }, 
+                        { scale: 1, duration: 0.3, ease: 'back.out(1.7)' }
+                    );
+                }
+            });
+        }
+    
+        updatePriceDisplay(variant);
+        updateStockStatus(variant);
+    
+        // Limit quantity to minimum of variant stock or 5
+        const maxQuantity = Math.min(variant.stock, 5);
+        quantityInput.max = maxQuantity;
+        if (parseInt(quantityInput.value) > maxQuantity) {
+            quantityInput.value = maxQuantity > 0 ? maxQuantity : 1;
+        }
+    
+        updateWishlistButton(variant);
+    
+        addToCartBtn.disabled = variant.stock <= 0;
+        buyNowBtn.disabled = variant.stock <= 0;
+    }
+
+    // Update price display
+    function updatePriceDisplay(variant) {
+        const currentPrice = document.getElementById('currentPrice');
+        const originalPrice = document.getElementById('originalPrice');
+        const discountBadge = document.getElementById('discountBadge');
+
+        if (!currentPrice) return;
+
+        gsap.to(priceContainer, {
+            opacity: 0,
+            y: -10,
+            duration: 0.2,
+            onComplete: () => {
+                currentPrice.textContent = `₹${variant.price}`;
+
+                if (variant.hasOffer) {
+                    if (!originalPrice) {
+                        const origPrice = document.createElement('span');
+                        origPrice.id = 'originalPrice';
+                        origPrice.className = 'original-price';
+                        origPrice.textContent = `₹${variant.originalPrice}`;
+                        priceContainer.appendChild(origPrice);
+
+                        const discBadge = document.createElement('span');
+                        discBadge.id = 'discountBadge';
+                        discBadge.className = 'discount-badge';
+                        discBadge.textContent = `${variant.offerPercentage}% OFF`;
+                        priceContainer.appendChild(discBadge);
+                    } else {
+                        originalPrice.textContent = `₹${variant.originalPrice}`;
+                        originalPrice.style.display = 'inline';
+                        discountBadge.textContent = `${variant.offerPercentage}% OFF`;
+                        discountBadge.style.display = 'inline';
+                    }
+                } else if (originalPrice) {
+                    originalPrice.style.display = 'none';
+                    discountBadge.style.display = 'none';
+                }
+
+                gsap.to(priceContainer, { opacity: 1, y: 0, duration: 0.3 });
+            }
+        });
+    }
+
+    // Update stock status
+    function updateStockStatus(variant) {
+        gsap.to(stockStatus, {
+            opacity: 0,
+            duration: 0.2,
+            onComplete: () => {
+                let html = '';
+    
+                if (variant.stock > 5) {
+                    html = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#28a745" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <span class="in-stock">In Stock</span>
+                    `;
+                } else if (variant.stock > 0) {
+                    html = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ffc107" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <span class="low-stock">Limited Stock</span>
+                    `;
+                } else {
+                    html = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#dc3545" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        <span class="out-of-stock">Out of Stock</span>
+                    `;
+                }
+    
+                stockStatus.innerHTML = html;
+                gsap.to(stockStatus, { opacity: 1, duration: 0.3 });
+            }
+        });
+    }
+
+    // Update wishlist button
+    function updateWishlistButton(variant) {
+        if (!wishlistBtn) return;
+
+        wishlistBtn.dataset.variantId = variant.id;
+
+        if (variant.isInWishlist) {
+            wishlistBtn.classList.add('active');
+            wishlistBtn.dataset.inWishlist = 'true';
+            wishlistBtn.querySelector('svg').style.fill = 'currentColor';
+        } else {
+            wishlistBtn.classList.remove('active');
+            wishlistBtn.removeAttribute('data-in-wishlist');
+            wishlistBtn.querySelector('svg').style.fill = 'none';
+        }
+    }
+
+    // Variant card click handler
+    if (variantOptions) {
+        variantOptions.addEventListener('click', function(e) {
+            const card = e.target.closest('.variant-card');
+            if (!card) return;
+
+            const variantId = card.dataset.variantId;
+            selectVariant(variantId);
+        });
+    }
+
+    // Quantity buttons
+    if (decreaseQuantityBtn) {
+        decreaseQuantityBtn.addEventListener('click', function() {
+            const currentValue = parseInt(quantityInput.value);
+            if (currentValue > 1) {
+                quantityInput.value = currentValue - 1;
+                gsap.to(this, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1 });
+            }
+        });
+    }
+
+    if (increaseQuantityBtn) {
+        increaseQuantityBtn.addEventListener('click', function() {
+            const currentValue = parseInt(quantityInput.value);
+            const maxValue = Math.min(parseInt(quantityInput.max), 5);
+            if (currentValue < maxValue) {
+                quantityInput.value = currentValue + 1;
+                gsap.to(this, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1 });
+            }
+        });
+    }
+
+    // Add to cart button
+    if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', function() {
+            const variantId = selectedVariantIdInput.value;
+            const quantity = quantityInput.value;
+
+            gsap.to(this, { scale: 0.95, duration: 0.1, yoyo: true, repeat: 1 });
+
+            fetch('{% url "cart_and_orders_app:add_to_cart" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    variant_id: variantId,
+                    quantity: quantity
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Product added to cart successfully!', 'success');
+                    const cartCount = document.getElementById('cart-count');
+                    if (cartCount) {
+                        cartCount.textContent = data.cart_count;
+                        cartCount.style.display = 'flex';
+                        gsap.fromTo(cartCount, 
+                            { scale: 0 }, 
+                            { scale: 1.2, duration: 0.3, ease: "back.out(2)", 
+                              onComplete: () => gsap.to(cartCount, { scale: 1, duration: 0.2 }) 
+                            }
+                        );
+                    }
+                    document.dispatchEvent(new CustomEvent('cart-updated', {
+                        detail: { count: data.cart_count }
+                    }));
+                } else {
+                    showAlert(data.error || 'Failed to add product to cart', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('An error occurred. Please try again.', 'danger');
+            });
+        });
+    }
+
+    // Buy now button
+    if (buyNowBtn) {
+        buyNowBtn.addEventListener('click', function() {
+            const variantId = selectedVariantIdInput.value;
+            const quantity = quantityInput.value;
+
+            gsap.to(this, { scale: 0.95, duration: 0.1, yoyo: true, repeat: 1 });
+
+            fetch('{% url "cart_and_orders_app:buy_now" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    variant_id: variantId,
+                    quantity: quantity
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    showAlert(data.message || 'Failed to process buy now request', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('An error occurred. Please try again.', 'danger');
+            });
+        });
+    }
+
+    // Wishlist button
+    if (wishlistBtn) {
+        wishlistBtn.addEventListener('click', function () {
+            const variantId = this.dataset.variantId;
+            const isInWishlist = this.hasAttribute('data-in-wishlist');
+        
+            if (isInWishlist) {
+                showAlert('This product is already in your wishlist!', 'info');
+                return;
+            }
+        
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            this.disabled = true;
+        
+            fetch('/wishlist/toggle/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ variant_id: variantId })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    this.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="${data.is_in_wishlist ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        Add to Wishlist
+                    `;
+        
+                    if (data.success) {
+                        if (data.is_in_wishlist) {
+                            this.classList.add('active');
+                            this.setAttribute('data-in-wishlist', 'true');
+                            showAlert('Added to wishlist!', 'success');
+                        } else {
+                            this.classList.remove('active');
+                            this.removeAttribute('data-in-wishlist');
+                            showAlert('Removed from wishlist!', 'success');
+                        }
+        
+                        const wishlistCount = document.getElementById('wishlist-count');
+                        if (wishlistCount) {
+                            wishlistCount.textContent = data.wishlist_count;
+                            wishlistCount.style.display = data.wishlist_count > 0 ? 'flex' : 'none';
+                            if (data.wishlist_count > 0) {
+                                gsap.fromTo(wishlistCount,
+                                    { scale: 0 },
+                                    {
+                                        scale: 1.2, duration: 0.3, ease: "back.out(2)",
+                                        onComplete: () => gsap.to(wishlistCount, { scale: 1, duration: 0.2 })
+                                    }
+                                );
+                            }
+                        }
+        
+                        document.dispatchEvent(new CustomEvent('wishlist-updated', {
+                            detail: { count: data.wishlist_count }
+                        }));
+                    } else {
+                        showAlert(data.message || 'Failed to update wishlist', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showAlert('An error occurred. Please try again.', 'danger');
+                })
+                .finally(() => {
+                    this.disabled = false;
+                });
+        });
+    }
+
+    // Tab functionality
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === tabId) {
+                    content.classList.add('active');
+                    gsap.from(content, { opacity: 0, y: 20, duration: 0.5 });
+                }
+            });
+        });
+    });
+
+    // Review form functionality
+    if (writeReviewBtn && reviewForm) {
+        writeReviewBtn.addEventListener('click', function() {
+            reviewForm.style.display = 'block';
+            gsap.fromTo(reviewForm, 
+                { opacity: 0, y: 20 }, 
+                { opacity: 1, y: 0, duration: 0.5 }
+            );
+            this.style.display = 'none';
+            reviewForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
+    if (cancelReviewBtn && writeReviewBtn) {
+        cancelReviewBtn.addEventListener('click', function() {
+            gsap.to(reviewForm, { 
+                opacity: 0, 
+                y: 20, 
+                duration: 0.3,
+                onComplete: () => {
+                    reviewForm.style.display = 'none';
+                    writeReviewBtn.style.display = 'block';
+                }
+            });
+        });
+    }
+
+    // Review form submission
+    if (submitReviewForm) {
+        submitReviewForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            let isValid = true;
+
+            const rating = formData.get('rating');
+            if (!rating) {
+                document.getElementById('ratingError').textContent = 'Please select a rating';
+                document.getElementById('ratingError').style.display = 'block';
+                isValid = false;
+            } else {
+                document.getElementById('ratingError').style.display = 'none';
+            }
+
+            const comment = formData.get('comment');
+            if (!comment || comment.trim().length < 10) {
+                document.getElementById('commentError').textContent = 'Please enter a comment (minimum 10 characters)';
+                document.getElementById('commentError').style.display = 'block';
+                isValid = false;
+            } else {
+                document.getElementById('commentError').style.display = 'none';
+            }
+
+            if (!isValid) return;
+
+            const submitBtn = document.getElementById('submitReviewBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Submitting...';
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Review submitted successfully!', 'success');
+                    gsap.to(reviewForm, { 
+                        opacity: 0, 
+                        y: 20, 
+                        duration: 0.3,
+                        onComplete: () => {
+                            reviewForm.style.display = 'none';
+                            const reviewsContainer = document.querySelector('.reviews-container');
+                            const successMessage = document.createElement('div');
+                            successMessage.className = 'alert alert-success mt-3';
+                            successMessage.innerHTML = `
+                                <svg viewBox="0 0 24 24" width="20" height="20" class="me-2" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                Your review has been submitted and will be visible after approval.
+                            `;
+                            reviewsContainer.insertBefore(successMessage, reviewsContainer.firstChild);
+                            gsap.fromTo(successMessage, 
+                                { opacity: 0, y: 20 }, 
+                                { opacity: 1, y: 0, duration: 0.5 }
+                            );
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }
+                    });
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Submit Review';
+                    if (typeof data.error === 'object') {
+                        for (const [field, error] of Object.entries(data.error)) {
+                            const errorElement = document.getElementById(`${field}Error`);
+                            if (errorElement) {
+                                errorElement.textContent = error;
+                                errorElement.style.display = 'block';
+                            } else {
+                                showAlert(`${field}: ${error}`, 'danger');
+                            }
+                        }
+                    } else {
+                        showAlert(data.error || 'Failed to submit review', 'danger');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('An error occurred. Please try again.', 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Submit Review';
+            });
+        });
+    }
+
+    // Initialize zoom functionality
+    function initializeZoom() {
+        const zoomContainers = document.querySelectorAll('.zoom-container');
+        zoomContainers.forEach(container => {
+            const img = container.querySelector('.zoom-image');
+            const lens = container.querySelector('.zoom-lens');
+            const result = container.querySelector('.zoom-result');
+    
+            container.removeEventListener('mouseenter', handleMouseEnter);
+            container.removeEventListener('mouseleave', handleMouseLeave);
+            container.removeEventListener('mousemove', handleMouseMove);
+            container.removeEventListener('click', handleClick);
+    
+            function handleMouseEnter() {
+                if (img.complete && img.naturalWidth > 0) {
+                    lens.style.display = 'block';
+                    result.style.display = 'block';
+                    const ratio = img.naturalWidth / img.width;
+                    result.style.backgroundImage = `url('${img.src}')`;
+                    result.style.backgroundSize = `${img.width * ratio}px ${img.height * ratio}px`;
+                    result.style.left = `${container.getBoundingClientRect().width + 10}px`;
+                    result.style.top = `${container.getBoundingClientRect().top}px`;
+                } else {
+                    console.warn('Image not fully loaded or invalid:', img.src);
+                }
+            }
+    
+            function handleMouseLeave() {
+                lens.style.display = 'none';
+                result.style.display = 'none';
+            }
+    
+            function handleMouseMove(e) {
+                const rect = img.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
+                x = Math.max(0, Math.min(x - lens.offsetWidth / 2, img.width - lens.offsetWidth));
+                y = Math.max(0, Math.min(y - lens.offsetHeight / 2, img.height - lens.offsetHeight));
+                lens.style.left = `${x}px`;
+                lens.style.top = `${y}px`;
+                const ratio = img.naturalWidth / img.width;
+                result.style.backgroundPosition = `-${x * ratio}px -${y * ratio}px`;
+            }
+    
+            function handleClick() {
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:9999; cursor:zoom-out';
+                const fullImg = document.createElement('img');
+                fullImg.src = img.src;
+                fullImg.style.maxHeight = '90%';
+                fullImg.style.maxWidth = '90%';
+                fullImg.style.objectFit = 'contain';
+                modal.appendChild(fullImg);
+                document.body.appendChild(modal);
+                modal.addEventListener('click', () => document.body.removeChild(modal));
+            }
+    
+            container.addEventListener('mouseenter', handleMouseEnter);
+            container.addEventListener('mouseleave', handleMouseLeave);
+            container.addEventListener('mousemove', handleMouseMove);
+            container.addEventListener('click', handleClick);
+        });
+    }
+    
+    const carousel = document.getElementById('productCarousel');
+    carousel.addEventListener('slid.bs.carousel', function () {
+        initializeZoom();
+    });
+    
+    initializeZoom();
+
+    // Initialize animations
+    gsap.from('.product-title', { opacity: 0, y: 20, duration: 0.5 });
+    gsap.from('.product-meta', { opacity: 0, y: 20, duration: 0.5, delay: 0.1 });
+    gsap.from('.product-description', { opacity: 0, y: 20, duration: 0.5, delay: 0.2 });
+    gsap.from('.variant-card-container', { opacity: 0, y: 20, duration: 0.5, delay: 0.3 });
+    gsap.from('.price-container', { opacity: 0, y: 20, duration: 0.5, delay: 0.4 });
+    gsap.from('.stock-status', { opacity: 0, y: 20, duration: 0.5, delay: 0.5 });
+    gsap.from('.quantity-selector', { opacity: 0, y: 20, duration: 0.5, delay: 0.6 });
+    gsap.from('.product-actions', { opacity: 0, y: 20, duration: 0.5, delay: 0.7 });
+
+    // Star rating input
+    const starLabels = document.querySelectorAll('.star-label');
+    starLabels.forEach(label => {
+        label.addEventListener('mouseover', function() {
+            starLabels.forEach(l => l.classList.remove('active'));
+            let current = label;
+            while (current) {
+                current.classList.add('active');
+                current = current.previousElementSibling?.previousElementSibling;
+            }
+        });
+
+        label.addEventListener('mouseout', function() {
+            starLabels.forEach(l => {
+                if (!l.previousElementSibling.checked) {
+                    l.classList.remove('active');
+                }
+            });
+            const checkedInput = document.querySelector('.star-input:checked');
+            if (checkedInput) {
+                let current = checkedInput.nextElementSibling;
+                while (current) {
+                    current.classList.add('active');
+                    current = current.previousElementSibling?.previousElementSibling;
+                }
+            }
+        });
+
+        label.addEventListener('click', function() {
+            gsap.to(this, { scale: 1.2, duration: 0.1, yoyo: true, repeat: 1 });
+        });
+    });
+});
+</script>
+{% endblock %}

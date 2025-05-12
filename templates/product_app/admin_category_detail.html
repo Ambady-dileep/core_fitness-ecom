@@ -1,0 +1,258 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
+                        <h1 class="h3 mb-3 mb-md-0" style="color: var(--primary-color);">
+                            Category: {{ category.name }}
+                        </h1>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-{% if category.is_active %}warning{% else %}success{% endif %}" 
+                                    onclick="toggleStatus('{% url 'product_app:admin_toggle_category_status' category.id %}')">
+                                <i class="fas {% if category.is_active %}fa-toggle-on{% else %}fa-toggle-off{% endif %} me-2"></i>
+                                {% if category.is_active %}Deactivate{% else %}Activate{% endif %} Category
+                            </button>
+                            <a href="{% url 'product_app:admin_edit_category' category.id %}" class="btn btn-outline-primary">
+                                <i class="fas fa-edit me-2"></i> Edit Category
+                            </a>
+                            <a href="{% url 'product_app:admin_category_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i> Back to Categories
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if messages %}
+                    <div class="messages mb-4">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Category Details -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Category Details</h5>
+                                    <p><strong>Name:</strong> {{ category.name|default:"Unnamed Category" }}</p>
+                                    <p><strong>Description:</strong> {{ category.description|default:"No description available." }}</p>
+                                    <p><strong>Offer Percentage:</strong> {{ category.offer_percentage }}%</p>
+                                    <p><strong>Status:</strong> 
+                                        <span class="badge bg-{% if category.is_active %}success{% else %}warning{% endif %}">
+                                            {{ category.is_active|yesno:"Active,Inactive" }}
+                                        </span>
+                                    </p>
+                                    <p><strong>Created:</strong> {{ category.created_at|date:"F d, Y" }}</p>
+                                    <p><strong>Updated:</strong> {{ category.updated_at|date:"F d, Y" }}</p>
+                                    {% if category.image %}
+                                    <img src="{{ category.image.url }}" class="img-fluid rounded" alt="{{ category.name }}" style="max-height: 200px;">
+                                    {% else %}
+                                    <img src="{% static 'img/default-category.jpg' %}" class="img-fluid rounded" alt="Default Category Image" style="max-height: 200px;">
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Related Information</h5>
+                                    <p><strong>Brands:</strong> {{ brands.count }}</p>
+                                    {% if brands %}
+                                    <ul>
+                                        {% for brand in brands %}
+                                        <li>{{ brand.name }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <p>No associated brands.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Products -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Products ({{ total_products }})</h5>
+                                    {% if products %}
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <th>Brand</th>
+                                                    <th>Price</th>
+                                                    <th>Stock</th>
+                                                    <th>Rating</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for product in products %}
+                                                <tr>
+                                                    <td>{{ product.product_name }}</td>
+                                                    <td>{{ product.brand.name|default:"No Brand" }}</td>
+                                                    <td>{{ product.min_price|floatformat:2 }}</td>
+                                                    <td>{{ product.total_stock }}</td>
+                                                    <td>{{ product.average_rating|floatformat:1 }} / 5</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- Product Pagination -->
+                                    {% if products.has_other_pages %}
+                                    <nav aria-label="Product page navigation">
+                                        <ul class="pagination justify-content-center mt-3">
+                                            {% if products.has_previous %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?product_page=1" aria-label="First">
+                                                    <span aria-hidden="true">««</span>
+                                                </a>
+                                            </li>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?product_page={{ products.previous_page_number }}" aria-label="Previous">
+                                                    <span aria-hidden="true">«</span>
+                                                </a>
+                                            </li>
+                                            {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">««</span>
+                                            </li>
+                                            <li class="page-item disabled">
+                                                <span class="page-link">«</span>
+                                            </li>
+                                            {% endif %}
+                                            
+                                            {% for i in products.paginator.page_range %}
+                                                {% if products.number == i %}
+                                                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                                                {% elif i > products.number|add:'-3' and i < products.number|add:'3' %}
+                                                <li class="page-item">
+                                                    <a class="page-link" href="?product_page={{ i }}">{{ i }}</a>
+                                                </li>
+                                                {% endif %}
+                                            {% endfor %}
+                                            
+                                            {% if products.has_next %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?product_page={{ products.next_page_number }}" aria-label="Next">
+                                                    <span aria-hidden="true">»</span>
+                                                </a>
+                                            </li>
+                                            <li class="page-item">
+                                                <a class="page-link" href="?product_page={{ products.paginator.num_pages }}" aria-label="Last">
+                                                    <span aria-hidden="true">»»</span>
+                                                </a>
+                                            </li>
+                                            {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">»</span>
+                                            </li>
+                                            <li class="page-item disabled">
+                                                <span class="page-link">»»</span>
+                                            </li>
+                                            {% endif %}
+                                        </ul>
+                                    </nav>
+                                    {% endif %}
+                                    {% else %}
+                                    <p>No products found in this category.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert JS -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
+<style>
+    .table th, .table td {
+        vertical-align: middle;
+    }
+    .table img {
+        border-radius: 4px;
+    }
+    .card-title {
+        color: var(--dark-color);
+    }
+    .page-link {
+        color: var(--primary-color);
+        border-color: #dee2e6;
+    }
+    .page-item.active .page-link {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+    .page-link:hover {
+        color: var(--secondary-color);
+        background-color: #e9ecef;
+    }
+</style>
+
+<script>
+function toggleStatus(toggleUrl) {
+    Swal.fire({
+        title: 'Toggle Status',
+        text: `Are you sure you want to toggle the status of this category?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Toggle',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(toggleUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: data.is_active ? 'Activated' : 'Deactivated',
+                        text: data.message,
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message || 'Failed to toggle status.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'An error occurred while toggling status.', 'error');
+            });
+        }
+    });
+}
+</script>
+{% endblock %}

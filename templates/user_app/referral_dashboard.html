@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container my-5">
+    <h1>Your Referral Dashboard</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Your Wallet Balance</h5>
+        </div>
+        <div class="card-body">
+            <h2 class="display-4 text-center">₹{{ wallet.balance }}</h2>
+            <p class="text-center">Earn ₹200 for every successful referral!</p>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Your Referral Code</h5>
+        </div>
+        <div class="card-body">
+            <h2 class="display-4 text-center">{{ referral_code }}</h2>
+            <p class="lead text-center">Share this code with your friends to earn rewards!</p>
+            <p class="text-center">Your friends will get ₹100 when they sign up using your code!</p>
+            
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" id="referral-url" value="{{ referral_url }}" readonly>
+                <button class="btn btn-outline-primary" type="button" onclick="copyToClipboard()">Copy Link</button>
+            </div>
+            
+            <div class="mt-3">
+                <h5>Share via:</h5>
+                <div class="d-flex gap-2">
+                    <a href="https://wa.me/?text=Join%20our%20store%20using%20my%20referral%20link:%20{{ referral_url|urlencode }}" 
+                       class="btn btn-success" target="_blank">
+                        <i class="fa fa-whatsapp"></i> WhatsApp
+                    </a>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ referral_url|urlencode }}" 
+                       class="btn btn-primary" target="_blank">
+                        <i class="fa fa-facebook"></i> Facebook
+                    </a>
+                    <a href="https://twitter.com/intent/tweet?text=Join%20our%20store%20using%20my%20referral%20link:%20{{ referral_url|urlencode }}" 
+                       class="btn btn-info" target="_blank">
+                        <i class="fa fa-twitter"></i> Twitter
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Your Referrals</h5>
+                </div>
+                <div class="card-body">
+                    {% if referrals %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Date</th>
+                                        <th>Your Bonus</th>
+                                        <th>Their Bonus</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for referral in referrals %}
+                                    <tr>
+                                        <td>{{ referral.referred_user.username }}</td>
+                                        <td>{{ referral.created_at|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if referral.referrer_rewarded %}
+                                                <span class="badge bg-success">₹200 Added</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if referral.referred_rewarded %}
+                                                <span class="badge bg-success">₹100 Added</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <p class="text-center mb-0">You haven't referred anyone yet. Share your referral code to start earning!</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Wallet Transaction History</h5>
+                </div>
+                <div class="card-body">
+                    {% if transactions %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for transaction in transactions %}
+                                    <tr>
+                                        <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
+                                        <td>
+                                            {% if transaction.transaction_type == 'CREDIT' %}
+                                                <span class="badge bg-success">Credit</span>
+                                            {% elif transaction.transaction_type == 'DEBIT' %}
+                                                <span class="badge bg-danger">Debit</span>
+                                            {% else %}
+                                                <span class="badge bg-info">{{ transaction.transaction_type }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>₹{{ transaction.amount }}</td>
+                                        <td>{{ transaction.description }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <p class="text-center mb-0">No wallet transactions yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard() {
+    var copyText = document.getElementById("referral-url");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); /* For mobile devices */
+    document.execCommand("copy");
+    alert("Copied the referral link: " + copyText.value);
+}
+</script>
+{% endblock %}

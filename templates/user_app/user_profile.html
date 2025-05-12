@@ -1,0 +1,855 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-50">
+            <!-- Profile Header -->
+            <div class="card shadow-sm border-0 mb-5" style="border-radius: 12px; background: #ffffff;">
+                <div class="card-body d-flex align-items-center p-4">
+                    <div class="me-4">
+                        {% if user.profile.profile_image %}
+                        <img src="{{ user.profile.profile_image.url }}" alt="Profile Picture" 
+                        class="rounded-circle" style="height: 80px; width: 80px; object-fit: cover; border: 2px solid #e2e8f0;"
+                        onerror="this.src='{% static 'images/default-profile.png' %}'; this.onerror=null;">
+                        {% else %}
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" 
+                                 style="height: 80px; width: 80px; border: 2px solid #e2e8f0;">
+                                <i class="fas fa-user fa-2x text-muted"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h2 class="mb-1 fw-semibold" style="color: #1a202c;">{{ user.full_name|default:user.username }}</h2>
+                        <p class="text-muted mb-2" style="font-size: 14px;">@{{ user.username }}</p>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'user_app:edit_profile' %}" class="btn btn-sm btn-outline-dark" 
+                               style="border-radius: 8px; font-size: 13px;">Edit Profile</a>
+                            <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" 
+                                    data-bs-target="#changePasswordModal" style="border-radius: 8px; font-size: 13px;">
+                                Change Password
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="card shadow-sm border-0 mb-5" style="border-radius: 12px; background: #ffffff;">
+                <div class="card-body p-4">
+                    <h4 class="fw-semibold mb-4" style="color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">Contact</h4>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="text-muted small fw-medium" style="font-size: 12px; text-transform: uppercase;">Email</div>
+                            <div style="color: #2d3748;">{{ user.email }}</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="text-muted small fw-medium" style="font-size: 12px; text-transform: uppercase;">Phone</div>
+                            <div style="color: #2d3748;">{{ user.phone_number|default:"Not provided" }}</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="text-muted small fw-medium" style="font-size: 12px; text-transform: uppercase;">Joined</div>
+                            <div style="color: #2d3748;">{{ user.date_joined|date:"F d, Y" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Addresses -->
+            <div class="card shadow-sm border-0 mb-5" style="border-radius: 12px; background: #ffffff;">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4" style="border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">
+                        <h4 class="fw-semibold mb-0" style="color: #2d3748;">Addresses</h4>
+                        <button type="button" class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" 
+                                data-bs-target="#addAddressModal" style="border-radius: 8px; font-size: 13px;">
+                            <i class="fas fa-plus me-1"></i> Add Address
+                        </button>
+                    </div>
+                    {% if user.addresses.all %}
+                        <div class="accordion" id="addressAccordion">
+                            {% for address in user.addresses.all %}
+                                <div class="accordion-item border-0 mb-3" style="background: #f7fafc; border-radius: 8px;">
+                                    <h2 class="accordion-header" id="heading{{ address.id }}">
+                                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %} bg-light" 
+                                                type="button" data-bs-toggle="collapse" 
+                                                data-bs-target="#collapse{{ address.id }}" 
+                                                aria-expanded="{{ forloop.first|yesno:'true,false' }}" 
+                                                aria-controls="collapse{{ address.id }}"
+                                                style="font-weight: 500; color: #2d3748; background: #f7fafc; border-radius: 8px;">
+                                            {% if address.is_default %}
+                                                <span class="badge bg-dark me-2" style="font-size: 11px;">Default</span>
+                                            {% endif %}
+                                            Address #{{ forloop.counter }}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ address.id }}" 
+                                         class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" 
+                                         aria-labelledby="heading{{ address.id }}" 
+                                         data-bs-parent="#addressAccordion">
+                                        <div class="accordion-body pt-2 pb-3 px-3" style="color: #718096;">
+                                            <address class="mb-2">
+                                                <strong>{{ address.address_line1 }}</strong><br>
+                                                {% if address.address_line2 %}
+                                                    {{ address.address_line2 }}<br>
+                                                {% endif %}
+                                                {% if address.city or address.state or address.postal_code %}
+                                                    {{ address.city|default:"" }}{% if address.city and address.state %}, {% endif %}
+                                                    {{ address.state|default:"" }} {{ address.postal_code|default:"" }}<br>
+                                                {% endif %}
+                                                {% if address.country %}
+                                                    {{ address.country }}<br>
+                                                {% endif %}
+                                                {% if address.phone %}
+                                                    Phone: {{ address.phone }}
+                                                {% else %}
+                                                    Phone: Not provided
+                                                {% endif %}
+                                            </address>
+                                            <div class="d-flex gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-dark edit-address-btn" 
+                                                        data-bs-toggle="modal" data-bs-target="#editAddressModal" 
+                                                        data-address-id="{{ address.id }}" 
+                                                        style="border-radius: 8px; font-size: 13px;">Edit</button>
+                                                        {% if not address.is_default %}
+                                                            <form method="post" action="{% url 'user_app:set_default_address' address.id %}" 
+                                                                class="me-2 set-default-form" data-address-id="{{ address.id }}">
+                                                            {% csrf_token %}
+                                                            <button type="submit" class="btn btn-sm btn-outline-dark" 
+                                                                    style="border-radius: 8px; font-size: 13px;">Set Default</button>
+                                                        </form>
+                                                    {% endif %}
+                                                <form method="post" action="{% url 'user_app:delete_address' address.id %}" 
+                                                    class="delete-address-form">
+                                                  {% csrf_token %}
+                                                  <button type="button" class="btn btn-sm btn-outline-danger delete-address-btn" 
+                                                          data-address-id="{{ address.id }}" 
+                                                          style="border-radius: 8px; font-size: 13px;">Delete</button>
+                                              </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted" style="font-size: 14px;">No addresses added yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Orders -->
+            <div class="card shadow-sm border-0 mb-5" style="border-radius: 12px; background: #ffffff;">
+                <div class="card-body p-4">
+                    <h4 class="fw-semibold mb-4" style="color: #2d3748; border-bottom: 2px solid #edf2f7; padding-bottom: 10px;">Orders</h4>
+                    {% if orders %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead style="background: #edf2f7; color: #4a5568;">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Date</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for order in orders %}
+                                        <tr>
+                                            <td>{{ order.order_id }}</td>
+                                            <td>{{ order.order_date|date:"M d, Y" }}</td>
+                                            <td>₹{{ order.total_amount|floatformat:2 }}</td>
+                                            <td>
+                                                <span class="badge {% if order.status == 'Delivered' %}bg-success{% elif order.status == 'Cancelled' %}bg-danger{% else %}bg-warning text-dark{% endif %}" 
+                                                      style="font-size: 12px;">
+                                                    {{ order.status }}
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" 
+                                                   class="btn btn-sm btn-outline-dark me-1" 
+                                                   style="border-radius: 8px; font-size: 13px;">View</a>
+                                                {% if order.status == 'Pending' %}
+                                                    <form method="post" action="{% url 'cart_and_orders_app:user_cancel_order' order.order_id %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                                style="border-radius: 8px; font-size: 13px;">Cancel</button>
+                                                    </form>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted" style="font-size: 14px;">No orders found.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Change Password Modal -->
+            <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+                        <div class="modal-header" style="border-bottom: 2px solid #edf2f7;">
+                            <h5 class="modal-title fw-semibold" id="changePasswordModalLabel" style="color: #2d3748;">Change Password</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form method="post" action="{% url 'user_app:change_password' %}" id="changePasswordForm">
+                            {% csrf_token %}
+                            <div class="modal-body p-4">
+                                {% if messages %}
+                                    {% for message in messages %}
+                                        <div class="alert alert-{% if message.tags == 'success' %}success{% else %}danger{% endif %} mb-3" role="alert">
+                                            {{ message }}
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
+                                <div class="mb-3">
+                                    <label for="old_password" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Current Password</label>
+                                    <input type="password" class="form-control" id="old_password" name="old_password" required 
+                                           style="border-radius: 8px; border: 1px solid #e2e8f0;">
+                                    <div class="text-danger small error-message" id="old_password_error"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="new_password1" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">New Password</label>
+                                    <input type="password" class="form-control" id="new_password1" name="new_password1" required 
+                                           style="border-radius: 8px; border: 1px solid #e2e8f0;">
+                                    <div class="text-danger small error-message" id="new_password1_error"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="new_password2" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Confirm New Password</label>
+                                    <input type="password" class="form-control" id="new_password2" name="new_password2" required 
+                                           style="border-radius: 8px; border: 1px solid #e2e8f0;">
+                                    <div class="text-danger small error-message" id="new_password2_error"></div>
+                                </div>
+                            </div>
+                            <div class="modal-footer" style="border-top: 2px solid #edf2f7;">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" 
+                                        style="border-radius: 8px; font-size: 13px;">Cancel</button>
+                                <button type="submit" class="btn btn-dark" style="border-radius: 8px; font-size: 13px;">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Address Modal -->
+            <div class="modal fade" id="addAddressModal" tabindex="-1" aria-labelledby="addAddressModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+                        <div class="modal-header" style="border-bottom: 2px solid #edf2f7;">
+                            <h5 class="modal-title fw-semibold" id="addAddressModalLabel" style="color: #2d3748;">Add New Address</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form method="post" action="{% url 'user_app:add_address' %}" id="addAddressForm">
+                            {% csrf_token %}
+                            <div class="modal-body p-4">
+                                {% for field in address_form %}
+                                    <div class="mb-3">
+                                        <label for="{{ field.id_for_label }}" class="form-label fw-medium" 
+                                               style="color: #4a5568; font-size: 13px;">{{ field.label }}</label>
+                                        {% if field.name == 'phone' %}
+                                            {{ field }}
+                                            <small class="form-text text-muted">Enter a 10-digit phone number starting with 6-9 (e.g., 9876543210).</small>
+                                        {% else %}
+                                            {{ field }}
+                                        {% endif %}
+                                        {% if field.errors %}
+                                            <div class="text-danger small">{{ field.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="modal-footer" style="border-top: 2px solid #edf2f7;">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" 
+                                        style="border-radius: 8px; font-size: 13px;">Cancel</button>
+                                <button type="submit" class="btn btn-dark" style="border-radius: 8px; font-size: 13px;">Save Address</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Address Modal -->
+            <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+                        <div class="modal-header" style="border-bottom: 2px solid #edf2f7;">
+                            <h5 class="modal-title fw-semibold" id="editAddressModalLabel" style="color: #2d3748;">Edit Address</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form method="post" id="editAddressForm">
+                            {% csrf_token %}
+                            <div class="modal-body p-4" id="editAddressFormBody">
+                                <!-- Form fields will be populated via AJAX -->
+                            </div>
+                            <div class="modal-footer" style="border-top: 2px solid #edf2f7;">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" 
+                                        style="border-radius: 8px; font-size: 13px;">Cancel</button>
+                                <button type="submit" class="btn btn-dark" style="border-radius: 8px; font-size: 13px;">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Password validation function matching signup criteria
+        function validatePassword(password) {
+            const minLength = password.length >= 8;
+            const hasUpperCase = /[A-Z]/.test(password);
+            const hasLowerCase = /[a-z]/.test(password);
+            const hasDigit = /[0-9]/.test(password);
+            const hasSpecial = /[!@#$%^&*()+\-_=\[\]{};:'",.<>?]/.test(password);
+            return {
+                isValid: minLength && hasUpperCase && hasLowerCase && hasDigit && hasSpecial,
+                errors: [
+                    !minLength ? "Password must be at least 8 characters long." : "",
+                    !hasUpperCase ? "Password must contain at least one uppercase letter." : "",
+                    !hasLowerCase ? "Password must contain at least one lowercase letter." : "",
+                    !hasDigit ? "Password must contain at least one digit." : "",
+                    !hasSpecial ? "Password must contain at least one special character (e.g., !@#$%^&*)." : ""
+                ].filter(Boolean)
+            };
+        }
+
+        // Clear error messages
+        function clearErrors(form) {
+            form.querySelectorAll('.error-message').forEach(div => div.innerHTML = '');
+            form.querySelectorAll('.form-control').forEach(input => input.classList.remove('is-invalid'));
+        }
+
+        // Show error message for specific field
+        function showError(fieldId, message) {
+            const errorDiv = document.getElementById(`${fieldId}_error`);
+            const input = document.getElementById(fieldId);
+            if (errorDiv && input) {
+                errorDiv.innerHTML = message;
+                input.classList.add('is-invalid');
+            }
+        }
+
+        // Change Password Form Validation
+        const changePasswordForm = document.getElementById('changePasswordForm');
+        if (changePasswordForm) {
+            const oldPasswordInput = document.getElementById('old_password');
+            const newPassword1Input = document.getElementById('new_password1');
+            const newPassword2Input = document.getElementById('new_password2');
+
+            // Real-time validation
+            oldPasswordInput.addEventListener('input', function() {
+                clearErrors(changePasswordForm);
+                if (!this.value) {
+                    showError('old_password', 'Current password is required.');
+                }
+            });
+
+            newPassword1Input.addEventListener('input', function() {
+                clearErrors(changePasswordForm);
+                const validation = validatePassword(this.value);
+                if (!validation.isValid) {
+                    showError('new_password1', validation.errors.join('<br>'));
+                }
+                // Check if new password matches old password
+                if (this.value && oldPasswordInput.value && this.value === oldPasswordInput.value) {
+                    showError('new_password1', 'New password cannot be the same as the current password.');
+                }
+                // Check if confirm password matches
+                if (newPassword2Input.value && this.value !== newPassword2Input.value) {
+                    showError('new_password2', 'New passwords do not match.');
+                }
+            });
+
+            newPassword2Input.addEventListener('input', function() {
+                clearErrors(changePasswordForm);
+                if (this.value !== newPassword1Input.value) {
+                    showError('new_password2', 'New passwords do not match.');
+                }
+            });
+
+            changePasswordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                clearErrors(this);
+
+                const oldPassword = oldPasswordInput.value;
+                const newPassword1 = newPassword1Input.value;
+                const newPassword2 = newPassword2Input.value;
+
+                // Client-side validation
+                let hasErrors = false;
+
+                if (!oldPassword) {
+                    showError('old_password', 'Current password is required.');
+                    hasErrors = true;
+                }
+
+                const validation = validatePassword(newPassword1);
+                if (!validation.isValid) {
+                    showError('new_password1', validation.errors.join('<br>'));
+                    hasErrors = true;
+                }
+
+                if (oldPassword && newPassword1 === oldPassword) {
+                    showError('new_password1', 'New password cannot be the same as the current password.');
+                    hasErrors = true;
+                }
+
+                if (newPassword1 !== newPassword2) {
+                    showError('new_password2', 'New passwords do not match.');
+                    hasErrors = true;
+                }
+
+                if (!hasErrors) {
+                    const formData = new FormData(this);
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+                    fetch("{% url 'user_app:change_password' %}", {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success',
+                                text: data.message,
+                                confirmButtonColor: '#000'
+                            }).then(() => {
+                                bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+                                this.reset();
+                                clearErrors(this);
+                            });
+                        } else {
+                            if (data.errors) {
+                                Object.keys(data.errors).forEach(field => {
+                                    showError(field, data.errors[field]);
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: data.message || 'Failed to change password',
+                                    confirmButtonColor: '#000'
+                                });
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Change password error:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Something went wrong.',
+                            confirmButtonColor: '#000'
+                        });
+                    })
+                    .finally(() => {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Save Changes';
+                    });
+                }
+            });
+        }
+
+        // Form validation for address forms
+        function validateAddressForm(form) {
+            let isValid = true;
+            form.querySelectorAll('.form-control').forEach(input => {
+                const errorDiv = input.nextElementSibling?.classList.contains('text-danger') ? input.nextElementSibling : null;
+                if (errorDiv) errorDiv.innerHTML = '';
+
+                if (input.required && !input.value) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorDiv) errorDiv.innerHTML = `${input.previousElementSibling.textContent} is required.`;
+                } else if (input.name === 'phone' && input.value && !/^[6-9]\d{9}$/.test(input.value)) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorDiv) errorDiv.innerHTML = 'Please enter a valid 10-digit phone number starting with 6-9.';
+                } else if (input.name === 'postal_code' && input.value && !/^\d{6}$/.test(input.value)) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorDiv) errorDiv.innerHTML = 'Please enter a valid 6-digit postal code.';
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            });
+            return isValid;
+        }
+
+        // Delete Address Confirmation
+        const deleteButtons = document.querySelectorAll('.delete-address-btn');
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const addressId = this.getAttribute('data-address-id');
+                const form = this.closest('form');
+                Swal.fire({
+                    title: 'Delete address?',
+                    text: "This cannot be undone.",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#000',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Delete',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const formData = new FormData(form);
+                        fetch(`/profile/address/${addressId}/delete/`, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                const accordionItem = document.querySelector(`#heading${addressId}`).closest('.accordion-item');
+                                accordionItem.remove();
+                                
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Deleted!',
+                                    text: data.message,
+                                    confirmButtonColor: '#000'
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: data.message || 'Failed to delete address',
+                                    confirmButtonColor: '#000'
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Delete address error:', error);
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'Something went wrong.',
+                                confirmButtonColor: '#000'
+                            });
+                        });
+                    }
+                });
+            });
+        });
+
+        const setDefaultForms = document.querySelectorAll('.set-default-form');
+        setDefaultForms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const addressId = this.getAttribute('data-address-id');
+                const formData = new FormData(this);
+                
+                fetch(`/profile/address/${addressId}/set-default/`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.querySelectorAll('.badge.bg-dark').forEach(badge => {
+                            badge.remove();
+                        });
+                        
+                        const addressHeader = document.querySelector(`#heading${addressId} .accordion-button`);
+                        addressHeader.innerHTML = `<span class="badge bg-dark me-2" style="font-size: 11px;">Default</span>` + 
+                            addressHeader.innerHTML.replace('<span class="badge bg-dark me-2" style="font-size: 11px;">Default</span>', '');
+                        
+                        document.querySelectorAll('.set-default-form').forEach(f => {
+                            f.classList.remove('d-none');
+                        });
+                        form.classList.add('d-none');
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: data.message || 'Address set as default successfully!',
+                            confirmButtonColor: '#000'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to set address as default',
+                            confirmButtonColor: '#000'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Set default address error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Something went wrong.',
+                        confirmButtonColor: '#000'
+                    });
+                });
+            });
+        });
+
+        // Add Address via AJAX
+        const addAddressForm = document.getElementById('addAddressForm');
+        if (addAddressForm) {
+            addAddressForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!validateAddressForm(this)) return;
+
+                const form = this;
+                const formData = new FormData(form);
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+                fetch("{% url 'user_app:add_address' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Add address response:', data);
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: data.message,
+                            confirmButtonColor: '#000',
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to add address',
+                            confirmButtonColor: '#000'
+                        });
+                        if (data.errors) {
+                            const errors = JSON.parse(data.errors);
+                            Object.keys(errors).forEach(field => {
+                                const errorDiv = document.querySelector(`#${field}`).nextElementSibling;
+                                if (errorDiv && errorDiv.classList.contains('text-danger')) {
+                                    errorDiv.innerHTML = errors[field][0].message;
+                                    document.querySelector(`#${field}`).classList.add('is-invalid');
+                                }
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Add address error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Something went wrong.',
+                        confirmButtonColor: '#000'
+                    });
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Save Address';
+                });
+            });
+        }
+
+        // Edit Address Functionality
+        function attachEditListeners() {
+            const editButtons = document.querySelectorAll('.edit-address-btn');
+            editButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const addressId = this.getAttribute('data-address-id');
+                    fetch(`{% url 'user_app:edit_address' 0 %}`.replace('0', addressId), {
+                        method: 'GET',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    })
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Edit address GET response:', data);
+                        if (data.success) {
+                            const formBody = document.getElementById('editAddressFormBody');
+                            formBody.innerHTML = `
+                                <input type="hidden" name="address_id" value="${addressId}">
+                                <div class="mb-3">
+                                    <label for="full_name" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Full Name</label>
+                                    <input type="text" class="form-control" id="full_name" name="full_name" value="${data.address.full_name}" required>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="address_line1" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Address Line 1</label>
+                                    <input type="text" class="form-control" id="address_line1" name="address_line1" value="${data.address.address_line1}" required>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="address_line2" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Address Line 2</label>
+                                    <input type="text" class="form-control" id="address_line2" name="address_line2" value="${data.address.address_line2 || ''}">
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="city" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">City</label>
+                                    <input type="text" class="form-control" id="city" name="city" value="${data.address.city}" required>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="state" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">State</label>
+                                    <input type="text" class="form-control" id="state" name="state" value="${data.address.state}" required>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="postal_code" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Postal Code</label>
+                                    <input type="text" class="form-control" id="postal_code" name="postal_code" value="${data.address.postal_code}" required pattern="\\d{6}">
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="country" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Country</label>
+                                    <input type="text" class="form-control" id="country" name="country" value="${data.address.country}" required>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="phone" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Phone Number</label>
+                                    <input type="tel" class="form-control" id="phone" name="phone" value="${data.address.phone || ''}" required pattern="[6-9]\\d{9}">
+                                    <small class="form-text text-muted">Enter a 10-digit phone number starting with 6-9 (e.g., 9876543210).</small>
+                                    <div class="text-danger small"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="is_default" class="form-label fw-medium" style="color: #4a5568; font-size: 13px;">Set as Default</label>
+                                    <input type="checkbox" class="form-check-input" id="is_default" name="is_default" ${data.address.is_default ? 'checked' : ''}>
+                                </div>
+                            `;
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'Failed to load address.', confirmButtonColor: '#000' });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Edit address GET error:', error);
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong.', confirmButtonColor: '#000' });
+                    });
+                });
+            });
+        }
+
+        // Submit Edit Address via AJAX
+        const editAddressForm = document.getElementById('editAddressForm');
+        if (editAddressForm) {
+            editAddressForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (!validateAddressForm(this)) return;
+
+                const form = this;
+                const formData = new FormData(form);
+                const addressId = formData.get('address_id');
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+                fetch(`{% url 'user_app:edit_address' 0 %}`.replace('0', addressId), {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Edit address POST response:', data);
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: data.message,
+                            confirmButtonColor: '#000',
+                        }).then(() => {
+                            const accordionItem = document.querySelector(`#collapse${addressId}`);
+                            if (accordionItem) {
+                                accordionItem.querySelector('address').innerHTML = `
+                                    <strong>${data.address.address_line1}</strong><br>
+                                    ${data.address.address_line2 ? data.address.address_line2 + '<br>' : ''}
+                                    ${data.address.city}${data.address.city && data.address.state ? ', ' : ''}${data.address.state} ${data.address.postal_code}<br>
+                                    ${data.address.country}<br>
+                                    Phone: ${data.address.phone || 'Not provided'}
+                                `;
+                                const header = document.querySelector(`#heading${addressId} .accordion-button`);
+                                if (data.address.is_default) {
+                                    header.innerHTML = `<span class="badge bg-dark me-2" style="font-size: 11px;">Default</span>Address #${header.closest('.accordion-item').dataset.index || ''}`;
+                                } else {
+                                    header.innerHTML = `Address #${header.closest('.accordion-item').dataset.index || ''}`;
+                                }
+                                bootstrap.Modal.getInstance(document.getElementById('editAddressModal')).hide();
+                            } else {
+                                location.reload();
+                            }
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to update address',
+                            confirmButtonColor: '#000'
+                        });
+                        if (data.errors) {
+                            const errors = JSON.parse(data.errors);
+                            Object.keys(errors).forEach(field => {
+                                const errorDiv = document.querySelector(`#${field}`)?.nextElementSibling;
+                                if (errorDiv && errorDiv.classList.contains('text-danger')) {
+                                    errorDiv.innerHTML = errors[field][0].message;
+                                    document.querySelector(`#${field}`)?.classList.add('is-invalid');
+                                }
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Edit address POST error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Something went wrong.',
+                        confirmButtonColor: '#000'
+                    });
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Save Changes';
+                });
+            });
+        }
+
+        // Initialize edit listeners
+        attachEditListeners();
+
+        // Add dataset index to accordion items for reference
+        document.querySelectorAll('.accordion-item').forEach((item, index) => {
+            item.dataset.index = index + 1;
+        });
+    });
+</script>
+{% endblock %}

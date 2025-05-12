@@ -1,0 +1,130 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4 mb-4">{{ title }}</h1>
+
+    <!-- Search and Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter"></i> Filter Transactions
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" name="search" class="form-control" placeholder="Search by user or description" value="{{ search_query }}">
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-select">
+                        <option value="">All Transaction Types</option>
+                        {% for type_value, type_label in transaction_types %}
+                            <option value="{{ type_value }}" {% if transaction_type == type_value %}selected{% endif %}>{{ type_label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="sort" class="form-select">
+                        <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest First</option>
+                        <option value="amount" {% if sort_by == 'amount' %}selected{% endif %}>Amount (Low to High)</option>
+                        <option value="-amount" {% if sort_by == '-amount' %}selected{% endif %}>Amount (High to Low)</option>
+                        <option value="transaction_type" {% if sort_by == 'transaction_type' %}selected{% endif %}>Transaction Type (A-Z)</option>
+                        <option value="-transaction_type" {% if sort_by == '-transaction_type' %}selected{% endif %}>Transaction Type (Z-A)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Apply</button>
+                </div>
+                {% if search_query or transaction_type or sort_by != '-created_at' %}
+                    <div class="col-md-2">
+                        <a href="{% url 'offer_and_coupon_app:admin_wallet_transactions' %}" class="btn btn-secondary w-100">Clear</a>
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Transaction Table -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-wallet"></i> Wallet Transactions
+        </div>
+        <div class="card-body">
+            {% if page_obj %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>User</th>
+                                <th>Amount</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in page_obj %}
+                                <tr>
+                                    <td>{{ transaction.id }}</td>
+                                    <td>{{ transaction.wallet.user.username }} ({{ transaction.wallet.user.email }})</td>
+                                    <td class="{% if transaction.amount < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {% if transaction.amount < 0 %}−{% else %}+{% endif %}₹{{ transaction.amount|floatformat:2 }}
+                                    </td>
+                                    <td>{{ transaction.get_transaction_type_display }}</td>
+                                    <td>{{ transaction.description|truncatechars:50 }}</td>
+                                    <td>{{ transaction.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td>
+                                        <a href="{% url 'offer_and_coupon_app:admin_wallet_transaction_detail' transaction.id %}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if transaction_type %}&type={{ transaction_type }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">« Previous</a>
+                                </li>
+                            {% endif %}
+                            {% for num in page_obj.paginator.page_range %}
+                                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                    <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if transaction_type %}&type={{ transaction_type }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endfor %}
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if transaction_type %}&type={{ transaction_type }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">Next »</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <p class="text-muted">No transactions found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize tooltips if needed
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endblock %}

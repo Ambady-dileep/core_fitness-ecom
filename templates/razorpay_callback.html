@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Payment...</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            {% if success %}
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Payment Successful',
+                    text: 'Your order has been placed successfully!',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.href = "{% url 'cart_and_orders_app:order_success' order_id=order.order_id %}";
+                });
+            {% else %}
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Payment Failed',
+                    text: '{{ error_message|default:"Payment verification failed. Please try again." }}',
+                    confirmButtonText: 'Retry'
+                }).then(() => {
+                    window.location.href = "{% url 'cart_and_orders_app:user_checkout' %}";
+                });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

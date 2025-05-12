@@ -1,0 +1,143 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Offer{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="fs-4 m-0"><i class="fas fa-edit me-2"></i>Edit Offer: {{ offer.name }}</h1>
+        <a href="{% url 'offer_and_coupon_app:admin_offer_list' %}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post" action="{% url 'offer_and_coupon_app:admin_edit_offer' offer.id %}" class="mt-4">
+                {% csrf_token %}
+                <div class="row g-3">
+                    {% if offer|model_type == 'ProductOffer' %}
+                        <div class="col-md-6">
+                            {{ form.name.label_tag }}
+                            {{ form.name|add_class:"form-control" }}
+                            {{ form.name.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.discount_value.label_tag }}
+                            {{ form.discount_value|add_class:"form-control" }}
+                            {{ form.discount_value.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.min_purchase_amount.label_tag }}
+                            {{ form.min_purchase_amount|add_class:"form-control" }}
+                            {{ form.min_purchase_amount.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.max_discount_amount.label_tag }}
+                            {{ form.max_discount_amount|add_class:"form-control" }}
+                            {{ form.max_discount_amount.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.valid_from.label_tag }}
+                            {{ form.valid_from|add_class:"form-control" }}
+                            {{ form.valid_from.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.valid_to.label_tag }}
+                            {{ form.valid_to|add_class:"form-control" }}
+                            {{ form.valid_to.errors }}
+                        </div>
+                        <div class="col-md-12">
+                            {{ form.description.label_tag }}
+                            {{ form.description|add_class:"form-control" }}
+                            {{ form.description.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.is_active.label_tag }}
+                            {{ form.is_active|add_class:"form-check-input" }}
+                            {{ form.is_active.errors }}
+                        </div>
+                        <div class="col-md-12">
+                            {{ form.products.label_tag }}
+                            {{ form.products|add_class:"form-control" }}
+                            {{ form.products.errors }}
+                        </div>
+                    {% else %}
+                        <div class="col-md-6">
+                            {{ form.name.label_tag }}
+                            {{ form.name|add_class:"form-control" }}
+                            {{ form.name.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.discount_value.label_tag }}
+                            {{ form.discount_value|add_class:"form-control" }}
+                            {{ form.discount_value.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.min_purchase_amount.label_tag }}
+                            {{ form.min_purchase_amount|add_class:"form-control" }}
+                            {{ form.min_purchase_amount.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.max_discount_amount.label_tag }}
+                            {{ form.max_discount_amount|add_class:"form-control" }}
+                            {{ form.max_discount_amount.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.valid_from.label_tag }}
+                            {{ form.valid_from|add_class:"form-control" }}
+                            {{ form.valid_from.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.valid_to.label_tag }}
+                            {{ form.valid_to|add_class:"form-control" }}
+                            {{ form.valid_to.errors }}
+                        </div>
+                        <div class="col-md-12">
+                            {{ form.description.label_tag }}
+                            {{ form.description|add_class:"form-control" }}
+                            {{ form.description.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.is_active.label_tag }}
+                            {{ form.is_active|add_class:"form-check-input" }}
+                            {{ form.is_active.errors }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.apply_to_subcategories.label_tag }}
+                            {{ form.apply_to_subcategories|add_class:"form-check-input" }}
+                            {{ form.apply_to_subcategories.errors }}
+                        </div>
+                        <div class="col-md-12">
+                            {{ form.categories.label_tag }}
+                            {{ form.categories|add_class:"form-control" }}
+                            {{ form.categories.errors }}
+                        </div>
+                    {% endif %}
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Update Offer</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% load custom_tags %}
+{% block extra_js %}
+<script>
+function get_model_type(obj) {
+    return obj.__class__.__name__;
+}
+</script>
+{% endblock %}

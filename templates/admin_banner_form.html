@@ -1,0 +1,110 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">{{ title }}</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{% url 'user_app:admin_dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'user_app:admin_banner_list' %}">Banners</a></li>
+        <li class="breadcrumb-item active">{{ title }}</li>
+    </ol>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-image me-1"></i> {{ title }}
+        </div>
+        <div class="card-body">
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">{{ form.title.label }}</label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                                <div class="text-danger">{{ form.title.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.subtitle.id_for_label }}" class="form-label">{{ form.subtitle.label }}</label>
+                            {{ form.subtitle }}
+                            {% if form.subtitle.errors %}
+                                <div class="text-danger">{{ form.subtitle.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.url.id_for_label }}" class="form-label">{{ form.url.label }}</label>
+                            {{ form.url }}
+                            <div class="form-text">{{ form.url.help_text }}</div>
+                            {% if form.url.errors %}
+                                <div class="text-danger">{{ form.url.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.display_order.id_for_label }}" class="form-label">{{ form.display_order.label }}</label>
+                                    {{ form.display_order }}
+                                    <div class="form-text">{{ form.display_order.help_text }}</div>
+                                    {% if form.display_order.errors %}
+                                        <div class="text-danger">{{ form.display_order.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3 form-check mt-4">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                        {{ form.is_active.label }}
+                                    </label>
+                                    {% if form.is_active.errors %}
+                                        <div class="text-danger">{{ form.is_active.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="{{ form.image.id_for_label }}" class="form-label">{{ form.image.label }}</label>
+                            {{ form.image }}
+                            {% if form.image.errors %}
+                                <div class="text-danger">{{ form.image.errors }}</div>
+                            {% endif %}
+                            
+                            {% if banner and banner.image %}
+                            <div class="mt-3">
+                                <p>Current Image:</p>
+                                <img src="{{ banner.image.url }}" alt="{{ banner.title }}" class="img-fluid" style="max-height: 200px;">
+                            </div>
+                            {% endif %}
+                            
+                            <div class="form-text">
+                                For best results, use an image with dimensions 1920x600 pixels.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Banner
+                    </button>
+                    <a href="{% url 'user_app:admin_banner_list' %}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-times me-1"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

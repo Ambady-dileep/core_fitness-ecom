@@ -1,0 +1,890 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Products | Core Fitness{% endblock %}
+
+{% block extra_css %}
+<!-- noUiSlider CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.css">
+<style>
+    /* Layout */
+    .products-wrapper {
+        display: flex;
+        gap: 2rem;
+    }
+    
+    .filter-sidebar {
+        width: 280px;
+        flex-shrink: 0;
+    }
+    
+    .products-main {
+        flex-grow: 1;
+    }
+    
+    /* Filter Sidebar */
+    .filter-section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .filter-title {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--light-text);
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+    
+    .filter-card {
+        border: none;
+        border-radius: 8px;
+        overflow: hidden;
+        background-color: var(--bg);
+    }
+    
+    /* Price Range Slider */
+    .noUi-connect {
+        background: var(--accent);
+    }
+    
+    .noUi-horizontal {
+        height: 8px;
+    }
+    
+    .noUi-horizontal .noUi-handle {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background-color: var(--accent);
+        box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+        border: none;
+        right: -9px;
+        top: -5px;
+    }
+    
+    .noUi-handle:before,
+    .noUi-handle:after {
+        display: none;
+    }
+    
+    .price-inputs {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1rem;
+    }
+    
+    .price-input {
+        width: 45%;
+    }
+    
+    /* Products Grid */
+    .products-container {
+        min-height: 200px;
+    }
+    
+    .product-item {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    
+    .product-card {
+        border: none;
+        border-radius: 8px;
+        overflow: hidden;
+        transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        position: relative;
+        background-color: var(--bg);
+    }
+    
+    .product-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+    }
+    
+    .product-img-container {
+        height: 220px;
+        overflow: hidden;
+        background-color: var(--light-bg);
+        position: relative;
+    }
+    
+    .product-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+    
+    .product-card:hover .product-img {
+        transform: scale(1.05);
+    }
+    
+    .card-title {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+        transition: color 0.3s ease;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    
+    .product-category {
+        font-size: 0.75rem;
+        color: var(--light-text);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    
+    .price-container {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 0.75rem 0;
+    }
+    
+    .price {
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: var(--text);
+    }
+    
+    .original-price {
+        margin-left: 0.5rem;
+        font-size: 0.85rem;
+        color: var(--light-text);
+        text-decoration: line-through;
+    }
+    
+    .stock-status {
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .in-stock {
+        color: #10b981;
+        display: flex;
+        align-items: center;
+    }
+    
+    .out-of-stock {
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Wishlist Button */
+    .wishlist-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+        background-color: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        opacity: 0.9;
+    }
+    
+    .wishlist-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .wishlist-icon {
+        stroke: var(--accent);
+        fill: none;
+        transition: all 0.3s ease;
+    }
+    
+    .wishlist-icon.active {
+        fill: var(--accent) !important;
+    }
+    
+    /* Discount Badge */
+    .discount-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background-color: var(--accent);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        z-index: 10;
+        transition: transform 0.3s ease;
+    }
+    
+    .product-card:hover .discount-badge {
+        transform: scale(1.1);
+    }
+    
+    /* Rating Display */
+    .rating-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .star-rating {
+        display: inline-flex;
+        font-size: 0.9rem;
+        color: #d1d5db; /* Grey for empty stars */
+    }
+    .star-rating .star {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        font-family: 'Font Awesome 5 Free';
+        font-weight: 900;
+        position: relative;
+    }
+    .star-rating .star::before {
+        content: '\f005';
+        color: #d1d5db; /* Grey for empty stars */
+    }
+    .star-rating .star.filled::before {
+        content: '\f005';
+        color: #facc15; /* Yellow for filled stars */
+    }
+    .star-rating .star.half-filled {
+        position: relative;
+    }
+    .star-rating .star.half-filled::before {
+        content: '\f005';
+        color: #d1d5db; /* Grey for empty half */
+    }
+    .star-rating .star.half-filled::after {
+        content: '\f005';
+        color: #facc15; /* Yellow for filled half */
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 50%;
+        overflow: hidden;
+    }
+    .review-count {
+        font-size: 0.75rem;
+        color: var(--light-text);
+        margin-left: 0.5rem;
+    }
+    .no-reviews {
+        font-size: 0.75rem;
+        color: var(--light-text);
+    }
+    
+    /* Pagination */
+    .pagination {
+        gap: 0.3rem;
+    }
+    
+    .pagination .page-link {
+        border-radius: 4px;
+        border: none;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        transition: all 0.3s ease;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background-color: var(--accent);
+        color: white;
+    }
+    
+    .pagination .page-link:hover {
+        background-color: var(--light-bg);
+        color: var(--accent);
+    }
+    
+    /* Filter Toggle for Mobile */
+    .filter-toggle {
+        display: none;
+        margin-bottom: 1rem;
+    }
+    
+    /* Make entire card clickable */
+    .product-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    
+    /* Prevent nested links from interfering */
+    .product-img-container {
+        pointer-events: none;
+    }
+    
+    .product-img {
+        pointer-events: none;
+    }
+    
+    .card-body {
+        pointer-events: none;
+    }
+    
+    /* Ensure wishlist button remains interactive */
+    .wishlist-btn {
+        pointer-events: auto;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 991px) {
+        .products-wrapper {
+            flex-direction: column;
+        }
+        
+        .filter-sidebar {
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        
+        .filter-toggle {
+            display: block;
+        }
+        
+        .filter-sidebar-content {
+            display: none;
+        }
+        
+        .filter-sidebar-content.show {
+            display: block;
+        }
+    }
+    
+    @media (max-width: 767px) {
+        .product-img-container {
+            height: 180px;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="section-title mb-5">Our Products</h1>
+    
+    <div class="products-wrapper">
+        <!-- Filter Sidebar -->
+        <aside class="filter-sidebar">
+            <div class="filter-toggle">
+                <button class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-between" type="button" id="toggleFilters">
+                    <span>Filters</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="filter-sidebar-content">
+                <form method="get" id="filter-form">
+                    <!-- Search -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">Search</h3>
+                        <div class="input-group">
+                            <input type="text" name="search" value="{{ search_query }}" class="form-control" 
+                                   placeholder="Search products..." aria-label="Search products">
+                            <button type="submit" class="btn btn-primary" aria-label="Submit search">
+                                <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Filter -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">Category</h3>
+                        {{ filter_form.category }}
+                    </div>
+                    
+                    <!-- Brand Filter -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">Brand</h3>
+                        {{ filter_form.brand }}
+                    </div>
+                    
+                    <!-- Price Range -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">Price Range</h3>
+                        <div id="price-slider"></div>
+                        <div class="price-inputs">
+                            <div class="price-input">
+                                <input type="number" name="min_price" id="min-price" value="{{ min_price }}" 
+                                    class="form-control form-control-sm" placeholder="Min" min="0" step="1" aria-label="Minimum price">
+                            </div>
+                            <div class="price-input">
+                                <input type="number" name="max_price" id="max-price" value="{{ max_price }}" 
+                                    class="form-control form-control-sm" placeholder="Max" min="0" step="1" aria-label="Maximum price">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">Apply Price</button>
+                    </div>
+                    
+                    <!-- Sort Options -->
+                    <div class="filter-section">
+                        <h3 class="filter-title">Sort By</h3>
+                        {{ filter_form.sort }}
+                    </div>
+                    
+                    <!-- Clear Filters Button -->
+                    {% if clear_filters %}
+                    <div class="filter-section">
+                        <a href="{% url 'product_app:user_product_list' %}" class="btn btn-outline-secondary w-100">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-1">
+                                <path d="M19 12H5"></path>
+                                <path d="M12 19l-7-7 7-7"></path>
+                            </svg>
+                            Clear All Filters
+                        </a>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </aside>
+        
+        <!-- Products Main Content -->
+        <div class="products-main">
+            <!-- Products Display -->
+            {% if products %}
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-2 row-cols-lg-3 g-4 products-container">
+                {% for item in products %}
+                <div class="col product-item">
+                    <a href="{% url 'product_app:user_product_detail' item.product.slug %}" class="product-link" 
+                       aria-label="View details for {{ item.product.product_name }}">
+                        <div class="card h-100 product-card">
+                            <!-- Debug Information -->
+                            {% if debug %}
+                            <div style="display: none;">
+                                Variant ID: {{ item.variant.id }}
+                                Wishlist Variants: {{ user_wishlist_variants|join:", " }}
+                                Is in Wishlist: {% if item.variant.id in user_wishlist_variants %}Yes{% else %}No{% endif %}
+                            </div>
+                            {% endif %}
+                            <!-- Wishlist Button -->
+                            <button class="wishlist-btn" data-variant-id="{{ item.variant.id }}" 
+                                    aria-label="{% if item.variant.id in user_wishlist_variants %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
+                                <svg width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" 
+                                     class="wishlist-icon {% if item.variant.id in user_wishlist_variants %}active{% endif %}">
+                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                </svg>
+                            </button>
+                            
+                            <div class="product-img-container">
+                                {% if item.primary_image %}
+                                <img src="{{ item.primary_image.image.url }}" class="card-img-top product-img" 
+                                     alt="{{ item.product.product_name }}" loading="lazy">
+                                {% else %}
+                                <img src="{% static 'images/no-image.jpg' %}" class="card-img-top product-img" 
+                                     alt="No image available" loading="lazy">
+                                {% endif %}
+                                {% if item.has_offer and item.discount_percentage > 0 %}
+                                <span class="discount-badge">{{ item.discount_percentage|floatformat:0 }}% off</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="card-body">
+                                <div class="product-category">{{ item.product.category.name }}</div>
+                                <h5 class="card-title">{{ item.product.product_name }}</h5>
+                                
+                                <!-- Updated Rating Display -->
+                                <div class="rating-container">
+                                    {% if item.review_count > 0 %}
+                                    <div class="star-rating" data-rating="{{ item.average_rating|floatformat:1 }}">
+                                        {% for i in "12345"|make_list %}
+                                        <span class="star"></span>
+                                        {% endfor %}
+                                        <span class="review-count">({{ item.review_count }} review{{ item.review_count|pluralize }})</span>
+                                    </div>
+                                    {% else %}
+                                    <span class="no-reviews">No reviews yet</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Price Display unchanged -->
+                                <div class="price-container">
+                                    <span class="price">₹{{ item.best_price|floatformat:2 }}</span>
+                                    {% if item.has_offer %}
+                                    <span class="original-price">₹{{ item.original_price|floatformat:2 }}</span>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Stock Status unchanged -->
+                                <div class="stock-status">
+                                    {% if item.total_stock > 0 %}
+                                    <span class="in-stock">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-1">
+                                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                        </svg>
+                                        In Stock
+                                    </span>
+                                    {% else %}
+                                    <span class="out-of-stock">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" class="me-1">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                                        </svg>
+                                        Out of Stock
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Product pagination" class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           aria-label="First page">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <polyline points="11 17 6 12 11 7"></polyline>
+                                <polyline points="18 17 13 12 18 7"></polyline>
+                            </svg>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           aria-label="Previous page">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                               aria-label="Page {{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           aria-label="Next page">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           aria-label="Last page">
+                            <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <polyline points="13 17 18 12 13 7"></polyline>
+                                <polyline points="6 17 11 12 6 7"></polyline>
+                            </svg>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            
+            {% else %}
+            <div class="alert alert-info text-center py-5">
+                <svg width="48" height="48" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1" class="mb-3">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <h4>No products found matching your criteria</h4>
+                <p class="mb-4">Try changing your search or filter options</p>
+                {% if clear_filters %}
+                <a href="{% url 'product_app:user_product_list' %}" class="btn btn-outline-primary">
+                    Clear All Filters
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- noUiSlider JS -->
+<script src="https://cdn.jsdelivr.net/npm/nouislider@14.6.3/distribute/nouislider.min.js"></script>
+<script>
+    // Function to get CSRF token from cookies
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Render Star Ratings
+        function renderStars() {
+            document.querySelectorAll('.star-rating[data-rating]').forEach(ratingEl => {
+                const rating = parseFloat(ratingEl.dataset.rating);
+                const stars = ratingEl.querySelectorAll('.star');
+                const wholeStars = Math.floor(rating);
+                const fractionalPart = rating - wholeStars;
+
+                stars.forEach((star, index) => {
+                    star.classList.remove('filled', 'half-filled');
+                    if (index < wholeStars) {
+                        star.classList.add('filled');
+                    } else if (index === wholeStars && fractionalPart >= 0.3 && fractionalPart <= 0.7) {
+                        star.classList.add('half-filled');
+                    } else if (index === wholeStars && fractionalPart > 0.7) {
+                        star.classList.add('filled');
+                    }
+                });
+            });
+        }
+        renderStars();
+
+        // Initialize GSAP animations
+        const productItems = document.querySelectorAll('.product-item');
+        
+        // Stagger animation for product cards
+        gsap.to(productItems, {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            stagger: 0.1,
+            ease: "power3.out"
+        });
+        
+        // Filter toggle for mobile
+        const toggleFiltersBtn = document.getElementById('toggleFilters');
+        const filterSidebarContent = document.querySelector('.filter-sidebar-content');
+        
+        if (toggleFiltersBtn) {
+            toggleFiltersBtn.addEventListener('click', function() {
+                filterSidebarContent.classList.toggle('show');
+                
+                // Animate the arrow icon
+                const arrow = this.querySelector('svg');
+                if (filterSidebarContent.classList.contains('show')) {
+                    gsap.to(arrow, { rotation: 180, duration: 0.3 });
+                } else {
+                    gsap.to(arrow, { rotation: 0, duration: 0.3 });
+                }
+            });
+        }
+        
+        // Initialize price range slider
+        const priceSlider = document.getElementById('price-slider');
+        const minPriceInput = document.getElementById('min-price');
+        const maxPriceInput = document.getElementById('max-price');
+        
+        if (priceSlider && minPriceInput && maxPriceInput) {
+            // Get price range from context
+            const minPrice = {{ price_range.min|default:0 }};
+            const maxPrice = {{ price_range.max|default:1000 }};
+            
+            // Get current values
+            const currentMinPrice = {{ min_price|default:price_range.min|default:0 }};
+            const currentMaxPrice = {{ max_price|default:price_range.max|default:1000 }};
+            
+            // Initialize noUiSlider
+            noUiSlider.create(priceSlider, {
+                start: [currentMinPrice || minPrice, currentMaxPrice || maxPrice],
+                connect: true,
+                step: 1,
+                range: {
+                    'min': minPrice,
+                    'max': maxPrice
+                },
+                format: {
+                    to: function (value) {
+                        return Math.round(value);
+                    },
+                    from: function (value) {
+                        return Number(value);
+                    }
+                }
+            });
+            
+            // Update input fields when slider changes
+            priceSlider.noUiSlider.on('update', function(values, handle) {
+                const value = values[handle];
+                
+                if (handle === 0) {
+                    minPriceInput.value = value;
+                } else {
+                    maxPriceInput.value = value;
+                }
+            });
+            
+            // Update slider when input fields change
+            minPriceInput.addEventListener('change', function() {
+                priceSlider.noUiSlider.set([this.value, null]);
+            });
+            
+            maxPriceInput.addEventListener('change', function() {
+                priceSlider.noUiSlider.set([null, this.value]);
+            });
+        }
+        
+        // Filter form functionality
+        const filterForm = document.getElementById('filter-form');
+        const filterInputs = ['category', 'brand', 'sort'];
+        
+        filterInputs.forEach(function(id) {
+            const elem = document.getElementById('id_' + id);
+            if (elem) {
+                elem.addEventListener('change', function() {
+                    filterForm.submit();
+                });
+            }
+        });
+        
+        // Wishlist functionality
+        const wishlistButtons = document.querySelectorAll('.wishlist-btn');
+        const csrfToken = getCookie('csrftoken');
+
+        wishlistButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const variantId = this.getAttribute('data-variant-id');
+                const wishlistIcon = this.querySelector('.wishlist-icon');
+                const isActive = wishlistIcon.classList.contains('active');
+
+                // Animate heart icon
+                gsap.to(wishlistIcon, {
+                    scale: 0.5,
+                    duration: 0.15,
+                    onComplete: () => {
+                        gsap.to(wishlistIcon, {
+                            scale: 1.2,
+                            duration: 0.3,
+                            ease: "elastic.out(1, 0.3)",
+                            onComplete: () => {
+                                gsap.to(wishlistIcon, {
+                                    scale: 1,
+                                    duration: 0.2
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // Optimistically toggle wishlist state
+                wishlistIcon.classList.toggle('active');
+                button.setAttribute('aria-label', isActive ? 'Add to wishlist' : 'Remove from wishlist');
+
+                // Send AJAX request to toggle wishlist
+                fetch('/wishlist/toggle/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ variant_id: variantId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update wishlist count in the navbar
+                        document.dispatchEvent(new CustomEvent('wishlist-updated', { 
+                            detail: { count: data.wishlist_count } 
+                        }));
+
+                        // Show success message
+                        const message = data.is_in_wishlist ? 'Added to wishlist' : 'Removed from wishlist';
+                        window.showAlert(message, 'success');
+
+                        // Ensure icon state matches server response
+                        if (data.is_in_wishlist) {
+                            wishlistIcon.classList.add('active');
+                            button.setAttribute('aria-label', 'Remove from wishlist');
+                        } else {
+                            wishlistIcon.classList.remove('active');
+                            button.setAttribute('aria-label', 'Add to wishlist');
+                        }
+                    } else {
+                        // Revert visual state on error
+                        wishlistIcon.classList.toggle('active');
+                        button.setAttribute('aria-label', isActive ? 'Add to wishlist' : 'Remove from wishlist');
+                        window.showAlert('Failed to update wishlist: ' + (data.error || 'Unknown error'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Wishlist Error:', error);
+                    // Revert visual state on error
+                    wishlistIcon.classList.toggle('active');
+                    button.setAttribute('aria-label', isActive ? 'Add to wishlist' : 'Remove from wishlist');
+                    window.showAlert('Failed to update wishlist due to network error', 'danger');
+                });
+            });
+        });
+        
+        // Hover effects with GSAP
+        productItems.forEach(item => {
+            const card = item.querySelector('.product-card');
+            const img = item.querySelector('.product-img');
+            const title = item.querySelector('.card-title');
+            
+            item.addEventListener('mouseenter', () => {
+                gsap.to(title, {
+                    color: 'var(--accent)',
+                    duration: 0.3
+                });
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                gsap.to(title, {
+                    color: 'var(--text)',
+                    duration: 0.3
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}

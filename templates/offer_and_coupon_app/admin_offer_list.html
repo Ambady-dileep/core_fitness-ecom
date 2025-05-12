@@ -1,0 +1,474 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Offer Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="fs-4 m-0"><i class="fas fa-tags me-2"></i>Offer Management</h1>
+        <div>
+            <button class="btn btn-primary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#productOfferModal">
+                <i class="fas fa-plus me-1"></i> Add Product Offer
+            </button>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#categoryOfferModal">
+                <i class="fas fa-plus me-1"></i> Add Category Offer
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" name="search" class="form-control" value="{{ search_query }}" placeholder="Search offers...">
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="sort" class="form-select">
+                        <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest First</option>
+                        <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name (A-Z)</option>
+                        <option value="-name" {% if sort_by == '-name' %}selected{% endif %}>Name (Z-A)</option>
+                        <option value="discount_value" {% if sort_by == 'discount_value' %}selected{% endif %}>Discount (Low-High)</option>
+                        <option value="-discount_value" {% if sort_by == '-discount_value' %}selected{% endif %}>Discount (High-Low)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Product Offers Table -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Product Offers</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Discount (%)</th>
+                            <th>Valid From</th>
+                            <th>Valid To</th>
+                            <th>Products</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for offer in product_page_obj %}
+                        <tr>
+                            <td>{{ offer.name }}</td>
+                            <td>{{ offer.discount_value }}</td>
+                            <td>{{ offer.valid_from|date:"Y-m-d H:i" }}</td>
+                            <td>{{ offer.valid_to|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                {% for product in offer.products.all %}
+                                    {{ product.product_name }}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                    None
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% if offer.is_active and offer.valid_from <= now and offer.valid_to >= now %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'offer_and_coupon_app:admin_edit_offer' offer.id %}" class="btn btn-sm btn-outline-primary me-1" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-outline-danger delete-offer" data-offer-id="{{ offer.id }}" data-offer-name="{{ offer.name|escapejs }}" data-offer-type="product" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button class="btn btn-sm {% if offer.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %} toggle-offer" data-offer-id="{{ offer.id }}" data-offer-type="product" data-is-active="{{ offer.is_active }}" title="{% if offer.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="fas {% if offer.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <i class="fas fa-info-circle me-2"></i> No product offers found
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if product_page_obj.has_other_pages %}
+            <nav aria-label="Product offers pagination" class="mt-3">
+                <ul class="pagination">
+                    {% if product_page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?product_page={{ product_page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous">
+                            <span aria-hidden="true">«</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for num in product_page_obj.paginator.page_range %}
+                    <li class="page-item {% if product_page_obj.number == num %}active{% endif %}">
+                        <a class="page-link" href="?product_page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+                    {% if product_page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?product_page={{ product_page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next">
+                            <span aria-hidden="true">»</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Category Offers Table -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Category Offers</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Discount (%)</th>
+                            <th>Valid From</th>
+                            <th>Valid To</th>
+                            <th>Categories</th>
+                            <th>Subcategories</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for offer in category_page_obj %}
+                        <tr>
+                            <td>{{ offer.name }}</td>
+                            <td>{{ offer.discount_value }}</td>
+                            <td>{{ offer.valid_from|date:"Y-m-d H:i" }}</td>
+                            <td>{{ offer.valid_to|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                {% for category in offer.categories.all %}
+                                    {{ category.name }}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                    None
+                                {% endfor %}
+                            </td>
+                            <td>{{ offer.apply_to_subcategories|yesno:"Yes,No" }}</td>
+                            <td>
+                                {% if offer.is_active and offer.valid_from <= now and offer.valid_to >= now %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'offer_and_coupon_app:admin_edit_offer' offer.id %}" class="btn btn-sm btn-outline-primary me-1" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-outline-danger delete-offer" data-offer-id="{{ offer.id }}" data-offer-name="{{ offer.name|escapejs }}" data-offer-type="category" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <button class="btn btn-sm {% if offer.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %} toggle-offer" data-offer-id="{{ offer.id }}" data-offer-type="category" data-is-active="{{ offer.is_active }}" title="{% if offer.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                    <i class="fas {% if offer.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-info-circle me-2"></i> No category offers found
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if category_page_obj.has_other_pages %}
+            <nav aria-label="Category offers pagination" class="mt-3">
+                <ul class="pagination">
+                    {% if category_page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?category_page={{ category_page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous">
+                            <span aria-hidden="true">«</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for num in category_page_obj.paginator.page_range %}
+                    <li class="page-item {% if category_page_obj.number == num %}active{% endif %}">
+                        <a class="page-link" href="?category_page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+                    {% if category_page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?category_page={{ category_page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next">
+                            <span aria-hidden="true">»</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Product Offer Modal -->
+    <div class="modal fade" id="productOfferModal" tabindex="-1" aria-labelledby="productOfferModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="productOfferModalLabel">Add Product Offer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="productOfferForm" method="post" action="{% url 'offer_and_coupon_app:admin_add_offer' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="offer_type" value="product">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                {{ product_offer_form.name.label_tag }}
+                                {{ product_offer_form.name|add_class:"form-control" }}
+                                {{ product_offer_form.name.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.discount_value.label_tag }}
+                                {{ product_offer_form.discount_value|add_class:"form-control" }}
+                                {{ product_offer_form.discount_value.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.min_purchase_amount.label_tag }}
+                                {{ product_offer_form.min_purchase_amount|add_class:"form-control" }}
+                                {{ product_offer_form.min_purchase_amount.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.max_discount_amount.label_tag }}
+                                {{ product_offer_form.max_discount_amount|add_class:"form-control" }}
+                                {{ product_offer_form.max_discount_amount.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.valid_from.label_tag }}
+                                {{ product_offer_form.valid_from|add_class:"form-control" }}
+                                {{ product_offer_form.valid_from.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.valid_to.label_tag }}
+                                {{ product_offer_form.valid_to|add_class:"form-control" }}
+                                {{ product_offer_form.valid_to.errors }}
+                            </div>
+                            <div class="col-md-12">
+                                {{ product_offer_form.description.label_tag }}
+                                {{ product_offer_form.description|add_class:"form-control" }}
+                                {{ product_offer_form.description.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ product_offer_form.is_active.label_tag }}
+                                {{ product_offer_form.is_active|add_class:"form-check-input" }}
+                                {{ product_offer_form.is_active.errors }}
+                            </div>
+                            <div class="col-md-12">
+                                {{ product_offer_form.products.label_tag }}
+                                {{ product_offer_form.products|add_class:"form-select select2" }}
+                                {{ product_offer_form.products.errors }}
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Create Product Offer</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="productOfferErrors" class="text-danger mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Offer Modal -->
+    <div class="modal fade" id="categoryOfferModal" tabindex="-1" aria-labelledby="categoryOfferModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="categoryOfferModalLabel">Add Category Offer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="categoryOfferForm" method="post" action="{% url 'offer_and_coupon_app:admin_add_offer' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="offer_type" value="category">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                {{ category_offer_form.name.label_tag }}
+                                {{ category_offer_form.name|add_class:"form-control" }}
+                                {{ category_offer_form.name.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.discount_value.label_tag }}
+                                {{ category_offer_form.discount_value|add_class:"form-control" }}
+                                {{ category_offer_form.discount_value.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.min_purchase_amount.label_tag }}
+                                {{ category_offer_form.min_purchase_amount|add_class:"form-control" }}
+                                {{ category_offer_form.min_purchase_amount.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.max_discount_amount.label_tag }}
+                                {{ category_offer_form.max_discount_amount|add_class:"form-control" }}
+                                {{ category_offer_form.max_discount_amount.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.valid_from.label_tag }}
+                                {{ category_offer_form.valid_from|add_class:"form-control" }}
+                                {{ category_offer_form.valid_from.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.valid_to.label_tag }}
+                                {{ category_offer_form.valid_to|add_class:"form-control" }}
+                                {{ category_offer_form.valid_to.errors }}
+                            </div>
+                            <div class="col-md-12">
+                                {{ category_offer_form.description.label_tag }}
+                                {{ category_offer_form.description|add_class:"form-control" }}
+                                {{ category_offer_form.description.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.is_active.label_tag }}
+                                {{ category_offer_form.is_active|add_class:"form-check-input" }}
+                                {{ category_offer_form.is_active.errors }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ category_offer_form.apply_to_subcategories.label_tag }}
+                                {{ category_offer_form.apply_to_subcategories|add_class:"form-check-input" }}
+                                {{ category_offer_form.apply_to_subcategories.errors }}
+                            </div>
+                            <div class="col-md-12">
+                                {{ category_offer_form.categories.label_tag }}
+                                {{ category_offer_form.categories|add_class:"form-select select2" }}
+                                {{ category_offer_form.categories.errors }}
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Create Category Offer</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="categoryOfferErrors" class="text-danger mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+function confirmDeleteOffer(offerId, offerName, offerType) {
+    Swal.fire({
+        title: 'Delete Offer?',
+        text: `Are you sure you want to delete "${offerName}"? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete it',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/admin/offers/${offerId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.message || 'Something went wrong', 'error');
+                }
+            })
+            .catch(error => {
+                Swal.fire('Error', 'Network error occurred: ' + error.message, 'error');
+            });
+        }
+    });
+}
+
+$(document).ready(function() {
+    // Toggle offer (Product or Category)
+    $('.toggle-offer').on('click', function(e) {
+        e.preventDefault(); // Prevent default form submission
+        var offerId = $(this).data('offer-id');
+        var offerType = $(this).data('offer-type');
+        var isActive = $(this).data('is-active');
+        var button = $(this);
+
+        $.ajax({
+            url: '/admin/offers/' + offerId + '/toggle-' + offerType + '/',
+            method: 'POST',
+            data: {
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Update button state
+                    button.text(response.is_active ? 'Deactivate' : 'Activate');
+                    button.attr('title', response.is_active ? 'Deactivate' : 'Activate');
+                    button.toggleClass('btn-outline-secondary btn-outline-success')
+                          .toggleClass('btn-outline-danger', response.is_active);
+                    button.find('i').toggleClass('fa-pause fa-play');
+                    button.data('is-active', response.is_active);
+
+                    // Show success message
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: response.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to toggle offer. Try again.'
+                });
+            }
+        });
+    });
+
+    // Delete offer (Product or Category)
+    $('.delete-offer').on('click', function() {
+        var offerId = $(this).data('offer-id');
+        var offerName = $(this).data('offer-name');
+        var offerType = $(this).data('offer-type');
+        confirmDeleteOffer(offerId, offerName, offerType);
+    });
+});
+</script>
+{% endblock %}

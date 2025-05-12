@@ -1,0 +1,322 @@
+{% extends 'admin_base.html' %}
+{% load static widget_tweaks %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Order Details - {{ order.order_id }}</h2>
+        <a href="{% url 'cart_and_orders_app:admin_orders_list' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-arrow-left me-2"></i>Back to Orders
+        </a>
+    </div>
+
+    <!-- Order Information -->
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Order Information</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>User:</strong> {{ order.user.full_name|default:order.user.username }}</p>
+            <p><strong>Order Date:</strong> {{ order.order_date|date:"M d, Y H:i" }}</p>
+            <p><strong>Status:</strong> 
+                <span class="badge 
+                    {% if order.status == 'Pending' %}bg-warning
+                    {% elif order.status == 'Processing' %}bg-info
+                    {% elif order.status == 'Shipped' %}bg-primary
+                    {% elif order.status == 'Out for Delivery' %}bg-primary
+                    {% elif order.status == 'Delivered' %}bg-success
+                    {% elif order.status == 'Cancelled' %}bg-danger{% endif %}">
+                    {{ order.status }}
+                </span>
+            </p>
+            <p><strong>Payment Method:</strong> {{ order.payment_method|default:"N/A" }}</p>
+            <p><strong>Total Amount:</strong> 
+                {% if order.get_cancelled_items_count > 0 %}
+                    <span class="text-muted text-decoration-line-through" data-bs-toggle="tooltip" title="Original total before cancellations">
+                        ₹{{ order.get_original_total_amount|floatformat:2 }}
+                    </span>
+                    <br>
+                    <span class="text-success">₹{{ order.total_amount|floatformat:2 }}</span>
+                {% else %}
+                    ₹{{ order.total_amount|floatformat:2 }}
+                {% endif %}
+            </p>
+            <p><strong>Coupon Discount:</strong> ₹{{ order.coupon_discount|floatformat:2 }}</p>
+            <p><strong>Coupon:</strong> {{ order.coupon.code|default:"N/A" }}</p>
+            <p><strong>Shipping Address:</strong> 
+                {{ order.shipping_address.full_address|default:"N/A" }}
+            </p>
+            {% if order.status in 'Pending,Processing' %}
+                <a href="{% url 'cart_and_orders_app:admin_cancel_order' order.order_id %}" class="btn btn-danger btn-sm mt-2">
+                    <i class="fas fa-times-circle me-2"></i>Cancel Entire Order
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Update Order Status -->
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Update Order Status</h5>
+        </div>
+        <div class="card-body">
+            {% if order.status == 'Cancelled' %}
+                <div class="alert alert-warning">
+                    This order has been cancelled and its status cannot be updated.
+                </div>
+            {% else %}
+                <form method="POST">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Order Items -->
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Order Items</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Variant</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Subtotal</th>
+                            <th>Status/Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items.all %}
+                        <tr>
+                            <td>{{ item.variant.product.product_name|default:"N/A" }}</td>
+                            <td>
+                                {{ item.variant.flavor|default:"Standard" }}
+                                {% if item.variant.size_weight %}
+                                    ({{ item.variant.size_weight }})
+                                {% endif %}
+                            </td>
+                            <td>{{ item.quantity }}</td>
+                            <td>₹{{ item.price|floatformat:2 }}</td>
+                            <td>₹{{ item.total_price|floatformat:2 }}</td>
+                            <td>
+                                {% if order.status in 'Pending,Processing' and not item.cancellations.exists %}
+                                    <input type="checkbox" class="form-check-input cancel-item-checkbox" name="items" value="{{ item.id }}" data-item-id="{{ item.id }}">
+                                {% else %}
+                                    {% if item.cancellations.exists %}
+                                        <span class="badge bg-danger">Cancelled</span>
+                                    {% else %}
+                                        <span class="badge 
+                                            {% if order.status == 'Pending' %}bg-warning
+                                            {% elif order.status == 'Processing' %}bg-info
+                                            {% elif order.status == 'Shipped' %}bg-primary
+                                            {% elif order.status == 'Out for Delivery' %}bg-primary
+                                            {% elif order.status == 'Delivered' %}bg-success
+                                            {% elif order.status == 'Cancelled' %}bg-danger{% endif %}">
+                                            {{ order.status }}
+                                        </span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center">No active items found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if order.status in 'Pending,Processing' and order.items.exists %}
+            <div class="mt-4">
+                <h5>Cancel Selected Items</h5>
+                <form id="admin-cancel-items-form" method="POST" action="{% url 'cart_and_orders_app:admin_cancel_order_item' order.order_id %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_reason" class="form-label">Reason for Cancellation</label>
+                        {{ item_cancel_form.reason|add_class:"form-select" }}
+                        {% if item_cancel_form.reason.errors %}
+                            <div class="text-danger small">{{ item_cancel_form.reason.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3" id="other-reason-container" style="display: none;">
+                        <label for="id_other_reason" class="form-label">Details</label>
+                        {{ item_cancel_form.other_reason|add_class:"form-control" }}
+                        {% if item_cancel_form.other_reason.errors %}
+                            <div class="text-danger small">{{ item_cancel_form.other_reason.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="btn btn-danger" id="cancel-items-btn" disabled>Cancel Selected Items</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Cancellations -->
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Cancellations</h5>
+        </div>
+        <div class="card-body">
+            {% with cancellations=order.cancellations.all %}
+            {% if cancellations %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Reason</th>
+                            <th>Refunded Amount</th>
+                            <th>Cancelled At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cancellation in cancellations %}
+                        <tr>
+                            <td>
+                                {% if cancellation.product_name %}
+                                    {{ cancellation.product_name }}
+                                    {% if cancellation.variant_flavor or cancellation.variant_size_weight %}
+                                        ({{ cancellation.variant_flavor|default:"Standard" }}
+                                        {% if cancellation.variant_size_weight %}
+                                            {{ cancellation.variant_size_weight }})
+                                        {% else %}
+                                            )
+                                        {% endif %}
+                                    {% endif %}
+                                    x {{ cancellation.quantity }}
+                                {% else %}
+                                    Entire Order
+                                {% endif %}
+                            </td>
+                            <td>{{ cancellation.reason|default:"N/A" }}</td>
+                            <td>₹{{ cancellation.refunded_amount|floatformat:2 }}</td>
+                            <td>{{ cancellation.cancelled_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>No cancellations recorded for this order.</p>
+            {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    <!-- Return Requests -->
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Return Requests</h5>
+        </div>
+        <div class="card-body">
+            {% if order.return_requests.exists %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Items</th>
+                            <th>Reason</th>
+                            <th>Requested At</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for return_request in order.return_requests.all %}
+                        <tr>
+                            <td>
+                                {% if return_request.items.exists %}
+                                    {% for item in return_request.items.all %}
+                                        {{ item.variant.product.product_name }}
+                                        ({{ item.variant.flavor|default:"Standard" }}
+                                        {% if item.variant.size_weight %}
+                                            {{ item.variant.size_weight }})
+                                        {% else %}
+                                            )
+                                        {% endif %}
+                                        x {{ item.quantity }}<br>
+                                    {% endfor %}
+                                {% else %}
+                                    Entire Order
+                                {% endif %}
+                            </td>
+                            <td>{{ return_request.reason|default:"N/A" }}</td>
+                            <td>{{ return_request.requested_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                {% if return_request.refund_processed %}
+                                    <span class="badge bg-success">Refund Processed</span>
+                                {% elif return_request.is_verified %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not return_request.is_verified and not return_request.refund_processed %}
+                                    <a href="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" class="btn btn-sm btn-primary">Verify</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>No return requests for this order.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Handle Cancel Items Form
+    const cancelItemsForm = document.getElementById('admin-cancel-items-form');
+    const cancelItemsBtn = document.getElementById('cancel-items-btn');
+    const checkboxes = document.querySelectorAll('.cancel-item-checkbox');
+    const reasonSelect = document.getElementById('id_reason');
+    const otherReasonContainer = document.getElementById('other-reason-container');
+
+    if (cancelItemsForm && cancelItemsBtn && reasonSelect && otherReasonContainer) {
+        // Enable/disable cancel button based on checkbox selection
+        function updateCancelButton() {
+            const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+            cancelItemsBtn.disabled = !anyChecked;
+        }
+
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateCancelButton);
+        });
+
+        // Show/hide other reason textarea
+        function updateOtherReasonVisibility() {
+            otherReasonContainer.style.display = reasonSelect.value === 'Other' ? 'block' : 'none';
+        }
+
+        reasonSelect.addEventListener('change', updateOtherReasonVisibility);
+        updateOtherReasonVisibility();
+
+        // Confirm submission
+        cancelItemsForm.addEventListener('submit', function(e) {
+            if (!confirm('Are you sure you want to cancel the selected items?')) {
+                e.preventDefault();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

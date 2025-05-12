@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5">
+    <h2>Verify Return Request for Order {{ order.order_id }}</h2>
+    {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+                {{ message }}
+            {% endfor %}
+        </div>
+    {% endif %}
+    <div class="card">
+        <div class="card-body">
+            <h5>Return Request Details</h5>
+            <p><strong>Request ID:</strong> {{ return_request.id }}</p>
+            <p><strong>Reason:</strong> {{ return_request.reason }}</p>
+            <p><strong>Submitted On:</strong> {{ return_request.created_at|date:"F d, Y H:i" }}</p>
+            <p><strong>Status:</strong> {{ return_request.get_status_display }}</p>
+        </div>
+    </div>
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5>Order Summary</h5>
+            <p><strong>Total Amount:</strong> ₹{{ order.total_amount|floatformat:2 }}</p>
+            <p><strong>Status:</strong> {{ order.get_status_display }}</p>
+            <p><strong>Customer:</strong> {{ order.user.get_full_name }} ({{ order.user.email }})</p>
+            <p><strong>Items:</strong></p>
+            <ul>
+                {% for item in order.items.all %}
+                    <li>{{ item.variant.product.product_name }} ({{ item.quantity }} x ₹{{ item.price|floatformat:2 }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% if not return_request.is_verified %}
+        <form method="post" action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" class="mt-4">
+            {% csrf_token %}
+            <button type="submit" name="action" value="approve" class="btn btn-success">Approve Return</button>
+            <button type="submit" name="action" value="reject" class="btn btn-danger">Reject Return</button>
+        </form>
+    {% else %}
+        <p class="mt-4"><strong>Action Taken:</strong> {{ return_request.get_status_display }}</p>
+    {% endif %}
+    <a href="{% url 'cart_and_orders_app:admin_orders_list' %}" class="btn btn-secondary mt-2">Back to Orders</a>
+</div>
+{% endblock %}

@@ -1,0 +1,373 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Wishlist - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="fw-light mb-4">My Wishlist</h2>
+
+    {% if wishlist_items %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="py-3 px-4 text-uppercase small fw-medium text-muted">Product</th>
+                                        <th class="py-3 px-4 text-uppercase small fw-medium text-muted">Variant</th>
+                                        <th class="py-3 px-4 text-uppercase small fw-medium text-muted">Price</th>
+                                        <th class="py-3 px-4 text-uppercase small fw-medium text-muted">Availability</th>
+                                        <th class="py-3 px-4 text-uppercase small fw-medium text-muted">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in wishlist_items %}
+                                        <tr data-variant-id="{{ item.variant.id }}" class="border-bottom">
+                                            <td class="py-3 px-4">
+                                                <div class="d-flex align-items-center">
+                                                    <a href="{% url 'product_app:user_product_detail' item.variant.product.slug %}?variant_id={{ item.variant.id }}" class="text-decoration-none me-3">
+                                                        <div class="rounded-3 overflow-hidden" style="width: 64px; height: 64px;">
+                                                            <img src="{{ item.variant.primary_image.image.url|default:'https://via.placeholder.com/64?text=Product' }}"
+                                                                alt="{{ item.variant.product.product_name }}"
+                                                                class="img-fluid"
+                                                                style="width: 100%; height: 100%; object-fit: cover;"
+                                                                onerror="this.src='https://via.placeholder.com/64?text=Product';">
+                                                        </div>
+                                                    </a>
+                                                    <div>
+                                                        <a href="{% url 'product_app:user_product_detail' item.variant.product.slug %}?variant_id={{ item.variant.id }}" class="text-decoration-none">
+                                                            <h6 class="mb-0 fw-medium">{{ item.variant.product.product_name }}</h6>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="py-3 px-4 text-body-secondary">
+                                                {{ item.variant.flavor|default:'Standard' }} {{ item.variant.size_weight|default:'N/A' }}
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                {% if item.variant.best_price.price and item.variant.has_offer %}
+                                                    <div>
+                                                        <span class="fw-medium">₹{{ item.variant.best_price.price|floatformat:2 }}</span>
+                                                        <span class="text-muted text-decoration-line-through small ms-2">₹{{ item.variant.original_price|floatformat:2 }}</span>
+                                                    </div>
+                                                {% elif item.variant.best_price.price %}
+                                                    <span class="fw-medium">₹{{ item.variant.best_price.price|floatformat:2 }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">Not available</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                {% if not item.variant.is_active or not item.variant.product.is_active or not item.variant.product.category.is_active or not item.variant.product.brand.is_active %}
+                                                    <div class="d-inline-flex align-items-center">
+                                                        <span class="bg-warning bg-opacity-10 text-warning px-2 py-1 rounded-pill small">
+                                                            <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
+                                                            Currently Unavailable
+                                                        </span>
+                                                    </div>
+                                                {% elif item.variant.stock > 0 %}
+                                                    <div class="d-inline-flex align-items-center">
+                                                        <span class="bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill small">
+                                                            <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
+                                                            In Stock
+                                                        </span>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="d-inline-flex align-items-center">
+                                                        <span class="bg-danger bg-opacity-10 text-danger px-2 py-1 rounded-pill small">
+                                                            <i class="fas fa-circle me-1" style="font-size: 8px;"></i>
+                                                            Out of Stock
+                                                        </span>
+                                                    </div>
+                                                {% endif %}
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <div class="d-flex">
+                                                    <button class="btn btn-sm btn-primary add-to-cart-btn rounded-pill me-2 {% if item.variant.stock <= 0 %}disabled{% endif %}"
+                                                            data-variant-id="{{ item.variant.id }}"
+                                                            {% if item.variant.stock <= 0 %}disabled{% endif %}
+                                                            aria-label="Add {{ item.variant.product.product_name }} to cart">
+                                                        <i class="fas fa-shopping-bag me-1"></i>
+                                                        <span class="small">Add</span>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-light rounded-circle remove-from-wishlist"
+                                                            data-variant-id="{{ item.variant.id }}"
+                                                            aria-label="Remove {{ item.variant.product.product_name }} from wishlist">
+                                                        <i class="far fa-trash-alt text-muted"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center py-5 mt-4">
+            <div class="mb-4">
+                <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center p-3 mb-3" style="width: 80px; height: 80px;">
+                    <i class="far fa-heart fa-2x text-muted"></i>
+                </div>
+                <h4 class="fw-light text-muted mb-3">Your wishlist is empty</h4>
+                <p class="text-body-secondary mb-4">Products added to your wishlist will appear here</p>
+            </div>
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary px-4 rounded-pill">
+                <span>Discover Products</span>
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const csrftoken = getCookie('csrftoken');
+
+        // Helper function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Add to Cart and Remove from Wishlist
+    const addToCartButtons = document.querySelectorAll('.add-to-cart-btn');
+    addToCartButtons.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (this.disabled) return;
+
+            const variantId = this.getAttribute('data-variant-id');
+            const productName = this.closest('tr').querySelector('h6').textContent.trim();
+            const row = this.closest('tr');
+            const originalContent = this.innerHTML;
+
+            // Add loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            this.disabled = true;
+
+            // Step 1: Add to cart
+            fetch('/cart/add/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ variant_id: variantId, quantity: 1 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to add to cart.');
+                }
+
+                // Dispatch cart-updated event
+                document.dispatchEvent(new CustomEvent('cart-updated', { 
+                    detail: { count: data.cart_count } 
+                }));
+
+                // Step 2: Remove from wishlist
+                return fetch('/wishlist/toggle/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ variant_id: variantId })
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && !data.is_in_wishlist) {
+                    // Animate row removal
+                    gsap.to(row, {
+                        opacity: 0,
+                        y: -20,
+                        duration: 0.4,
+                        ease: "power2.out",
+                        onComplete: () => {
+                            row.remove();
+                            // Dispatch wishlist-updated event
+                            document.dispatchEvent(new CustomEvent('wishlist-updated', { 
+                                detail: { count: data.wishlist_count } 
+                            }));
+                            // Check if wishlist is empty
+                            if (!document.querySelectorAll('tbody tr').length) {
+                                location.reload();
+                            }
+                            // Show success alert
+                            Swal.fire({
+                                title: 'Moved to Cart',
+                                text: `${productName} has been added to cart and removed from wishlist.`,
+                                icon: 'success',
+                                iconColor: '#3085d6',
+                                timer: 1500,
+                                showConfirmButton: false,
+                                customClass: {
+                                    popup: 'swal-premium-popup'
+                                },
+                                background: '#fff',
+                                backdrop: `rgba(0,0,0,0.4)`
+                            });
+                        }
+                    });
+                } else {
+                    throw new Error('Failed to remove from wishlist.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Error',
+                    text: error.message || 'Failed to process request.',
+                    icon: 'error',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            })
+            .finally(() => {
+                // Restore button state
+                this.innerHTML = originalContent;
+                this.disabled = false;
+            });
+        });
+    });
+
+        // Remove from Wishlist Functionality
+        const removeButtons = document.querySelectorAll('.remove-from-wishlist');
+        removeButtons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const variantId = this.getAttribute('data-variant-id');
+                const productName = this.closest('tr').querySelector('h6').textContent.trim();
+                const row = this.closest('tr');
+
+                // Add loading state
+                const originalContent = this.innerHTML;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                this.disabled = true;
+
+                fetch('/wishlist/toggle/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ variant_id: variantId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && !data.is_in_wishlist) {
+                        gsap.to(row, {
+                            opacity: 0,
+                            y: -20,
+                            duration: 0.4,
+                            ease: "power2.out",
+                            onComplete: () => {
+                                row.remove();
+                                document.dispatchEvent(new CustomEvent('wishlist-updated', { 
+                                    detail: { count: data.wishlist_count } 
+                                }));
+                                if (!document.querySelectorAll('tbody tr').length) {
+                                    location.reload();
+                                }
+                                Swal.fire({
+                                    title: 'Removed',
+                                    text: productName,
+                                    icon: 'success',
+                                    iconColor: '#3085d6',
+                                    timer: 1500,
+                                    showConfirmButton: false,
+                                    customClass: {
+                                        popup: 'swal-premium-popup'
+                                    },
+                                    background: '#fff',
+                                    backdrop: `rgba(0,0,0,0.4)`
+                                });
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Remove Wishlist Error:', error);
+                    Swal.fire({
+                        title: 'Error',
+                        text: 'Failed to remove from wishlist.',
+                        icon: 'error',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                })
+                .finally(() => {
+                    // Restore button state
+                    this.innerHTML = originalContent;
+                    this.disabled = false;
+                });
+            });
+        });
+    });
+</script>
+
+<style>
+    /* Premium styling additions */
+    .swal-premium-popup {
+        border-radius: 12px !important;
+        box-shadow: 0 15px 35px rgba(50, 50, 93, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07) !important;
+    }
+    
+    .table th {
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        font-size: 0.75rem;
+    }
+    
+    .table td {
+        vertical-align: middle;
+    }
+    
+    .btn-primary {
+        box-shadow: 0 4px 6px rgba(50, 50, 93, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        transition: all 0.2s;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+    }
+    
+    .btn-light {
+        background-color: #f8f9fa;
+        border-color: #f8f9fa;
+        transition: all 0.2s;
+    }
+    
+    .btn-light:hover {
+        background-color: #e9ecef;
+    }
+    
+    .card {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+</style>
+{% endblock %}

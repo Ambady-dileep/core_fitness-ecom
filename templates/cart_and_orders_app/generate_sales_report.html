@@ -1,0 +1,75 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Generate Sales Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2 class="mb-4">Generate Sales Report</h2>
+    
+    <div class="card glass shadow">
+        <div class="card-header">
+            <h5 class="mb-0">Select Report Parameters</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{% url 'cart_and_orders_app:generate_sales_report' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label">Report Type</label>
+                    {{ form.report_type }}
+                    {% if form.report_type.errors %}
+                        <div class="text-danger">{{ form.report_type.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3" id="custom-date-range" style="display: none;">
+                    <label for="{{ form.start_date.id_for_label }}" class="form-label">Start Date</label>
+                    {{ form.start_date }}
+                    {% if form.start_date.errors %}
+                        <div class="text-danger">{{ form.start_date.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3" id="custom-end-date" style="display: none;">
+                    <label for="{{ form.end_date.id_for_label }}" class="form-label">End Date</label>
+                    {{ form.end_date }}
+                    {% if form.end_date.errors %}
+                        <div class="text-danger">{{ form.end_date.errors }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3 form-check">
+                    {{ form.export }}
+                    <label class="form-check-label" for="{{ form.export.id_for_label }}">Export to CSV</label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Generate Report</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const reportTypeRadios = document.querySelectorAll('input[name="report_type"]');
+        const customDateRange = document.getElementById('custom-date-range');
+        const customEndDate = document.getElementById('custom-end-date');
+
+        function toggleDateFields() {
+            if (document.querySelector('input[name="report_type"]:checked').value === 'CUSTOM') {
+                customDateRange.style.display = 'block';
+                customEndDate.style.display = 'block';
+            } else {
+                customDateRange.style.display = 'none';
+                customEndDate.style.display = 'none';
+            }
+        }
+
+        reportTypeRadios.forView(radio => {
+            radio.addEventListener('change', toggleDateFields);
+        });
+
+        toggleDateFields(); // Initial check
+    });
+</script>
+{% endblock %}

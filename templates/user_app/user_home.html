@@ -1,0 +1,457 @@
+{% extends 'base.html' %}
+{% load static cloudinary %}
+
+{% block title %}Home - Core Fitness{% endblock %}
+
+{% block extra_css %}
+    <style>
+        /* Hero Section */
+        .hero-section {
+            background-size: cover;
+            background-position: center;
+            color: var(--text);
+            padding: 6rem 0;
+            margin-bottom: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.5));
+            z-index: 1;
+        }
+        .hero-section .container {
+            position: relative;
+            z-index: 2;
+        }
+        .hero-section h1 {
+            font-weight: 500;
+            font-size: 2.5rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .hero-section p {
+            font-size: 1.1rem;
+            font-weight: 300;
+            margin-bottom: 2rem;
+            color: var(--light-text);
+        }
+        
+        /* Carousel Controls */
+        .carousel-indicators {
+            bottom: -40px;
+        }
+        .carousel-indicators button {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--light-text);
+            opacity: 0.5;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        .carousel-indicators .active {
+            background-color: var(--accent);
+            opacity: 1;
+            transform: scale(1.2);
+        }
+        .carousel-control-prev, .carousel-control-next {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .carousel:hover .carousel-control-prev,
+        .carousel:hover .carousel-control-next {
+            opacity: 0.8;
+        }
+        .carousel-control-prev {
+            left: 20px;
+        }
+        .carousel-control-next {
+            right: 20px;
+        }
+        
+        /* Category Card */
+        .category-card {
+            background-color: var(--bg);
+            border-radius: 4px;
+            text-align: center;
+            padding: 2rem 1.5rem;
+            height: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border);
+        }
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
+            border-color: var(--accent);
+        }
+        .category-icon {
+            margin-bottom: 1.5rem;
+        }
+        .category-icon img {
+            max-width: 60px;
+            height: auto;
+        }
+        .category-card h5 {
+            font-size: 1rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            color: var(--text);
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        .category-card p {
+            font-size: 0.85rem;
+            color: var(--light-text);
+        }
+
+        /* Product Card */
+        .product-card {
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
+            border-color: var(--accent);
+        }
+        .product-card-img-container {
+            height: 220px;
+            overflow: hidden;
+            position: relative;
+            background-color: #f8f8f8;
+        }
+        [data-theme="dark"] .product-card-img-container {
+            background-color: #2a2a2a;
+        }
+        .product-card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .product-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--accent);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 500;
+            padding: 0.25rem 0.5rem;
+            border-radius: 2px;
+            z-index: 2;
+        }
+        .product-card .card-body {
+            padding: 1.5rem;
+            background-color: var(--bg);
+        }
+        .product-card h5 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .product-card .category {
+            font-size: 0.8rem;
+            color: var(--light-text);
+            margin-bottom: 0.75rem;
+        }
+        .product-card .price {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+        .product-card .original-price {
+            font-size: 0.85rem;
+            color: var(--light-text);
+            text-decoration: line-through;
+            margin-left: 0.5rem;
+        }
+        .product-card .discount {
+            font-size: 0.85rem;
+            color: var(--accent);
+            font-weight: 500;
+        }
+        .product-rating {
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+        }
+        .product-rating .stars {
+            color: #FFD700;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+        .product-rating .count {
+            font-size: 0.75rem;
+            color: var(--light-text);
+        }
+
+        /* Section Heading */
+        .section-title {
+            font-size: 1.4rem;
+            text-align: left;
+            margin-bottom: 2rem;
+            position: relative;
+            padding-bottom: 0.8rem;
+        }
+        .section-title::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 40px;
+            height: 1px;
+            background-color: var(--accent);
+        }
+        
+        /* View All Button */
+        .view-all-btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 2px;
+            font-size: 0.85rem;
+            font-weight: 400;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        .view-all-btn:hover {
+            background-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <!-- Hero Section with Carousel -->
+    <div id="bannerCarousel" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-inner">
+            {% for banner in banners %}
+                <div class="carousel-item {% if forloop.first %}active{% endif %}">
+                    <div class="hero-section" style="background-image: url('{% cloudinary_url banner.image %}');">
+                        <div class="container text-center">
+                            <h1>{{ banner.title }}</h1>
+                            {% if banner.subtitle %}
+                                <p class="lead mb-4">{{ banner.subtitle }}</p>
+                            {% endif %}
+                            <a href="{% if banner.url %}{{ banner.url }}{% else %}{% url 'product_app:user_product_list' %}{% endif %}"
+                               class="btn btn-primary">Shop Now</a>
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="carousel-item active">
+                    <div class="hero-section" style="background-image: url('{% static 'images/default-banner.jpg' %}');">
+                        <div class="container text-center">
+                            <h1>Welcome to Core Fitness</h1>
+                            <p class="lead mb-4">Premium supplements and gear for peak performance</p>
+                            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">Shop Now</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        {% if banners.count > 1 %}
+            <button class="carousel-control-prev" type="button" data-bs-target="#bannerCarousel" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#bannerCarousel" data-bs-slide="next">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Next</span>
+            </button>
+            
+            <div class="carousel-indicators">
+                {% for banner in banners %}
+                    <button type="button" data-bs-target="#bannerCarousel" data-bs-slide-to="{{ forloop.counter0 }}"
+                            class="{% if forloop.first %}active{% endif %}" aria-current="{% if forloop.first %}true{% endif %}"></button>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Categories Section -->
+    <div class="container my-5">
+        <h2 class="section-title">Shop by Category</h2>
+        <div class="row">
+            {% for category in categories %}
+                <div class="col-md-3 col-sm-6 mb-4">
+                    <a href="{% url 'product_app:user_product_list' %}?category={{ category.id }}" class="text-decoration-none">
+                        <div class="category-card">
+                            <div class="category-icon">
+                                {% if category.image %}
+                                    <img src="{% cloudinary_url category.image %}" alt="{{ category.name }}">
+                                {% else %}
+                                    <svg width="40" height="40" viewBox="0 0 24 24" stroke="var(--accent)" fill="none" stroke-width="2">
+                                        <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path>
+                                        <line x1="16" y1="8" x2="2" y2="22"></line>
+                                        <line x1="17.5" y1="15" x2="9" y2="15"></line>
+                                    </svg>
+                                {% endif %}
+                            </div>
+                            <h5>{{ category.name }}</h5>
+                            <p>{{ category.description|truncatechars:50 }}</p>
+                        </div>
+                    </a>
+                </div>
+            {% empty %}
+                <div class="col-12 text-center">
+                    <p>No categories available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Featured Products Section -->
+    <div class="container my-5">
+        <h2 class="section-title">Featured Products</h2>
+        <div class="row">
+            {% for item in featured_products %}
+                <div class="col-md-3 col-sm-6 mb-4">
+                    <a href="{% url 'product_app:user_product_detail' item.product.slug %}" class="text-decoration-none">
+                        <div class="card product-card h-100">
+                            <div class="product-card-img-container">
+                                {% if item.discount > 0 %}
+                                    <div class="product-badge">{{ item.discount }}% OFF</div>
+                                {% endif %}
+                                {% if item.product.primary_image %}
+                                    <img src="{% cloudinary_url item.product.primary_image.image %}" class="card-img-top product-card-img" alt="{{ item.product.product_name }}">
+                                {% else %}
+                                    <img src="{% static 'images/default-product.jpg' %}" class="card-img-top product-card-img" alt="No Image">
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title" title="{{ item.product.product_name }}">{{ item.product.product_name }}</h5>
+                                <p class="category">{{ item.product.category.name }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="price">₹{{ item.sales_price }}</span>
+                                        {% if item.discount > 0 %}
+                                            <span class="original-price">₹{{ item.original_price }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if item.product.average_rating > 0 %}
+                                        <div class="product-rating">
+                                            <div class="stars">
+                                                {% for i in "12345" %}
+                                                    {% if forloop.counter <= item.product.average_rating|floatformat:"0" %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="far fa-star"></i>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                            <span class="count">({{ item.product.review_count }})</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            {% empty %}
+                <div class="col-12 text-center">
+                    <p>No featured products available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- New Arrivals Section -->
+    <div class="container my-5">
+        <h2 class="section-title">New Arrivals</h2>
+        <div class="row">
+            {% for item in new_arrivals %}
+                <div class="col-md-3 col-sm-6 mb-4">
+                    <a href="{% url 'product_app:user_product_detail' item.product.slug %}" class="text-decoration-none">
+                        <div class="card product-card h-100">
+                            <div class="product-card-img-container">
+                                {% if item.discount > 0 %}
+                                    <div class="product-badge">{{ item.discount }}% OFF</div>
+                                {% endif %}
+                                {% if item.product.primary_image %}
+                                    <img src="{% cloudinary_url item.product.primary_image.image %}" class="card-img-top product-card-img" alt="{{ item.product.product_name }}">
+                                {% else %}
+                                    <img src="{% static 'images/default-product.jpg' %}" class="card-img-top product-card-img" alt="No Image">
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title" title="{{ item.product.product_name }}">{{ item.product.product_name }}</h5>
+                                <p class="category">{{ item.product.category.name }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="price">₹{{ item.sales_price }}</span>
+                                        {% if item.discount > 0 %}
+                                            <span class="original-price">₹{{ item.original_price }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if item.product.average_rating > 0 %}
+                                        <div class="product-rating">
+                                            <div class="stars">
+                                                {% for i in "12345" %}
+                                                    {% if forloop.counter <= item.product.average_rating|floatformat:"0" %}
+                                                        <i class="fas fa-star"></i>
+                                                    {% else %}
+                                                        <i class="far fa-star"></i>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                            <span class="count">({{ item.product.review_count }})</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            {% empty %}
+                <div class="col-12 text-center">
+                    <p>No new arrivals available.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- View All Products -->
+    <div class="container my-5 text-center">
+        <a href="{% url 'product_app:user_product_list' %}" class="view-all-btn">View All Products</a>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize carousel
+            var bannerCarousel = new bootstrap.Carousel(document.getElementById('bannerCarousel'), {
+                interval: 5000,
+                wrap: true
+            });
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,449 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Orders - Core Fitness{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="section-title">My Orders</h2>
+    <div class="minimal-divider mx-auto"></div>
+
+    <!-- Search and Filter Section -->
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-md-6">
+            <input type="text" name="q" class="form-control" placeholder="Search by Order ID" value="{{ search_query }}" aria-label="Search orders">
+        </div>
+        <div class="col-md-6">
+            <select name="status" class="form-control" onchange="this.form.submit()" aria-label="Filter by status">
+                <option value="">All Statuses</option>
+                {% for status_code, status_name in status_choices %}
+                    <option value="{{ status_code }}" {% if status_filter == status_code %}selected{% endif %}>
+                        {{ status_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <!-- Incomplete Razorpay Orders Section -->
+    {% if incomplete_razorpay_orders %}
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Incomplete Payments</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th scope="col">Order ID</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Amount</th>
+                                <th scope="col" class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in incomplete_razorpay_orders %}
+                                <tr>
+                                    <td>{{ order.order_id }}</td>
+                                    <td>{{ order.created_at|date:"d M Y" }}</td>
+                                    <td>₹{{ order.total_amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-warning retry-payment-btn" data-order-id="{{ order.order_id }}">
+                                            Retry Payment
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Orders List -->
+    {% if orders %}
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Order History</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Order ID</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Payment</th>
+                                <th scope="col">Total</th>
+                                <th scope="col" class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                                <tr>
+                                    <td>{{ order.order_id }}</td>
+                                    <td>{{ order.created_at|date:"d M Y" }}</td>
+                                    <td>
+                                        <span class="badge status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge payment-{{ order.payment_status|lower }}">{{ order.payment_status }}</span>
+                                    </td>
+                                    <td>₹{{ order.total_amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" class="btn btn-sm btn-outline-primary me-1" aria-label="View order details">
+                                            View
+                                        </a>
+                                        {% if order.status == 'Delivered' %}
+                                            <a href="{% url 'cart_and_orders_app:user_return_order' order.order_id %}" class="btn btn-sm btn-outline-warning return-order me-1" aria-label="Return order">
+                                                Return
+                                            </a>
+                                        {% endif %}
+                                        {% if order.payment_status == 'PAID' %}
+                                            <a href="{% url 'cart_and_orders_app:generate_pdf' order.order_id %}" class="btn btn-sm btn-outline-info" aria-label="Download invoice">
+                                                Invoice
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <h4 class="mb-3">No Orders Yet</h4>
+            <p class="text-muted">Start shopping to see your orders here.</p>
+            <a href="{% url 'product_app:user_product_list' %}" class="btn btn-primary">Shop Now</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-control {
+        border: 1px solid var(--border);
+        border-radius: 2px;
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+        transition: all 0.3s ease;
+        background-color: var(--bg);
+        color: var(--text);
+    }
+    .form-control:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.1);
+        outline: none;
+    }
+    .table th, .table td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        font-size: 0.85rem;
+        color: var(--text);
+    }
+    .table th {
+        font-weight: 500;
+        color: var(--light-text);
+        text-transform: uppercase;
+        font-size: 0.8rem;
+    }
+    .table tbody tr:hover {
+        background-color: var(--light-bg);
+    }
+    .badge {
+        padding: 0.3rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: white;
+    }
+    .status-pending, .payment-pending {
+        background-color: #f59e0b;
+    }
+    .status-confirmed, .payment-paid {
+        background-color: #10b981;
+    }
+    .status-shipped, .status-out-for-delivery {
+        background-color: #3b82f6;
+    }
+    .status-delivered {
+        background-color: #059669;
+    }
+    .status-cancelled, .payment-failed {
+        background-color: #ef4444;
+    }
+    .btn {
+        padding: 0.4rem 1rem;
+        font-size: 0.8rem;
+        border-radius: 2px;
+        transition: all 0.3s ease;
+    }
+    .btn-primary {
+        background-color: var(--primary);
+        border-color: var(--primary);
+    }
+    .btn-primary:hover {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
+    .btn-warning {
+        background-color: #f59e0b;
+        border-color: #f59e0b;
+        color: white;
+    }
+    .btn-warning:hover {
+        background-color: #d97706;
+        border-color: #d97706;
+        transform: translateY(-2px);
+    }
+    .btn-outline-primary {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+    .btn-outline-primary:hover {
+        background-color: var(--primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+    .btn-outline-warning {
+        border-color: #f59e0b;
+        color: #f59e0b;
+    }
+    .btn-outline-warning:hover {
+        background-color: #f59e0b;
+        color: white;
+        transform: translateY(-2px);
+    }
+    .btn-outline-info {
+        border-color: #3b82f6;
+        color: #3b82f6;
+    }
+    .btn-outline-info:hover {
+        background-color: #3b82f6;
+        color: white;
+        transform: translateY(-2px);
+    }
+    .text-center h4 {
+        font-size: 1.2rem;
+        font-weight: 400;
+        color: var(--text);
+    }
+    .text-center p {
+        color: var(--light-text);
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // GSAP animations for tables
+    gsap.utils.toArray('.table').forEach(table => {
+        gsap.fromTo(table, {
+            opacity: 0,
+            y: 20
+        }, {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            scrollTrigger: {
+                trigger: table,
+                start: "top 85%",
+                toggleActions: "play none none none"
+            }
+        });
+    });
+
+    // Return Confirmation
+    document.querySelectorAll('.return-order').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = this.href;
+            Swal.fire({
+                title: 'Are you sure you want to return this order?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No',
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#666'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = url;
+                }
+            });
+        });
+    });
+
+    // Retry Payment Logic
+document.querySelectorAll('.retry-payment-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const orderId = this.getAttribute('data-order-id');
+        const retryUrl = `/orders/${orderId}/retry-payment/`;
+
+        // Disable the button to prevent multiple clicks
+        this.disabled = true;
+        this.innerText = 'Processing...';
+
+        Swal.fire({
+            title: 'Initiating Payment...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        fetch(retryUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            Swal.close();
+            if (!data.success) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: data.message || 'Failed to initiate payment. Please try again.'
+                }).then(() => {
+                    // Re-enable the button on failure
+                    this.disabled = false;
+                    this.innerText = 'Retry Payment';
+                });
+                return;
+            }
+
+            const options = {
+                key: data.key, // Fixed: Use data.key instead of data.razorpay_key
+                amount: data.amount,
+                currency: data.currency,
+                name: 'Core Fitness',
+                description: data.description,
+                order_id: data.razorpay_order_id,
+                callback_url: data.callback_url,
+                prefill: data.prefill,
+                theme: { color: '#f59e0b' },
+                handler: function(response) {
+                    fetch(data.callback_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: new URLSearchParams({
+                            'razorpay_payment_id': response.razorpay_payment_id,
+                            'razorpay_order_id': response.razorpay_order_id,
+                            'razorpay_signature': response.razorpay_signature
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Payment Successful',
+                                text: 'Your payment was successful!',
+                                confirmButtonText: 'OK'
+                            }).then(() => {
+                                window.location.href = data.redirect;
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Payment Failed',
+                                text: data.message || 'Payment verification failed.'
+                            }).then(() => {
+                                // Re-enable the button on failure
+                                this.disabled = false;
+                                this.innerText = 'Retry Payment';
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Callback error:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An error occurred while verifying the payment.'
+                        }).then(() => {
+                            // Re-enable the button on error
+                            this.disabled = false;
+                            this.innerText = 'Retry Payment';
+                        });
+                    });
+                },
+                modal: {
+                    ondismiss: function() {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Payment Cancelled',
+                            text: 'You cancelled the payment. You can retry again.',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            // Re-enable the button on cancellation
+                            this.disabled = false;
+                            this.innerText = 'Retry Payment';
+                        });
+                    }.bind(this) // Bind `this` to access the button
+                }
+            };
+
+            const rzp = new Razorpay(options);
+            rzp.on('payment.failed', function(response) {
+                console.log('Payment failed:', response);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Payment Failed',
+                    text: 'Payment failed. Please try again.',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    window.location.href = `/order/${orderId}/failure/`;
+                });
+            });
+            rzp.open();
+        })
+        .catch(error => {
+            Swal.close();
+            console.error('Retry payment error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Failed to initiate payment. Please try again.'
+            }).then(() => {
+                // Re-enable the button on error
+                this.disabled = false;
+                this.innerText = 'Retry Payment';
+            });
+        });
+    });
+});
+
+    // CSRF Token Helper (unchanged)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+});
+</script>
+{% endblock %}
