@@ -72,11 +72,11 @@ class Brand(models.Model):
         super().save(*args, **kwargs)
 
     @property
-    def product_count(self):
+    def active_product_count(self):  
         return self.products.filter(is_active=True).count()
 
     @property
-    def category_count(self):
+    def active_category_count(self):
         return self.categories.filter(is_active=True).count()
 
     def __str__(self):

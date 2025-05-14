@@ -1,0 +1,333 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Brands | Core Fitness{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Filter form styling */
+    .filter-section {
+        margin-bottom: 2rem;
+    }
+    .form-control, .form-select {
+        border-radius: 0.25rem;
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        border-color: var(--border);
+        color: var(--text);
+        background-color: var(--light-bg);
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
+        background-color: var(--bg);
+    }
+    .btn-filter {
+        font-size: 0.85rem;
+        padding: 0.5rem 1.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .filter-toggle-btn {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-radius: 0.25rem;
+    }
+    .brand-card {
+        transition: transform 0.3s ease;
+        border: none;
+        background-color: var(--bg);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03);
+    }
+    .brand-card:hover {
+        transform: translateY(-5px);
+    }
+    .brand-img {
+        max-height: 150px;
+        object-fit: contain;
+        padding: 1rem;
+    }
+    .pagination .page-link {
+        color: var(--text);
+        background-color: var(--light-bg);
+        border-color: var(--border);
+        font-size: 0.85rem;
+    }
+    .pagination .page-item.active .page-link {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+    .loading-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    .loading-overlay.show {
+        display: flex;
+    }
+    .loading-spinner {
+        border: 4px solid var(--text);
+        border-top: 4px solid var(--accent);
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5 position-relative">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Hero Section -->
+    <div class="text-center mb-5">
+        <h1 class="section-title">Our Brands</h1>
+        <p class="text-muted lead">Explore premium fitness brands curated for quality and performance.</p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <!-- Filter Section -->
+            <div class="filter-section">
+                <!-- Mobile Filter Toggle -->
+                <div class="d-lg-none mb-3">
+                    <button class="btn btn-outline-secondary filter-toggle-btn w-100 d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#filterContent" aria-expanded="false" aria-controls="filterContent">
+                        <span><i class="fas fa-filter me-2"></i> Filters & Search</span>
+                        <i class="fas fa-chevron-down" id="filterArrow"></i>
+                    </button>
+                </div>
+
+                <!-- Filter Form -->
+                <div id="filterContent" class="collapse d-lg-block">
+                    <form method="get" id="filter-form">
+                        <div class="row g-3 align-items-end">
+                            <!-- Search Input -->
+                            <div class="col-lg-4 col-md-6">
+                                <h5 class="text-uppercase small fw-medium text-muted mb-2"><i class="fas fa-search me-2"></i> Search Brands</h5>
+                                <div class="input-group">
+                                    <input type="text" name="q" value="{{ query|default:'' }}" class="form-control" placeholder="Search brands..." aria-label="Search brands">
+                                    <button type="submit" class="btn btn-danger btn-filter" aria-label="Submit search">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Sort Dropdown -->
+                            <div class="col-lg-4 col-md-6">
+                                <h5 class="text-uppercase small fw-medium text-muted mb-2"><i class="fas fa-sort me-2"></i> Sort By</h5>
+                                <select name="sort" id="id_sort" class="form-select">
+                                    <option value="" {% if sort_by == '' %}selected{% endif %}>Default</option>
+                                    <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>Name (A-Z)</option>
+                                    <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Name (Z-A)</option>
+                                    <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest</option>
+                                    <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest</option>
+                                    <option value="popular" {% if sort_by == 'popular' %}selected{% endif %}>Most Popular</option>
+                                </select>
+                            </div>
+
+                            <!-- Clear Filters -->
+                            {% if query or sort_by %}
+                            <div class="col-lg-4 col-md-12">
+                                <a href="{% url 'product_app:user_brand_list' %}" class="btn btn-outline-danger btn-filter w-100">
+                                    <i class="fas fa-times me-2"></i> Clear Filters
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Featured Brands -->
+            {% if featured_brands %}
+            <div class="mb-5">
+                <h2 class="section-title"><i class="fas fa-star me-2 text-warning"></i> Featured Brands</h2>
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
+                    {% for brand in featured_brands %}
+                    <div class="col">
+                        <div class="brand-card card h-100">
+                            <div class="text-center bg-light" style="height: 200px;">
+                                {% if brand.logo %}
+                                <img src="{{ brand.logo.url }}" class="brand-img img-fluid" alt="{{ brand.name }} logo" loading="lazy">
+                                {% else %}
+                                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                    <i class="fas fa-image fa-3x mb-2"></i>
+                                    <span class="small">No image</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ brand.name }}</h5>
+                                <p class="card-text text-muted small">{{ brand.description|default:"Explore high-quality supplements from this trusted brand."|truncatewords:15 }}</p>
+                                <a href="{% url 'product_app:user_product_list' %}?brand={{ brand.id }}" class="btn btn-danger btn-sm btn-filter">
+                                    <i class="fas fa-shopping-cart me-2"></i> View Products
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- All Brands -->
+            <div>
+                <h2 class="section-title">
+                    <i class="fas fa-th-list me-2 text-warning"></i> All Brands
+                    {% if query %}
+                    <span class="small fw-normal text-muted ms-2">Results for "{{ query }}"</span>
+                    {% endif %}
+                </h2>
+
+                {% if page_obj %}
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
+                    {% for brand in page_obj %}
+                    <div class="col">
+                        <div class="brand-card card h-100">
+                            <div class="text-center bg-light" style="height: 200px;">
+                                {% if brand.logo %}
+                                <img src="{{ brand.logo.url }}" class="brand-img img-fluid" alt="{{ brand.name }} logo" loading="lazy">
+                                {% else %}
+                                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                                    <i class="fas fa-image fa-3x mb-2"></i>
+                                    <span class="small">No image</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ brand.name }}</h5>
+                                <p class="card-text text-muted small">{{ brand.description|default:"Explore high-quality supplements from this trusted brand."|truncatewords:15 }}</p>
+                                <a href="{% url 'product_app:user_product_list' %}?brand={{ brand.id }}" class="btn btn-danger btn-sm btn-filter">
+                                    <i class="fas fa-shopping-cart me-2"></i> View Products
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Brand pagination" class="mt-5">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="First page">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous page">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Page {{ num }}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next page">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Last page">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5 bg-light rounded-3 border">
+                    <i class="fas fa-info-circle fa-4x text-muted mb-3"></i>
+                    <h4 class="mb-2">No brands found</h4>
+                    <p class="text-muted mb-4">No brands match your criteria. Try adjusting your search or filters.</p>
+                    {% if query or sort_by %}
+                    <a href="{% url 'product_app:user_brand_list' %}" class="btn btn-primary btn-filter">
+                        <i class="fas fa-times me-2"></i> Clear Filters
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterForm = document.getElementById('filter-form');
+        const sortSelect = document.getElementById('id_sort');
+        const searchInput = filterForm.querySelector('input[name="q"]');
+        const toggleFiltersBtn = document.querySelector('.filter-toggle-btn');
+        const filterContent = document.getElementById('filterContent');
+        const filterArrow = document.getElementById('filterArrow');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        // Show loading overlay during form submission
+        filterForm.addEventListener('submit', function() {
+            loadingOverlay.classList.add('show');
+        });
+
+        // Auto-submit on sort change
+        if (sortSelect) {
+            sortSelect.addEventListener('change', function() {
+                filterForm.submit();
+            });
+        }
+
+        // Auto-submit on search input (debounced)
+        let searchTimeout;
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    filterForm.submit();
+                }, 500); // 500ms debounce
+            });
+        }
+
+        // Filter toggle for mobile
+        if (toggleFiltersBtn && filterContent) {
+            toggleFiltersBtn.addEventListener('click', function() {
+                const isExpanded = filterContent.classList.contains('show');
+                filterArrow.classList.toggle('fa-chevron-down', !isExpanded);
+                filterArrow.classList.toggle('fa-chevron-up', isExpanded);
+            });
+        }
+    });
+</script>
+{% endblock %}

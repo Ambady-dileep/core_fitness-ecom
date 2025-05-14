@@ -25,6 +25,7 @@ from .category_views import (
     admin_brand_delete,
     admin_brand_detail,
     admin_toggle_brand_status,
+    user_brand_list,
 )
 
 app_name = 'product_app'
@@ -39,6 +40,9 @@ urlpatterns = [
 
     # User-Facing Category Routes
     path('categories/', user_category_list, name='user_category_list'),
+
+    # User-Facing Brand Routes
+    path('brands/', user_brand_list, name='user_brand_list'),
 
     # Admin Product Routes
     path('admin/products/', admin_product_list, name='admin_product_list'),

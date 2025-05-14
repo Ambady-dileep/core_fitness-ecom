@@ -235,6 +235,68 @@ def user_category_list(request):
 
 ###############################################################################################################################################################################
 
+@never_cache
+def user_brand_list(request):
+    # Fetch active brands with related data
+    brands = Brand.objects.filter(is_active=True).prefetch_related('products', 'categories')
+
+    # Annotate with product and category counts
+    brands = brands.annotate(
+        product_count=Count('products', filter=Q(products__is_active=True, products__category__is_active=True)),
+        category_count=Count('categories', filter=Q(categories__is_active=True))
+    )
+
+    # Handle search query
+    query = request.GET.get('q', '').strip()
+    if query:
+        logger.info(f"Search query: {query}")
+        brands = brands.filter(
+            Q(name__icontains=query) |
+            Q(description__icontains=query) |
+            Q(categories__name__icontains=query, categories__is_active=True)
+        ).distinct()
+        if not brands.exists():
+            logger.warning(f"No brands found for query: {query}")
+
+    # Handle sorting
+    sort_by = request.GET.get('sort', '')
+    sort_options = {
+        'a_to_z': 'name',
+        'z_to_a': '-name',
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'popular': '-product_count',
+        '': 'name'  # Default sort
+    }
+    sort_field = sort_options.get(sort_by, 'name')
+    logger.info(f"Sorting by: {sort_by} ({sort_field})")
+    brands = brands.order_by(sort_field)
+
+    # Get featured brands (those with the most products)
+    featured_brands = Brand.objects.filter(is_active=True).annotate(
+        product_count=Count('products', filter=Q(products__is_active=True, products__category__is_active=True))
+    ).order_by('-product_count')[:3]
+
+    # Paginate results
+    per_page = int(request.GET.get('per_page', 9))  
+    paginator = Paginator(brands, per_page=per_page)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Debug brand count
+    logger.info(f"Total brands after filtering: {brands.count()}")
+
+    context = {
+        'page_obj': page_obj,
+        'title': 'Our Brands',
+        'query': query,
+        'sort_by': sort_by,
+        'featured_brands': featured_brands,
+    }
+
+    return render(request, 'product_app/user_brand_list.html', context)
+
+
 @login_required
 @user_passes_test(is_admin)
 def admin_brand_list(request):
