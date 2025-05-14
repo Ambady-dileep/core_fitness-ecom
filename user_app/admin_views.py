@@ -14,6 +14,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from .forms import ContactForm
 from .models import ContactMessage
+from cart_and_orders_app.models import Order, OrderItem, ReturnRequest, ProductVariant
+import json
 from django.db.models import Q, Count, Sum, F
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -66,7 +68,6 @@ def admin_login(request):
     
     return render(request, 'admin_login.html', {'form': form})
 
-
 @login_required
 @user_passes_test(is_admin)
 def admin_dashboard(request):
@@ -86,16 +87,23 @@ def admin_dashboard(request):
     elif time_filter == 'yearly':
         start_date = now - timedelta(days=365)
 
-    # Sales data for chart
-    orders = Order.objects.filter(order_date__gte=start_date, status='Delivered')
+    # Sales data for chart - Include 'Confirmed' and 'Delivered' orders
+    orders = Order.objects.filter(
+        Q(status='Confirmed') | Q(status='Delivered'),
+        order_date__gte=start_date
+    )
     sales_data = []
     labels = []
-    
+
     if time_filter == 'daily':
         for hour in range(24):
             hour_start = start_date.replace(hour=hour, minute=0, second=0)
             hour_end = hour_start + timedelta(hours=1)
-            amount = orders.filter(order_date__gte=hour_start, order_date__lt=hour_end).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            # Filter orders by the hour they were confirmed or delivered
+            amount = orders.filter(
+                order_date__gte=hour_start,
+                order_date__lt=hour_end
+            ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
             sales_data.append(float(amount))
             labels.append(hour_start.strftime('%H:%M'))
     elif time_filter == 'weekly':
@@ -117,6 +125,26 @@ def admin_dashboard(request):
             amount = orders.filter(order_date__gte=month_start, order_date__lt=month_end).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
             sales_data.append(float(amount))
             labels.append(month_start.strftime('%b'))
+
+    # Basic statistics
+    total_users = CustomUser.objects.filter(is_superuser=False).count()
+    total_orders = orders.count()
+    total_revenue = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    pending_returns = ReturnRequest.objects.filter(is_verified=False, refund_processed=False).count()
+    average_order_value = total_revenue / total_orders if total_orders > 0 else 0
+    total_coupon_discount = orders.aggregate(Sum('coupon_discount'))['coupon_discount__sum'] or 0
+    low_stock_items = ProductVariant.objects.filter(stock__lte=10, is_active=True).count()
+
+    # Recent orders (last 5)
+    recent_orders = Order.objects.select_related('user').order_by('-order_date')[:5]
+
+    # Low stock variants (stock <= 10)
+    low_stock_variants = ProductVariant.objects.filter(stock__lte=10, is_active=True).select_related('product')[:10]
+
+    # Order status distribution
+    order_status_counts = Order.objects.values('status').annotate(count=Count('id'))
+    order_status_labels = [status['status'] for status in order_status_counts]
+    order_status_data = [status['count'] for status in order_status_counts]
 
     # Top 10 best-selling products
     top_products = OrderItem.objects.filter(order__status='Delivered').values(
@@ -142,18 +170,21 @@ def admin_dashboard(request):
         total_revenue=Sum(F('quantity') * F('price'))
     ).order_by('-total_sold')[:10]
 
-    # Basic statistics
-    total_users = CustomUser.objects.filter(is_superuser=False).count()
-    total_orders = orders.count()
-    total_revenue = orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-
     context = {
         'title': 'Admin Dashboard',
         'total_users': total_users,
         'total_orders': total_orders,
         'total_revenue': float(total_revenue),
+        'pending_returns': pending_returns,
+        'average_order_value': float(average_order_value),
+        'total_coupon_discount': float(total_coupon_discount),
+        'low_stock_items': low_stock_items,
+        'recent_orders': recent_orders,
+        'low_stock_variants': low_stock_variants,
         'sales_data': sales_data,
-        'sales_labels': labels,
+        'sales_labels': json.dumps(labels),
+        'order_status_labels': json.dumps(order_status_labels),
+        'order_status_data': order_status_data,
         'time_filter': time_filter,
         'top_products': top_products,
         'top_categories': top_categories,
