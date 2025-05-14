@@ -52,9 +52,9 @@ def admin_product_list(request):
         if brand:
             products = products.filter(brand=brand)
         if min_price is not None:
-            products = products.filter(variants__best_price__price__gte=min_price)
+            products = products.filter(variants__original_price__gte=min_price)
         if max_price is not None:
-            products = products.filter(variants__best_price__price__lte=max_price)
+            products = products.filter(variants__original_price__lte=max_price)
 
     status = request.GET.get('status', 'all')
     if status == 'active':
@@ -63,8 +63,12 @@ def admin_product_list(request):
         products = products.filter(is_active=False)
 
     # Sorting
-    sort_by = request.GET.get('sort', '-created_at')
+    sort_by = filter_form.cleaned_data.get('sort') or request.GET.get('sort', '-created_at')
     sort_options = {
+        'price_low': 'min_price',
+        'price_high': '-max_price',
+        'a_to_z': 'product_name',
+        'z_to_a': '-product_name',
         'new_arrivals': '-created_at',
         '-created_at': '-created_at',
         'rating': '-average_rating',
@@ -72,10 +76,20 @@ def admin_product_list(request):
         'stock_low': 'total_stock',
         'calculated_total_stock': 'total_stock',
     }
-    if sort_by in ('stock_low', 'calculated_total_stock'):
+
+    if sort_by in ('price_low', 'price_high'):
+        # Annotate min and max prices for sorting
+        products = products.annotate(
+            min_price=Min('variants__original_price'),
+            max_price=Max('variants__original_price')
+        ).order_by(sort_options.get(sort_by, '-created_at'))
+    elif sort_by in ('stock_low', 'calculated_total_stock'):
         products = products.annotate(total_stock=Sum('variants__stock')).order_by(sort_options.get(sort_by, '-created_at'))
     else:
         products = products.order_by(sort_options.get(sort_by, '-created_at'))
+
+    # Ensure distinct results to avoid duplicates from variant joins
+    products = products.distinct()
 
     # Pagination
     paginator = Paginator(products, 10)

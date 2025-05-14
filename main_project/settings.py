@@ -36,7 +36,8 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1','13.126.134.132','www.corefitness.site
 AUTH_USER_MODEL = 'user_app.CustomUser'
 
 
-REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')      
+REDIS_HOST = os.environ.get('REDIS_HOST', 'corefitness.site') 
+REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')     
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))    
 REDIS_DB = int(os.environ.get('REDIS_DB', 0))           
 
@@ -192,14 +193,6 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-STATIC_URL = '/static/'
-STATICFILES_DIRS = []
-STATIC_ROOT = BASE_DIR / "staticfiles"
-
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

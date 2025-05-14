@@ -2,25 +2,45 @@
 {% load static %}
 
 {% block title %}{{ product.product_name }} | Core Fitness{% endblock %}
-
 {% block extra_css %}
 <style>
 .product-container { padding: 3rem 0; }
-.product-gallery { position: relative; margin-bottom: 2rem; }
-.main-image-container { 
-    position: relative; 
-    overflow: hidden; 
-    border-radius: 8px; 
-    background: var(--light-bg); 
-    aspect-ratio: 1/1; 
-    cursor: crosshair; 
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+.product-gallery {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-direction: row; /* Thumbnails on the left */
 }
-.main-image { 
-    width: 100%; 
-    height: 100%; 
-    object-fit: contain; 
-    transition: opacity 0.3s; 
+.carousel-container {
+    flex: 1;
+    position: relative;
+    border-radius: 8px;
+    overflow: visible;
+    background: transparent; /* Transparent background */
+    aspect-ratio: 1/1;
+    box-shadow: none; /* No shadow for transparency */
+}
+.carousel-inner img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.5s ease, opacity 0.5s ease;
+    transform: rotateY(15deg); /* Slight 3D rotation for main images */
+}
+.carousel-item {
+    perspective: 100px; 
+}
+.carousel-item.active img {
+    transform: rotateY(0deg); /* Active image straightens */
+}
+.carousel-control-prev:hover,
+.carousel-control-next:hover,
+.carousel-control-prev-icon,
+.carousel-control-next-icon {
+    filter: brightness(0) invert(1);
+}
+.carousel-indicators {
+    display: none; /* Hide indicators to avoid JS error */
 }
 .zoom-lens { 
     position: absolute; 
@@ -30,7 +50,10 @@
     background-color: rgba(255, 255, 255, 0.4); 
     cursor: crosshair; 
     display: none; 
-    z-index: 1001; 
+    z-index: 1100;
+}
+.container {
+    position: relative;
 }
 .breadcrumb {
     background: transparent;
@@ -57,33 +80,52 @@
     font-weight: 500;
 }
 .zoom-result { 
-    position: fixed; 
-    right: 20px; 
-    border: 1px solid #ccc; 
+    position: absolute;
     width: 300px; 
-    height: 300px; 
+    height: 300px; /* Ensure height equals width for a square */
     background-repeat: no-repeat; 
     background-color: white; 
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); 
-    z-index: 1000; 
+    z-index: 1090;
     display: none; 
     border-radius: 3px; 
     pointer-events: none; 
+    border: 1px solid #ccc;
+    top: 0; /* Align with the top of the container */
+    left: calc(100% + 10px); /* Position to the right with a 10px gap */
 }
-.thumbnail-nav { 
-    width: 50px; 
-    height: 50px; 
-    object-fit: cover; 
-    cursor: pointer; 
-    border: 1px solid #ddd; 
-    border-radius: 4px; 
-    transition: all 0.3s; 
+.zoom-container {
+    position: relative; 
+    width: 100%;
+    height: 100%;
 }
-.thumbnail-nav:hover { 
-    border-color: var(--accent); 
-    opacity: 0.8; 
+.thumbnail-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 70px;
 }
-.row.g-2 { gap: 0.5rem; }
+.thumbnail-nav {
+    width: 100%;
+    height: 70px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    background: var(--light-bg);
+    transform: rotateY(-15deg); /* Slight 3D rotation for thumbnails */
+}
+.thumbnail-nav:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.1);
+    transform: rotateY(0deg) scale(1.05); /* Straighten and scale on hover */
+}
+.thumbnail-nav.active {
+    border-color: var(--accent);
+    transform: rotateY(0deg); /* Active thumbnail straightens */
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
+}
 .product-title { 
     font-size: 1.8rem; 
     font-weight: 500; 
@@ -180,33 +222,60 @@
 .quantity-selector { 
     display: flex; 
     align-items: center; 
-    margin-bottom: 1.5rem; 
+    gap: 8px; /* Tighter spacing */
+    margin-bottom: 1rem; 
 }
+
 .quantity-btn { 
-    width: 36px; 
-    height: 36px; 
+    width: 28px; 
+    height: 28px; 
     display: flex; 
     align-items: center; 
     justify-content: center; 
-    background: var(--light-bg); 
-    border: none; 
-    border-radius: 2px; 
+    background: transparent; /* No background */
+    border: 1px solid var(--border); 
+    border-radius: 4px; 
     cursor: pointer; 
-    transition: all 0.3s; 
+    transition: all 0.2s ease; 
+    color: var(--text);
 }
+
 .quantity-btn:hover { 
     background: var(--accent); 
     color: white; 
+    border-color: var(--accent); 
 }
-.quantity-input { 
-    width: 50px; 
-    height: 36px; 
+
+.quantity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quantity-display { 
+    width: 32px; /* Smaller width */
+    height: 28px; 
     text-align: center; 
-    border: 1px solid var(--border); 
-    border-radius: 2px; 
-    margin: 0 5px; 
+    border: none; /* Remove border for minimal look */
+    background: transparent; /* No background */
     font-size: 0.9rem; 
-    background: var(--bg); 
+    font-weight: 500; 
+    color: var(--text); 
+    padding: 0; /* Remove padding */
+    margin: 0; /* Remove margin */
+    pointer-events: none; /* Prevent any interaction */
+    -webkit-appearance: none; /* Remove default input styling on Webkit browsers */
+    -moz-appearance: textfield; /* Remove default input styling on Firefox */
+}
+
+.quantity-display::-webkit-inner-spin-button,
+.quantity-display::-webkit-outer-spin-button { 
+    -webkit-appearance: none; /* Remove number input arrows */
+    margin: 0; 
+}
+
+.quantity-display:focus { 
+    outline: none; /* Remove focus outline */
+    box-shadow: none; /* Remove focus shadow */
 }
 .product-actions {
     display: flex;
@@ -523,6 +592,19 @@
     .product-actions { flex-direction: column; }
     .action-btn { width: 100%; }
     .variant-card-container { grid-template-columns: 1fr; }
+    .product-gallery {
+        flex-direction: column; /* Stack thumbnails above main image on small screens */
+    }
+    .thumbnail-column {
+        flex-direction: row;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+    }
+    .thumbnail-nav {
+        width: 70px;
+        flex-shrink: 0;
+    }
 }
 </style>
 {% endblock %}
@@ -542,57 +624,54 @@
     <div class="row">
         <!-- Product Gallery -->
         <div class="col-lg-6 mb-4">
-            <div id="productCarousel" class="carousel slide" data-bs-ride="carousel">
-                <div class="carousel-indicators">
+            <div class="product-gallery">
+                <div class="thumbnail-column">
                     {% for variant_data in variants %}
                         {% for image in variant_data.images %}
                             {% with forloop.counter0 as slide_index %}
-                                <button type="button" data-bs-target="#productCarousel" data-bs-slide-to="{{ slide_index }}"
-                                        {% if slide_index == 0 %}class="active" aria-current="true"{% endif %}
-                                        aria-label="Slide {{ forloop.counter }}"></button>
+                                <img src="{{ image.image.url }}" 
+                                     class="thumbnail-nav {% if slide_index == 0 %}active{% endif %}" 
+                                     alt="Thumbnail {{ forloop.counter }}"
+                                     data-bs-target="#productCarousel" 
+                                     data-bs-slide-to="{{ slide_index }}"
+                                     data-variant-id="{{ variant_data.variant.id }}">
                             {% endwith %}
                         {% endfor %}
                     {% endfor %}
                 </div>
-                <div class="carousel-inner rounded">
-                    {% for variant_data in variants %}
-                        {% for image in variant_data.images %}
-                            {% with forloop.counter0 as slide_index %}
-                                <div class="carousel-item {% if slide_index == 0 %}active{% endif %}">
-                                    <div class="main-image-container zoom-container">
-                                        <img src="{{ image.image.url }}" class="main-image zoom-image" alt="{{ product.product_name }} - {{ variant_data.variant.flavor|default:'Standard' }}">
-                                        <div class="zoom-lens"></div>
-                                        <div class="zoom-result"></div>
+                <div id="productCarousel" class="carousel slide carousel-container">
+                    <div class="carousel-inner rounded">
+                        {% for variant_data in variants %}
+                            {% for image in variant_data.images %}
+                                {% with forloop.counter0 as slide_index %}
+                                    <div class="carousel-item {% if slide_index == 0 %}active{% endif %}" 
+                                         data-variant-id="{{ variant_data.variant.id }}">
+                                        <div class="main-image-container zoom-container">
+                                            <img src="{{ image.image.url }}" 
+                                                 class="main-image zoom-image" 
+                                                 alt="{{ product.product_name }} - {{ variant_data.variant.flavor|default:'Standard' }}"
+                                                 onerror="this.src='/placeholder.svg?height=300&width=300';">
+                                            <div class="zoom-lens"></div>
+                                            <!-- Remove zoom-result from here -->
+                                        </div>
                                     </div>
-                                </div>
-                            {% endwith %}
+                                {% endwith %}
+                            {% endfor %}
                         {% endfor %}
-                    {% endfor %}
+                    </div>
+                    <!-- Add zoom-result here, outside carousel-inner -->
+                    <div class="zoom-result"></div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
                 </div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
-                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                    <span class="visually-hidden">Previous</span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
-                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                    <span class="visually-hidden">Next</span>
-                </button>
             </div>
-            <div class="row mt-2 g-2 d-none d-md-flex">
-                {% for variant_data in variants %}
-                    {% for image in variant_data.images %}
-                        {% with forloop.counter0 as slide_index %}
-                            <div class="col-2">
-                                <img src="{{ image.image.url }}" class="img-thumbnail thumbnail-nav" alt="Thumbnail {{ forloop.counter }}"
-                                     data-bs-target="#productCarousel" data-bs-slide-to="{{ slide_index }}">
-                            </div>
-                        {% endwith %}
-                    {% endfor %}
-                {% endfor %}
-            </div>
-            <small class="text-muted d-block mt-1"><i class="bi bi-zoom-in"></i> Hover to zoom, click to enlarge</small>
         </div>
-
         <!-- Product Info -->
         <div class="col-lg-6">
             <h1 class="product-title">{{ product.product_name }}</h1>
@@ -715,13 +794,13 @@
                 <!-- Quantity Selector -->
                 <div class="quantity-selector">
                     <button type="button" class="quantity-btn" id="decreaseQuantity">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </button>
-                    <input type="number" name="quantity" id="quantity" class="quantity-input" value="1" min="1" max="5" readonly>
+                    <input type="number" name="quantity" id="quantity" class="quantity-display" value="1" min="1" max="5" readonly disabled tabindex="-1">
                     <button type="button" class="quantity-btn" id="increaseQuantity">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
@@ -765,33 +844,8 @@
         </div>
 
         <div class="tab-content active" id="description">
-            <div class="row">
-                <div class="col-md-8 mx-auto">
-                    <h3 class="section-title">Product Details</h3>
-                    <p>{{ product.description|linebreaks }}</p>
-
-                    {% if product.variants.first.flavor %}
-                        <h4>Available Flavors</h4>
-                        <ul>
-                            {% for variant in product.variants.all %}
-                                {% if variant.flavor %}
-                                    <li>{{ variant.flavor }}</li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-
-                    {% if product.variants.first.size_weight %}
-                        <h4>Available Sizes</h4>
-                        <ul>
-                            {% for variant in product.variants.all %}
-                                {% if variant.size_weight %}
-                                    <li>{{ variant.size_weight }}</li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
+            <div class="product-description">
+                {{ product.description|linebreaks }}
             </div>
         </div>
 
@@ -922,13 +976,12 @@
     {% endif %}
 </div>
 {% endblock %}
-
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize variables
-    const thumbnailsContainer = document.querySelectorAll('.thumbnail-nav');
+    const thumbnails = document.querySelectorAll('.thumbnail-nav');
     const variantOptions = document.getElementById('variantOptions');
     const quantityInput = document.getElementById('quantity');
     const decreaseQuantityBtn = document.getElementById('decreaseQuantity');
@@ -945,6 +998,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const reviewForm = document.getElementById('reviewForm');
     const cancelReviewBtn = document.getElementById('cancelReviewBtn');
     const submitReviewForm = document.getElementById('submitReviewForm');
+    const carouselElement = document.getElementById('productCarousel');
 
     // Product variants data
     const variantsData = [
@@ -990,14 +1044,199 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     renderStars();
 
-    // Thumbnail Navigation
-    thumbnailsContainer.forEach(thumb => {
-        thumb.addEventListener('click', function() {
-            const slideIndex = this.getAttribute('data-bs-slide-to');
-            const carousel = new bootstrap.Carousel(document.getElementById('productCarousel'));
-            carousel.to(parseInt(slideIndex));
-        });
+    // Initialize Carousel
+    const carousel = new bootstrap.Carousel(carouselElement, {
+        ride: false,
+        interval: false
     });
+
+    // Function to update carousel and thumbnails based on selected variant
+    function updateCarouselForVariant(variantId) {
+        const variant = variantsData.find(v => v.id == variantId);
+        if (!variant) return;
+
+        // Hide all thumbnails and carousel items
+        thumbnails.forEach(thumb => thumb.classList.remove('active', 'd-block'));
+        document.querySelectorAll('.carousel-item').forEach(item => item.classList.remove('active'));
+
+        // Show only the thumbnails and carousel items for the selected variant
+        let firstSlideIndex = null;
+        thumbnails.forEach((thumb, index) => {
+            if (thumb.dataset.variantId == variantId) {
+                thumb.classList.add('d-block');
+                if (firstSlideIndex === null) {
+                    firstSlideIndex = index;
+                    thumb.classList.add('active');
+                }
+            }
+        });
+
+        document.querySelectorAll('.carousel-item').forEach((item, index) => {
+            if (item.dataset.variantId == variantId) {
+                if (index === firstSlideIndex) {
+                    item.classList.add('active');
+                    carousel.to(index);
+                }
+            }
+        });
+
+        // Reinitialize zoom for the new active slide
+        const activeZoomContainer = document.querySelector('.carousel-item.active .zoom-container');
+        if (activeZoomContainer) {
+            initializeZoom(activeZoomContainer);
+        }
+    }
+
+    // Thumbnail Navigation
+    thumbnails.forEach(thumb => {
+        thumb.removeEventListener('click', handleThumbnailClick);
+        thumb.addEventListener('click', handleThumbnailClick);
+    });
+
+    function handleThumbnailClick() {
+        const slideIndex = parseInt(this.getAttribute('data-bs-slide-to'));
+        const variantId = this.dataset.variantId;
+
+        // Only allow navigation within the same variant's images
+        if (document.querySelector(`.carousel-item[data-variant-id="${variantId}"]`)) {
+            carousel.to(slideIndex);
+            thumbnails.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+        }
+    }
+
+    // Sync active thumbnail with carousel slide
+    carouselElement.addEventListener('slide.bs.carousel', function (event) {
+        const slideIndex = event.to;
+        const activeVariantId = selectedVariantIdInput.value;
+        const activeThumb = document.querySelector(`.thumbnail-nav[data-bs-slide-to="${slideIndex}"][data-variant-id="${activeVariantId}"]`);
+        
+        thumbnails.forEach(t => t.classList.remove('active'));
+        if (activeThumb) {
+            activeThumb.classList.add('active');
+        }
+    });
+
+    // Initialize Zoom Functionality
+    // Initialize Zoom Functionality
+function initializeZoom(container) {
+    const img = container.querySelector('.zoom-image');
+    const lens = container.querySelector('.zoom-lens');
+    const result = document.querySelector('.carousel-container .zoom-result'); // Reference the shared zoom-result
+
+    // Remove existing event listeners to prevent duplicates
+    container.removeEventListener('mouseenter', handleMouseEnter);
+    container.removeEventListener('mouseleave', handleMouseLeave);
+    container.removeEventListener('mousemove', handleMouseMove);
+    container.removeEventListener('click', handleClick);
+
+    function handleMouseEnter() {
+        // Ensure the image is fully loaded
+        if (!img.complete || img.naturalWidth <= 0) {
+            console.warn('Image not fully loaded or invalid:', img.src);
+            img.addEventListener('load', handleMouseEnter); // Retry on load
+            return;
+        }
+
+        lens.style.display = 'block';
+        result.style.display = 'block';
+
+        // Calculate the zoom ratio based on the image's natural size
+        const ratio = img.naturalWidth / img.width;
+        result.style.backgroundImage = `url('${img.src}')`;
+        result.style.backgroundSize = `${img.width * ratio}px ${img.height * ratio}px`;
+
+        // Position the zoom-result relative to the carousel-container
+        const containerRect = container.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const zoomResultWidth = parseFloat(getComputedStyle(result).width);
+
+        if (containerRect.right + zoomResultWidth + 10 > viewportWidth) {
+            result.style.left = 'auto';
+            result.style.right = `${containerRect.width + 10}px`; // Position to the left
+        } else {
+            result.style.left = `${containerRect.width + 10}px`;
+            result.style.right = 'auto';
+        }
+        result.style.top = `0px`;
+    }
+
+    function handleMouseLeave() {
+        lens.style.display = 'none';
+        result.style.display = 'none';
+    }
+
+    function handleMouseMove(e) {
+        const rect = img.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        // Constrain the lens position within the image bounds
+        x = Math.max(0, Math.min(x - lens.offsetWidth / 2, img.width - lens.offsetWidth));
+        y = Math.max(0, Math.min(y - lens.offsetHeight / 2, img.height - lens.offsetHeight));
+
+        lens.style.left = `${x}px`;
+        lens.style.top = `${y}px`;
+
+        // Update the background position of the zoom-result
+        const ratio = img.naturalWidth / img.width;
+        result.style.backgroundPosition = `-${x * ratio}px -${y * ratio}px`;
+    }
+
+    function handleClick() {
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:9999; cursor:zoom-out';
+        const fullImg = document.createElement('img');
+        fullImg.src = img.src;
+        fullImg.style.maxHeight = '90%';
+        fullImg.style.maxWidth = '90%';
+        fullImg.style.objectFit = 'contain';
+        modal.appendChild(fullImg);
+        document.body.appendChild(modal);
+        modal.addEventListener('click', () => document.body.removeChild(modal));
+    }
+
+    container.addEventListener('mouseenter', handleMouseEnter);
+    container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('click', handleClick);
+}
+
+// Initialize zoom for the initial active slide
+const initialZoomContainer = document.querySelector('.carousel-item.active .zoom-container');
+if (initialZoomContainer) {
+    initializeZoom(initialZoomContainer);
+}
+
+// Reinitialize zoom after carousel slide
+carouselElement.addEventListener('slid.bs.carousel', function () {
+    const activeZoomContainer = document.querySelector('.carousel-item.active .zoom-container');
+    if (activeZoomContainer) {
+        initializeZoom(activeZoomContainer);
+    }
+});
+
+// Update zoom-result position on window resize
+window.addEventListener('resize', function () {
+    const activeZoomContainer = document.querySelector('.carousel-item.active .zoom-container');
+    if (activeZoomContainer) {
+        const result = document.querySelector('.carousel-container .zoom-result');
+        if (result && result.style.display === 'block') {
+            const containerRect = activeZoomContainer.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const zoomResultWidth = parseFloat(getComputedStyle(result).width);
+
+            if (containerRect.right + zoomResultWidth + 10 > viewportWidth) {
+                result.style.left = 'auto';
+                result.style.right = `${containerRect.width + 10}px`;
+            } else {
+                result.style.left = `${containerRect.width + 10}px`;
+                result.style.right = 'auto';
+            }
+            result.style.top = `0px`;
+        }
+    }
+});
 
     // Variant selection
     function selectVariant(variantId) {
@@ -1021,8 +1260,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
         updatePriceDisplay(variant);
         updateStockStatus(variant);
+        updateCarouselForVariant(variantId); // Update carousel for the selected variant
     
-        // Limit quantity to minimum of variant stock or 5
         const maxQuantity = Math.min(variant.stock, 5);
         quantityInput.max = maxQuantity;
         if (parseInt(quantityInput.value) > maxQuantity) {
@@ -1035,7 +1274,10 @@ document.addEventListener('DOMContentLoaded', function() {
         buyNowBtn.disabled = variant.stock <= 0;
     }
 
-    // Update price display
+    // Initialize the carousel and zoom based on the selected variant
+    const initialVariantId = selectedVariantIdInput.value;
+    selectVariant(initialVariantId);
+
     function updatePriceDisplay(variant) {
         const currentPrice = document.getElementById('currentPrice');
         const originalPrice = document.getElementById('originalPrice');
@@ -1079,7 +1321,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update stock status
     function updateStockStatus(variant) {
         gsap.to(stockStatus, {
             opacity: 0,
@@ -1121,7 +1362,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update wishlist button
     function updateWishlistButton(variant) {
         if (!wishlistBtn) return;
 
@@ -1138,7 +1378,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Variant card click handler
     if (variantOptions) {
         variantOptions.addEventListener('click', function(e) {
             const card = e.target.closest('.variant-card');
@@ -1149,7 +1388,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Quantity buttons
     if (decreaseQuantityBtn) {
         decreaseQuantityBtn.addEventListener('click', function() {
             const currentValue = parseInt(quantityInput.value);
@@ -1157,9 +1395,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 quantityInput.value = currentValue - 1;
                 gsap.to(this, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1 });
             }
+            // Update button states
+            decreaseQuantityBtn.disabled = quantityInput.value <= 1;
+            increaseQuantityBtn.disabled = quantityInput.value >= quantityInput.max;
         });
     }
-
+    
     if (increaseQuantityBtn) {
         increaseQuantityBtn.addEventListener('click', function() {
             const currentValue = parseInt(quantityInput.value);
@@ -1168,10 +1409,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 quantityInput.value = currentValue + 1;
                 gsap.to(this, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1 });
             }
+            // Update button states
+            decreaseQuantityBtn.disabled = quantityInput.value <= 1;
+            increaseQuantityBtn.disabled = quantityInput.value >= maxValue;
         });
     }
 
-    // Add to cart button
     if (addToCartBtn) {
         addToCartBtn.addEventListener('click', function() {
             const variantId = selectedVariantIdInput.value;
@@ -1219,7 +1462,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Buy now button
     if (buyNowBtn) {
         buyNowBtn.addEventListener('click', function() {
             const variantId = selectedVariantIdInput.value;
@@ -1253,7 +1495,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Wishlist button
     if (wishlistBtn) {
         wishlistBtn.addEventListener('click', function () {
             const variantId = this.dataset.variantId;
@@ -1328,7 +1569,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Tab functionality
     tabButtons.forEach(button => {
         button.addEventListener('click', function() {
             const tabId = this.dataset.tab;
@@ -1346,7 +1586,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Review form functionality
     if (writeReviewBtn && reviewForm) {
         writeReviewBtn.addEventListener('click', function() {
             reviewForm.style.display = 'block';
@@ -1373,7 +1612,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Review form submission
     if (submitReviewForm) {
         submitReviewForm.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -1470,78 +1708,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize zoom functionality
-    function initializeZoom() {
-        const zoomContainers = document.querySelectorAll('.zoom-container');
-        zoomContainers.forEach(container => {
-            const img = container.querySelector('.zoom-image');
-            const lens = container.querySelector('.zoom-lens');
-            const result = container.querySelector('.zoom-result');
-    
-            container.removeEventListener('mouseenter', handleMouseEnter);
-            container.removeEventListener('mouseleave', handleMouseLeave);
-            container.removeEventListener('mousemove', handleMouseMove);
-            container.removeEventListener('click', handleClick);
-    
-            function handleMouseEnter() {
-                if (img.complete && img.naturalWidth > 0) {
-                    lens.style.display = 'block';
-                    result.style.display = 'block';
-                    const ratio = img.naturalWidth / img.width;
-                    result.style.backgroundImage = `url('${img.src}')`;
-                    result.style.backgroundSize = `${img.width * ratio}px ${img.height * ratio}px`;
-                    result.style.left = `${container.getBoundingClientRect().width + 10}px`;
-                    result.style.top = `${container.getBoundingClientRect().top}px`;
-                } else {
-                    console.warn('Image not fully loaded or invalid:', img.src);
-                }
-            }
-    
-            function handleMouseLeave() {
-                lens.style.display = 'none';
-                result.style.display = 'none';
-            }
-    
-            function handleMouseMove(e) {
-                const rect = img.getBoundingClientRect();
-                let x = e.clientX - rect.left;
-                let y = e.clientY - rect.top;
-                x = Math.max(0, Math.min(x - lens.offsetWidth / 2, img.width - lens.offsetWidth));
-                y = Math.max(0, Math.min(y - lens.offsetHeight / 2, img.height - lens.offsetHeight));
-                lens.style.left = `${x}px`;
-                lens.style.top = `${y}px`;
-                const ratio = img.naturalWidth / img.width;
-                result.style.backgroundPosition = `-${x * ratio}px -${y * ratio}px`;
-            }
-    
-            function handleClick() {
-                const modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:9999; cursor:zoom-out';
-                const fullImg = document.createElement('img');
-                fullImg.src = img.src;
-                fullImg.style.maxHeight = '90%';
-                fullImg.style.maxWidth = '90%';
-                fullImg.style.objectFit = 'contain';
-                modal.appendChild(fullImg);
-                document.body.appendChild(modal);
-                modal.addEventListener('click', () => document.body.removeChild(modal));
-            }
-    
-            container.addEventListener('mouseenter', handleMouseEnter);
-            container.addEventListener('mouseleave', handleMouseLeave);
-            container.addEventListener('mousemove', handleMouseMove);
-            container.addEventListener('click', handleClick);
-        });
-    }
-    
-    const carousel = document.getElementById('productCarousel');
-    carousel.addEventListener('slid.bs.carousel', function () {
-        initializeZoom();
-    });
-    
-    initializeZoom();
-
-    // Initialize animations
+    // GSAP Animations
     gsap.from('.product-title', { opacity: 0, y: 20, duration: 0.5 });
     gsap.from('.product-meta', { opacity: 0, y: 20, duration: 0.5, delay: 0.1 });
     gsap.from('.product-description', { opacity: 0, y: 20, duration: 0.5, delay: 0.2 });
@@ -1551,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', function() {
     gsap.from('.quantity-selector', { opacity: 0, y: 20, duration: 0.5, delay: 0.6 });
     gsap.from('.product-actions', { opacity: 0, y: 20, duration: 0.5, delay: 0.7 });
 
-    // Star rating input
+    // Star Rating Input
     const starLabels = document.querySelectorAll('.star-label');
     starLabels.forEach(label => {
         label.addEventListener('mouseover', function() {

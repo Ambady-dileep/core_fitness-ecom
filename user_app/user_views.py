@@ -96,7 +96,6 @@ def user_login(request):
     }
     return render(request, 'signup_login.html', context)
 
-
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def user_signup(request):
     """Handle user registration with OTP verification."""
@@ -210,11 +209,11 @@ def user_signup(request):
             logger.debug(f"Generated OTP: {otp}")
 
             logger.debug("Storing OTP...")
-            store_otp(email, otp, timeout=90)  # Store OTP for 1.5 minutes
+            store_otp(email, otp, timeout=90)  
             logger.debug("OTP stored successfully")
 
             logger.debug("Setting OTP cooldown...")
-            set_otp_cooldown(email, timeout=90)  # Set cooldown for 1.5 minutes
+            set_otp_cooldown(email, timeout=90)  
             logger.debug("OTP cooldown set successfully")
 
             logger.info(f"Attempting to send OTP to {email} with OTP: {otp}")
@@ -314,7 +313,10 @@ def change_password(request):
     
     return redirect('user_app:my_profile')
 
+
+@login_required 
 def user_home(request):
+    print("Authenticated user:", request.user)
     # Fetch active banners
     banners = Banner.objects.filter(is_active=True)
 
@@ -380,9 +382,6 @@ def privacy_policy(request):
 
 def faq(request):
     return render(request, 'faq.html')
-
-def contact_us(request):
-    return render(request, 'contact_us.html')
 
 @login_required
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
@@ -1066,3 +1065,4 @@ def verify_referral_code(request):
             return JsonResponse({'success': False, 'error': 'An error occurred while verifying the referral code.'}, status=500)
     
     return JsonResponse({'success': False, 'error': 'Invalid request.'}, status=400)
+

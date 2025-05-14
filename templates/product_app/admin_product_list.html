@@ -92,44 +92,47 @@
         </div>
     </div>
 
-    <!-- Filter Form -->
-    <div class="row mb-4">
-        <div class="col">
-            <div class="card">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">
-                        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
-                            <i class="fas fa-filter"></i> Filters
-                        </button>
-                    </h5>
-                </div>
-                <div id="filterCollapse" class="collapse show">
-                    <div class="card-body">
-                        <form method="GET" action="" class="row g-3">
-                            {{ filter_form.as_p }}
-                            <div class="col-md-3">
-                                <label for="status" class="form-label">Status</label>
-                                <select name="status" id="status" class="form-select">
-                                    <option value="all" {% if status == 'all' %}selected{% endif %}>All Status</option>
-                                    <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
-                                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label for="sort" class="form-label">Sort By</label>
-                                <select name="sort" id="sort calling-the-right-function" class="form-select">
-                                    <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>New Arrivals</option>
-                                    <option value="-average_rating" {% if sort_by == '-average_rating' %}selected{% endif %}>Highest Rated</option>
-                                    <option value="calculated_total_stock" {% if sort_by == 'calculated_total_stock' %}selected{% endif %}>Stock (Low to High)</option>
-                                </select>
-                            </div>
-                            <div class="col-12 text-end">
-                                <button type="submit" class="btn btn-primary">Apply Filters</button>
-                                <a href="{% url 'product_app:admin_product_list' %}" class="btn btn-secondary">Reset</a>
-                            </div>
-                        </form>
+    <!-- Filter Form - Compact Version -->
+    <div class="card mb-3">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <button class="btn btn-link collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                    <i class="fas fa-filter"></i> Filters
+                </button>
+            </h5>
+            <div>
+                <a href="{% url 'product_app:admin_product_list' %}" class="btn btn-sm btn-outline-secondary">Reset</a>
+            </div>
+        </div>
+        <div id="filterCollapse" class="collapse">
+            <div class="card-body">
+                <form method="GET" action="" class="row g-2">
+                    <div class="row">
+                        <div class="col-md-3">
+                            {{ filter_form.category }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ filter_form.brand }}
+                        </div>
+                        <div class="col-md-2">
+                            <select name="status" id="status" class="form-select form-select-sm">
+                                <option value="all" {% if status == 'all' %}selected{% endif %}>All Status</option>
+                                <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+                                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select name="sort" id="sort" class="form-select form-select-sm">
+                                <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                                <option value="-average_rating" {% if sort_by == '-average_rating' %}selected{% endif %}>Highest Rated</option>
+                                <option value="calculated_total_stock" {% if sort_by == 'calculated_total_stock' %}selected{% endif %}>Low Stock</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                        </div>
                     </div>
-                </div>
+                </form>
             </div>
         </div>
     </div>
@@ -245,7 +248,6 @@
                                         <table class="table table-sm mb-0">
                                             <thead>
                                                 <tr>
-                                                    <th>Image</th>
                                                     <th>Flavor</th>
                                                     <th>Size/Weight</th>
                                                     <th>Price</th>
@@ -257,17 +259,6 @@
                                             <tbody>
                                                 {% for variant in product.variants.all %}
                                                 <tr class="variant-row">
-                                                    <td>
-                                                        {% with primary_image=variant.variant_images.filter.is_primary|first %}
-                                                        {% if primary_image %}
-                                                        <img src="{{ primary_image.image.url }}" alt="{{ product.product_name }} - {{ variant.flavor|default:'Standard' }}"
-                                                             class="img-thumbnail product-image img-fluid w-50 "
-                                                             onclick="showImageModal('{{ primary_image.image.url }}')">
-                                                        {% else %}
-                                                        <span class="text-muted">No image</span>
-                                                        {% endif %}
-                                                        {% endwith %}
-                                                    </td>
                                                     <td>{{ variant.flavor|default:"N/A" }}</td>
                                                     <td>{{ variant.size_weight|default:"N/A" }}</td>
                                                     <td>₹{{ variant.best_price.price|floatformat:2 }}</td>

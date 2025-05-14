@@ -18,6 +18,7 @@ from django.db.models import Q, Count, Sum, F
 from django.utils import timezone
 from datetime import datetime, timedelta
 from cart_and_orders_app.models import Order, OrderItem
+from .forms import AdminLoginForm
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,41 +34,37 @@ def admin_login(request):
     if request.user.is_authenticated and request.user.is_superuser:
         return redirect('user_app:admin_customer_list')
         
+    form = AdminLoginForm(request.POST or None)
+    
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        
-        try:
-            user_obj = CustomUser.objects.get(username=username)
-            if not user_obj.is_superuser:
-                logger.warning(f"Unauthorized admin access attempt by username: {username}")
-                messages.error(request, "You are not authorized to access the admin panel.")
-                return render(request, 'admin_login.html')
+        if form.is_valid():
+            username = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
             
-            # Only check is_blocked for non-superusers
-            if not user_obj.is_superuser:
-                try:
-                    if user_obj.profile.is_blocked:
-                        logger.warning(f"Blocked account attempted login: {username}")
-                        messages.error(request, "Your account has been blocked. Please contact support.")
-                        return render(request, 'admin_login.html')
-                except CustomUser.profile.RelatedObjectDoesNotExist:
-                    # Profile doesn't exist, assume not blocked
-                    pass
-
             user = authenticate(request, username=username, password=password)
-            if user:
+            if user is None:
+                logger.warning(f"Failed admin login attempt: {username}")
+                form.add_error(None, "Invalid username or password.")
+                return render(request, 'admin_login.html', {'form': form})
+                
+            try:
+                user_obj = CustomUser.objects.get(username=username)
+                if not user_obj.is_superuser:
+                    logger.warning(f"Unauthorized admin access attempt by username: {username}")
+                    form.add_error(None, "You are not authorized to access the admin panel.")
+                    return render(request, 'admin_login.html', {'form': form})
+                
                 login(request, user)
                 logger.info(f"Admin login successful: {username}")
                 return redirect('user_app:admin_customer_list')
-            else:
-                logger.warning(f"Failed admin login attempt: {username}")
-                messages.error(request, "Invalid username or password.")
-        except CustomUser.DoesNotExist:
-            logger.warning(f"Admin login attempt with non-existent username: {username}")
-            messages.error(request, "Username does not exist.")
+            except CustomUser.DoesNotExist:
+                logger.warning(f"Admin login attempt with non-existent username: {username}")
+                form.add_error('username', "Username does not exist.")
+                return render(request, 'admin_login.html', {'form': form})
+        else:
+            logger.warning("Form validation failed")
     
-    return render(request, 'admin_login.html')
+    return render(request, 'admin_login.html', {'form': form})
 
 
 @login_required

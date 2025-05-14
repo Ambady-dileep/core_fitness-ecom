@@ -33,11 +33,11 @@ class CouponForm(forms.ModelForm):
                 'min': '0',
                 'placeholder': 'Enter 0 for no maximum limit'
             }),
-            'valid_from': forms.DateTimeInput(attrs={
+            'valid_from': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'datetime-local'
             }),
-            'valid_to': forms.DateTimeInput(attrs={
+            'valid_to': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'datetime-local'
             }),

@@ -34,7 +34,7 @@ urlpatterns = [
     path('about-us/', user_views.about_us, name='about_us'),
     path('privacy-policy/', user_views.privacy_policy, name='privacy_policy'),
     path('edit-profile/', user_views.edit_profile, name='edit_profile'),
-    path('contact-us/', user_views.contact_us, name='contact_us'),
+    path('contact-us/', admin_views.contact_us, name='contact_us'),
     path('profile/', user_views.my_profile, name='my_profile'),
 
     # Password Reset and OTP URLs

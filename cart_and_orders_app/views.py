@@ -44,6 +44,8 @@ from datetime import datetime, timedelta
 def is_admin(user):
     return user.is_staff or user.is_superuser
 
+
+@login_required
 def user_cart_list(request):
     try:
         cart = Cart.objects.get(user=request.user)
@@ -81,8 +83,8 @@ def user_cart_list(request):
     return render(request, 'cart_and_orders_app/user_cart_list.html', context)
 
 
-@require_POST
 @login_required
+@require_POST
 def add_to_cart(request):
     try:
         data = json.loads(request.body)

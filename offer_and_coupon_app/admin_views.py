@@ -15,24 +15,33 @@ logger = logging.getLogger(__name__)
 
 @staff_member_required
 def admin_coupon_list(request):
+    from django.utils import timezone
+    from datetime import datetime
+
     coupons = Coupon.objects.all()
     search_query = request.GET.get('search', '')
     if search_query:
         coupons = coupons.filter(Q(code__icontains=search_query))
 
     status = request.GET.get('status', '')
+    today = timezone.now().date()  # Use date-only for comparisons
     if status == 'active':
         coupons = coupons.filter(
             is_active=True,
-            valid_from__lte=timezone.now(),
-            valid_to__gte=timezone.now()
+            valid_from__date__lte=today,
+            valid_to__date__gte=today
         )
-    elif status == 'inactive':
+    elif status == 'pending':
         coupons = coupons.filter(
-            Q(is_active=False) |
-            Q(valid_from__gt=timezone.now()) |
-            Q(valid_to__lt=timezone.now())
+            is_active=True,
+            valid_from__date__gt=today
         )
+    elif status == 'expired':
+        coupons = coupons.filter(
+            valid_to__date__lt=today
+        )
+    elif status == 'disabled':
+        coupons = coupons.filter(is_active=False)
 
     sort_by = request.GET.get('sort', '-created_at')
     allowed_sorts = [
@@ -56,6 +65,7 @@ def admin_coupon_list(request):
         'status': status,
         'sort_by': sort_by,
         'title': 'Coupon List',
+        'today': today,  # Pass today's date for template comparisons
     }
     logger.info(f"Admin {request.user.username} accessed coupon list with search='{search_query}', status='{status}', sort='{sort_by}'")
     return render(request, 'offer_and_coupon_app/admin_coupon_list.html', context)
@@ -141,68 +151,6 @@ def coupon_usage_report(request):
     }
     logger.info(f"Admin {request.user.username} accessed coupon usage report")
     return render(request, 'offer_and_coupon_app/admin_coupon_usage_report.html', context)
-
-@staff_member_required
-def admin_user_coupon_list(request):
-    user_coupons = UserCoupon.objects.select_related('user', 'coupon', 'order').all()
-    search_query = request.GET.get('search', '')
-    if search_query:
-        user_coupons = user_coupons.filter(
-            Q(user__username__icontains=search_query) |
-            Q(coupon__code__icontains=search_query)
-        )
-
-    status = request.GET.get('status', '')
-    if status == 'used':
-        user_coupons = user_coupons.filter(is_used=True)
-    elif status == 'unused':
-        user_coupons = user_coupons.filter(is_used=False)
-
-    sort_by = request.GET.get('sort', '-created_at')
-    allowed_sorts = [
-        'user__username', '-user__username',
-        'coupon__code', '-coupon__code',
-        'is_used', '-is_used',
-        'created_at', '-created_at'
-    ]
-    if sort_by in allowed_sorts:
-        user_coupons = user_coupons.order_by(sort_by)
-
-    paginator = Paginator(user_coupons, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    context = {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'status': status,
-        'sort_by': sort_by,
-        'title': 'User Coupons',
-    }
-    logger.info(f"Admin {request.user.username} accessed user coupon list with search='{search_query}', status='{status}', sort='{sort_by}'")
-    return render(request, 'offer_and_coupon_app/admin_user_coupon_list.html', context)
-
-@staff_member_required
-@require_http_methods(["GET", "POST"])
-def admin_user_coupon_add(request):
-    if request.method == 'POST':
-        form = UserCouponForm(request.POST)
-        if form.is_valid():
-            user_coupon = form.save()
-            logger.info(f"Admin {request.user.username} assigned coupon '{user_coupon.coupon.code}' to user '{user_coupon.user.username}'")
-            messages.success(request, f"Coupon '{user_coupon.coupon.code}' assigned to {user_coupon.user.username}.")
-            return redirect('offer_and_coupon_app:admin_user_coupon_list')
-        else:
-            logger.warning(f"Admin {request.user.username} failed to assign user coupon: {form.errors}")
-            messages.error(request, "Please correct the errors below.")
-    else:
-        form = UserCouponForm()
-    context = {
-        'form': form,
-        'title': 'Assign User Coupon',
-        'action': 'Assign',
-    }
-    return render(request, 'offer_and_coupon_app/admin_user_coupon_form.html', context)
 
 @staff_member_required
 def admin_wallet_transactions(request):

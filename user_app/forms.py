@@ -7,20 +7,33 @@ from .models import CustomUser, Banner
 from .models import ContactMessage
 from .models import Address, CustomUser, UserProfile, validate_full_name
 
+
 class AdminLoginForm(forms.Form):
     username = forms.CharField(
+        max_length=150,
+        required=True,
         widget=forms.TextInput(attrs={
-            'class': 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
-            'placeholder': 'Username'
-        })
+            'class': 'form-control',
+            'placeholder': 'Enter username',
+            'id': 'username'
+        }),
+        error_messages={
+            'required': 'Username is required'
+        }
     )
     password = forms.CharField(
+        required=True,
         widget=forms.PasswordInput(attrs={
-            'class': 'w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
-            'placeholder': 'Password'
-        })
+            'class': 'form-control',
+            'placeholder': 'Enter password',
+            'id': 'password'
+        }),
+        error_messages={
+            'required': 'Password is required'
+        }
     )
 
+    
 class UserProfileForm(forms.ModelForm):
     phone_regex = RegexValidator(
         regex=r'^[6-9]\d{9}$',

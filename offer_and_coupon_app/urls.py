@@ -22,6 +22,4 @@ urlpatterns = [
     path('admin/coupons/report/', admin_views.coupon_usage_report, name='coupon_usage_report'),
     path('admin/wallet/', admin_views.admin_wallet_transactions, name='admin_wallet_transactions'),
     path('admin/wallet/transactions/<int:transaction_id>/', admin_views.admin_wallet_transaction_detail, name='admin_wallet_transaction_detail'),
-    path('admin/user-coupons/', admin_views.admin_user_coupon_list, name='admin_user_coupon_list'),
-    path('admin/user-coupons/add/', admin_views.admin_user_coupon_add, name='admin_user_coupon_add'),
 ]
