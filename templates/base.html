@@ -1038,7 +1038,6 @@
             document.addEventListener('wishlist-updated', function(e) {
                 const count = e.detail.count !== undefined && e.detail.count >= 0 ? e.detail.count : 0;
                 updateWishlistCount(count);
-                showAlert('Wishlist ', 'success');
             });
             
             // Listen for cart-updated events

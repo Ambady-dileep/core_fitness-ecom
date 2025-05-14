@@ -1,14 +1,291 @@
 {% extends 'base.html' %}
 {% load static %}
+
 {% block title %}Shop by Category - Core Fitness{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Minimalistic Styling aligned with base.html variables */
+    :root {
+        --bg: #ffffff;
+        --light-bg: #f8f9fa;
+        --text: #333333;
+        --muted-text: #666666;
+        --accent: #ff0000;
+        --border: #e0e0e0;
+        --shadow: rgba(0, 0, 0, 0.05);
+        --transition: all 0.3s ease;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1rem;
+    }
+
+    /* Header Section */
+    .section-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+    }
+
+    .section-subtitle {
+        font-size: 1rem;
+        color: var(--muted-text);
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+
+    /* Filters Section */
+    .filter-section {
+        margin-bottom: 2rem;
+    }
+
+    .form-control, .form-select {
+        border-radius: 0.25rem;
+        font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        color: var(--text);
+        background-color: var(--light-bg);
+        transition: var(--transition);
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
+        background-color: var(--bg);
+        outline: none;
+    }
+
+    .btn-filter {
+        font-size: 0.85rem;
+        padding: 0.5rem 1.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-radius: 0.25rem;
+    }
+
+    .filter-toggle-btn {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-radius: 0.25rem;
+    }
+
+    /* Category Cards */
+    .categories-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .category-card {
+        background-color: var(--bg);
+        border: none;
+        box-shadow: 0 2px 10px var(--shadow);
+        transition: var(--transition);
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    .category-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .category-image {
+        position: relative;
+        height: 180px;
+        background-color: var(--light-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .category-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 1rem;
+        transition: var(--transition);
+    }
+
+    .category-card:hover .category-image img {
+        transform: scale(1.05);
+    }
+
+    .category-offer {
+        position: absolute;
+        top: 0.75rem;
+        left: 0.75rem;
+        background-color: var(--accent);
+        color: #ffffff;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        border-radius: 0.25rem;
+    }
+
+    .category-content {
+        padding: 1.25rem;
+        text-align: left;
+    }
+
+    .category-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+    }
+
+    .category-description {
+        font-size: 0.85rem;
+        color: var(--muted-text);
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+
+    .category-button {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background-color: black;
+        color: #ffffff;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: 0.25rem;
+        transition: var(--transition);
+    }
+
+    .category-button:hover {
+        background-color: #e60000;
+        color: #ffffff;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 0;
+        background-color: var(--light-bg);
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+    }
+
+    .empty-state-icon {
+        font-size: 2.5rem;
+        color: var(--muted-text);
+        margin-bottom: 1rem;
+    }
+
+    .empty-state-title {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--text);
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state-text {
+        font-size: 0.9rem;
+        color: var(--muted-text);
+        margin-bottom: 1.5rem;
+    }
+
+    .empty-state-button {
+        padding: 0.5rem 1.5rem;
+        background-color: var(--accent);
+        color: #ffffff;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: 0.25rem;
+        transition: var(--transition);
+    }
+
+    .empty-state-button:hover {
+        background-color: #e60000;
+    }
+
+    /* Pagination */
+    .pagination-container {
+        margin-top: 3rem;
+    }
+
+    .pagination .page-link {
+        color: var(--text);
+        background-color: var(--light-bg);
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: var(--transition);
+    }
+
+    .pagination .page-link:hover {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+    }
+
+    .pagination .page-item.active .page-link {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+    }
+
+    .pagination .page-item.disabled .page-link {
+        color: var(--muted-text);
+        pointer-events: none;
+    }
+
+    /* Responsive Styles */
+    @media (max-width: 768px) {
+        .category-filters {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .search-container {
+            max-width: 100%;
+        }
+
+        .sort-container {
+            justify-content: flex-start;
+        }
+
+        .categories-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+    }
+
+    @media (max-width: 576px) {
+        .section-title {
+            font-size: 2rem;
+        }
+
+        .categories-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="premium-container py-5">
-    <!-- Premium Header -->
-    <div class="premium-header">
-        <h1>{{ title }}</h1>
-        <div class="premium-divider"></div>
-        <p>Explore our premium fitness supplement categories, designed to support your performance and recovery goals.</p>
+<div class="container py-5">
+    <!-- Header Section -->
+    <div class="text-center mb-5">
+        <h1 class="section-title">{{ title }}</h1>
+        <p class="section-subtitle">Explore our premium fitness supplement categories, designed to support your performance and recovery goals.</p>
     </div>
 
     <!-- Error Message -->
@@ -19,54 +296,64 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->   
-    <div class="category-filters">
-        <div class="search-container">
-            <form method="GET" action="" id="searchForm">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" name="q" placeholder="Search categories..." value="{{ query }}" aria-label="Search categories">
-                {% if query %}
-                <button type="button" class="clear-search" id="clearSearch">
-                    <i class="fas fa-times"></i>
-                </button>
-                {% endif %}
-            </form>
-        </div>
-        
-        <div class="sort-container">
-            <span class="sort-label">Sort by:</span>
-            <form method="GET" action="" id="sortForm">
-                {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
-                <select name="sort" id="sort" class="sort-select">
-                    <option value="" {% if not sort_by %}selected{% endif %}>Featured</option>
-                    <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>A to Z</option>
-                    <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Z to A</option>
-                </select>
-            </form>
-        </div>
-    </div>
+    <!-- Filters Section -->
+    <div class="filter-section">
+        <div class="row g-3 align-items-end">
+            <!-- Search Input -->
+            <div class="col-lg-4 col-md-6">
+                <form method="GET" action="" id="searchForm">
+                    <div class="input-group">
+                        <input type="text" name="q" value="{{ query|default:'' }}" class="form-control" placeholder="Search categories..." aria-label="Search categories">
+                        <button type="submit" class="btn btn-danger btn-filter" aria-label="Submit search">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        {% if query %}
+                        <button type="button" class="btn btn-outline-secondary btn-filter ms-2" id="clearSearch">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
 
-    <!-- Categories Count -->
-    <div class="categories-count">
-        Showing <span>{{ page_obj.paginator.count }}</span> categories
+            <!-- Sort Dropdown -->
+            <div class="col-lg-4 col-md-6">
+                <form method="GET" action="" id="sortForm">
+                    {% if query %}<input type="hidden" name="q" value="{{ query|urlencode }}">{% endif %}
+                    <select name="sort" id="sort" class="form-select">
+                        <option value="" {% if sort_by == '' %}selected{% endif %}>Featured</option>
+                        <option value="a_to_z" {% if sort_by == 'a_to_z' %}selected{% endif %}>Name (A-Z)</option>
+                        <option value="z_to_a" {% if sort_by == 'z_to_a' %}selected{% endif %}>Name (Z-A)</option>
+                    </select>
+                </form>
+            </div>
+
+            <!-- Categories Count -->
+            <div class="col-lg-4 col-md-12 text-md-end text-start">
+                <span class="text-muted small">Showing <strong>{{ page_obj.paginator.count }}</strong> categories</span>
+            </div>
+        </div>
     </div>
 
     <!-- Categories Grid -->
     <div class="categories-grid">
         {% for category in page_obj %}
-        <div class="category-card" data-index="{{ forloop.counter0 }}">
+        <div class="category-card">
             <div class="category-image">
                 {% if category.image %}
-                <img src="{{ category.image.url }}" alt="{{ category.name }}">
+                <img src="{{ category.image.url }}" alt="{{ category.name }}" loading="lazy">
                 {% else %}
-                <img src="{% static 'images/placeholder-category.jpg' %}" alt="{{ category.name }}">
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-box" viewBox="0 0 16 16">
+                        <path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.846 3.5 8 5.961 14.154 3.5zM15 4.239 8.723 6.57a.5.5 0 0 1-.446 0L2 4.239v7.022a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5zM1 3.5v8.261a2.5 2.5 0 0 0 2.5 2.5h9a2.5 2.5 0 0 0 2.5-2.5V3.5L8.186 1.113z"/>
+                    </svg>
+                    <span class="small mt-2">No image</span>
+                </div>
                 {% endif %}
-                
                 {% if category.offer_percentage > 0 %}
                 <div class="category-offer">{{ category.offer_percentage }}% OFF</div>
                 {% endif %}
             </div>
-            
             <div class="category-content">
                 <h3 class="category-title">{{ category.name }}</h3>
                 {% if category.description %}
@@ -74,7 +361,6 @@
                 {% else %}
                 <p class="category-description">Premium quality supplements to support your fitness journey.</p>
                 {% endif %}
-                
                 <a href="{% url 'product_app:user_product_list' %}?category={{ category.id }}" class="category-button">
                     Explore Collection
                 </a>
@@ -95,493 +381,116 @@
     <!-- Pagination -->
     {% if page_obj.has_other_pages %}
     <div class="pagination-container">
-        <ul class="pagination">
-            {% if page_obj.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-            </li>
-            {% else %}
-            <li class="page-item disabled">
-                <span class="page-link"><i class="fas fa-chevron-left"></i></span>
-            </li>
-            {% endif %}
-            
-            {% for num in page_obj.paginator.page_range %}
-            {% if page_obj.number == num %}
-            <li class="page-item active">
-                <span class="page-link">{{ num }}</span>
-            </li>
-            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}">{{ num }}</a>
-            </li>
-            {% endif %}
-            {% endfor %}
-            
-            {% if page_obj.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </li>
-            {% else %}
-            <li class="page-item disabled">
-                <span class="page-link"><i class="fas fa-chevron-right"></i></span>
-            </li>
-            {% endif %}
-        </ul>
+        <nav aria-label="Category pagination">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if query %}&q={{ query|urlencode }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="First page">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Previous page">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Page {{ num }}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Next page">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query %}&q={{ query|urlencode }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}" aria-label="Last page">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
     </div>
     {% endif %}
 </div>
-
-<style>
-    /* Premium Minimalist Styling */
-    :root {
-        --premium-black: #111111;
-        --premium-white: #ffffff;
-        --premium-gray: #f8f8f8;
-        --premium-text: #333333;
-        --premium-accent: #d4af37;
-        --premium-border: #eeeeee;
-        --transition: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
-    }
-    
-    .premium-container {
-        max-width: 1280px;
-        margin: 0 auto;
-        padding: 0 1.5rem;
-    }
-    
-    .premium-header {
-        text-align: center;
-        margin-bottom: 4rem;
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    
-    .premium-header h1 {
-        font-size: 2.5rem;
-        font-weight: 300;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
-        color: var(--premium-text);
-    }
-    
-    .premium-header p {
-        font-size: 1rem;
-        color: #666;
-        max-width: 600px;
-        margin: 0 auto;
-        line-height: 1.6;
-    }
-    
-    .premium-divider {
-        width: 40px;
-        height: 2px;
-        background-color: var(--premium-accent);
-        margin: 1.5rem auto;
-    }
-    
-    .category-filters {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 2rem;
-        opacity: 0;
-    }
-    
-    .search-container {
-        position: relative;
-        flex: 1;
-        max-width: 400px;
-    }
-    
-    .search-container input {
-        width: 100%;
-        padding: 0.8rem 1rem 0.8rem 3rem;
-        border: 1px solid var(--premium-border);
-        border-radius: 0;
-        font-size: 0.9rem;
-        background-color: var(--premium-white);
-        transition: all var(--transition);
-    }
-    
-    .search-container input:focus {
-        outline: none;
-        border-color: var(--premium-accent);
-        box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
-    }
-    
-    .search-icon {
-        position: absolute;
-        left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #888;
-    }
-    
-    .clear-search {
-        position: absolute;
-        right: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        background: none;
-        border: none;
-        color: #888;
-        cursor: pointer;
-        padding: 0;
-        font-size: 0.9rem;
-    }
-    
-    .sort-container {
-        display: flex;
-        align-items: center;
-    }
-    
-    .sort-label {
-        font-size: 0.85rem;
-        margin-right: 0.75rem;
-        color: #666;
-    }
-    
-    .sort-select {
-        padding: 0.5rem 2rem 0.5rem 1rem;
-        border: 1px solid var(--premium-border);
-        border-radius: 0;
-        background-color: var(--premium-white);
-        color: var(--premium-text);
-        font-size: 0.85rem;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.5rem center;
-        background-size: 1em;
-    }
-    
-    .sort-select:focus {
-        outline: none;
-        border-color: var(--premium-accent);
-    }
-    
-    .categories-count {
-        margin-bottom: 1.5rem;
-        font-size: 0.9rem;
-        color: #666;
-        opacity: 0;
-    }
-    
-    .categories-count span {
-        font-weight: 500;
-        color: var(--premium-text);
-    }
-    
-    .categories-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 2rem;
-        margin-bottom: 3rem;
-    }
-    
-    .category-card {
-        position: relative;
-        background-color: var(--premium-white);
-        border: 1px solid var(--premium-border);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        transition: all var(--transition);
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    
-    .category-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
-    }
-    
-    .category-image {
-        position: relative;
-        height: 220px;
-        overflow: hidden;
-    }
-    
-    .category-image img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
-    }
-    
-    .category-card:hover .category-image img {
-        transform: scale(1.05);
-    }
-    
-    .category-offer {
-        position: absolute;
-        top: 1rem;
-        left: 1rem;
-        background-color: var(--premium-accent);
-        color: var(--premium-white);
-        padding: 0.35rem 0.75rem;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        font-weight: 500;
-    }
-    
-    .category-content {
-        padding: 1.5rem;
-        flex-grow: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .category-title {
-        font-size: 1.1rem;
-        font-weight: 500;
-        margin-bottom: 0.75rem;
-        color: var(--premium-text);
-    }
-    
-    .category-description {
-        font-size: 0.9rem;
-        color: #666;
-        line-height: 1.5;
-        margin-bottom: 1.5rem;
-        flex-grow: 1;
-    }
-    
-    .category-button {
-        display: inline-block;
-        padding: 0.75rem 1.5rem;
-        background-color: transparent;
-        color: var(--premium-text);
-        border: 1px solid var(--premium-border);
-        font-size: 0.85rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        text-decoration: none;
-        text-align: center;
-        transition: all var(--transition);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .category-button:before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 0;
-        height: 100%;
-        background-color: var(--premium-accent);
-        transition: width 0.3s ease;
-        z-index: -1;
-    }
-    
-    .category-button:hover {
-        color: var(--premium-white);
-        border-color: var(--premium-accent);
-    }
-    
-    .category-button:hover:before {
-        width: 100%;
-    }
-    
-    .empty-state {
-        text-align: center;
-        padding: 5rem 0;
-        opacity: 0;
-    }
-    
-    .empty-state-icon {
-        font-size: 3rem;
-        color: #ddd;
-        margin-bottom: 1.5rem;
-    }
-    
-    .empty-state-title {
-        font-size: 1.5rem;
-        font-weight: 300;
-        margin-bottom: 1rem;
-        color: var(--premium-text);
-    }
-    
-    .empty-state-text {
-        font-size: 0.95rem;
-        color: #666;
-        margin-bottom: 1.5rem;
-        max-width: 500px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    
-    .empty-state-button {
-        display: inline-block;
-        padding: 0.75rem 1.5rem;
-        background-color: transparent;
-        color: var(--premium-text);
-        border: 1px solid var(--premium-border);
-        font-size: 0.85rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        text-decoration: none;
-        transition: all var(--transition);
-    }
-    
-    .empty-state-button:hover {
-        background-color: var(--premium-text);
-        color: var(--premium-white);
-    }
-    
-    /* Pagination styling */
-    .pagination-container {
-        margin-top: 3rem;
-        display: flex;
-        justify-content: center;
-        opacity: 0;
-    }
-    
-    .pagination {
-        display: flex;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        gap: 0.5rem;
-    }
-    
-    .page-item {
-        margin: 0;
-    }
-    
-    .page-link {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        color: var(--premium-text);
-        border: 1px solid var(--premium-border);
-        text-decoration: none;
-        transition: all var(--transition);
-    }
-    
-    .page-link:hover {
-        border-color: var(--premium-accent);
-        color: var(--premium-accent);
-    }
-    
-    .page-item.active .page-link {
-        background-color: var(--premium-accent);
-        border-color: var(--premium-accent);
-        color: var(--premium-white);
-    }
-    
-    .page-item.disabled .page-link {
-        color: #ccc;
-        pointer-events: none;
-    }
-    
-    /* Responsive styles */
-    @media (max-width: 768px) {
-        .category-filters {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 1rem;
-        }
-        
-        .search-container {
-            max-width: 100%;
-        }
-        
-        .sort-container {
-            justify-content: flex-end;
-        }
-        
-        .categories-grid {
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        }
-    }
-    
-    @media (max-width: 576px) {
-        .premium-header h1 {
-            font-size: 2rem;
-        }
-        
-        .categories-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
+{% endblock %}
 
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize GSAP
-        gsap.registerPlugin(ScrollTrigger);
-        
-        // Animate header
-        gsap.to('.premium-header', {
-            opacity: 1,
-            y: 0,
-            duration: 0.8,
-            ease: 'power2.out'
-        });
-        
-        // Animate filters
-        gsap.to('.category-filters', {
-            opacity: 1,
-            duration: 0.6,
-            delay: 0.3,
-            ease: 'power2.out'
-        });
-        
-        // Animate categories count
-        gsap.to('.categories-count', {
-            opacity: 1,
-            duration: 0.6,
-            delay: 0.4,
-            ease: 'power2.out'
-        });
-        
-        // Animate category cards with stagger
-        gsap.to('.category-card', {
-            opacity: 1,
-            y: 0,
-            duration: 0.6,
-            stagger: 0.1,
-            delay: 0.5,
-            ease: 'power2.out'
-        });
-        
-        // Animate pagination
-        gsap.to('.pagination-container', {
-            opacity: 1,
-            duration: 0.6,
-            delay: 0.7,
-            ease: 'power2.out'
-        });
-        
-        // Animate empty state if present
-        if (document.querySelector('.empty-state')) {
-            gsap.to('.empty-state', {
+        // GSAP Animations (if included in base.html)
+        if (typeof gsap !== 'undefined') {
+            gsap.registerPlugin(ScrollTrigger);
+
+            gsap.to('.section-title', {
+                opacity: 1,
+                y: 0,
+                duration: 0.8,
+                ease: 'power2.out'
+            });
+
+            gsap.to('.section-subtitle', {
+                opacity: 1,
+                y: 0,
+                duration: 0.8,
+                delay: 0.2,
+                ease: 'power2.out'
+            });
+
+            gsap.to('.filter-section', {
                 opacity: 1,
                 duration: 0.6,
+                delay: 0.3,
+                ease: 'power2.out'
+            });
+
+            gsap.to('.category-card', {
+                opacity: 1,
+                y: 0,
+                duration: 0.6,
+                stagger: 0.1,
                 delay: 0.5,
                 ease: 'power2.out'
             });
+
+            gsap.to('.pagination-container', {
+                opacity: 1,
+                duration: 0.6,
+                delay: 0.7,
+                ease: 'power2.out'
+            });
+
+            if (document.querySelector('.empty-state')) {
+                gsap.to('.empty-state', {
+                    opacity: 1,
+                    duration: 0.6,
+                    delay: 0.5,
+                    ease: 'power2.out'
+                });
+            }
         }
-        
-        // Initialize event handlers
+
+        // Sort Form Auto-Submit
         const sortSelect = document.getElementById('sort');
         if (sortSelect) {
             sortSelect.addEventListener('change', function() {
                 document.getElementById('sortForm').submit();
             });
         }
-        
+
+        // Clear Search
         const clearSearchBtn = document.getElementById('clearSearch');
         if (clearSearchBtn) {
             clearSearchBtn.addEventListener('click', function() {
@@ -589,17 +498,26 @@
                 document.getElementById('searchForm').submit();
             });
         }
-        
-        // Optional: Initialize search form submission on Enter key
+
+        // Search on Enter Key
         const searchInput = document.querySelector('#searchForm input[name="q"]');
         if (searchInput) {
             searchInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
+                    e.preventDefault();
                     document.getElementById('searchForm').submit();
                 }
+            });
+
+            // Debounced Search
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    document.getElementById('searchForm').submit();
+                }, 500);
             });
         }
     });
 </script>
-{% endblock %}
 {% endblock %}
