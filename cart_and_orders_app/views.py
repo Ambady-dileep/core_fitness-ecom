@@ -335,11 +335,9 @@ def user_checkout(request):
         messages.error(request, "Some items are out of stock. Please update your cart.")
         return redirect('cart_and_orders_app:user_cart_list')
     
+    # Get user addresses (no redirect if empty)
     addresses = Address.objects.filter(user=request.user)
     default_address = addresses.filter(is_default=True).first()
-    if not addresses:
-        messages.warning(request, "Please add a shipping address.")
-        return redirect('user_app:user_address_list')
     
     applied_coupon = request.session.get('applied_coupon')
     coupon = None
