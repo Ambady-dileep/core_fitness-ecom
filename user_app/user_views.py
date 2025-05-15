@@ -387,6 +387,7 @@ def faq(request):
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def my_profile(request):
     """Display user profile with orders and addresses."""
+    print("helo")
     user = request.user
     orders = Order.objects.filter(user=user).order_by('-order_date')
     addresses = Address.objects.filter(user=user)
