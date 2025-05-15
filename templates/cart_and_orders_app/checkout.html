@@ -244,6 +244,10 @@
                                 <input type="tel" class="form-control border-dark" id="phone" name="phone" required pattern="[6-9]\d{9}" placeholder="e.g., 9876543210">
                                 <div class="invalid-feedback" id="phone-error">Please enter a valid 10-digit phone number starting with 6-9.</div>
                             </div>
+                            <div class="col-12">
+                                <label for="is_default" class="form-label">Set as Default Address</label>
+                                <input type="checkbox" class="form-check-input" id="is_default" name="is_default">
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-dark mt-4 w-100">Save Address</button>
                     </form>
@@ -287,6 +291,193 @@
 </div>
 
 <style>
+    /* Modal container */
+    #addAddressModal .modal-dialog {
+        max-width: 490px; /* Slightly wider for better form layout */
+        transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #addAddressModal .modal-content {
+        border: none;
+        border-radius: 8px; /* Softer corners */
+        background-color: var(--bg);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        transform: translateY(20px);
+        opacity: 0;
+        transition: transform 0.4s ease, opacity 0.4s ease;
+    }
+
+    #addAddressModal.show .modal-content {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    /* Modal header */
+    #addAddressModal .modal-header {
+        border-bottom: 1px solid var(--border);
+        padding: 1.5rem 2rem;
+        background-color: var(--light-bg);
+        position: relative;
+    }
+
+    #addAddressModal .modal-title {
+        font-size: 1.2rem;
+        font-weight: 400;
+        color: var(--text);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        position: relative;
+        padding-bottom: 0.5rem;
+    }
+
+    #addAddressModal .modal-title::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 30px;
+        height: 2px;
+        background-color: var(--accent);
+        transition: width 0.3s ease;
+    }
+
+    #addAddressModal .modal-header:hover .modal-title::after {
+        width: 50px;
+    }
+
+    #addAddressModal .btn-close {
+        background: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        padding: 0.5rem;
+        margin: -0.5rem -0.5rem -0.5rem auto;
+    }
+
+    #addAddressModal .btn-close:hover {
+        opacity: 1;
+        transform: rotate(90deg);
+    }
+
+    /* Modal body */
+    #addAddressModal .modal-body {
+        padding: 2rem;
+        background-color: var(--bg);
+    }
+
+    #addAddressModal .form-label {
+        font-size: 0.85rem;
+        font-weight: 400;
+        color: var(--text);
+        letter-spacing: 0.03em;
+        margin-bottom: 0.5rem;
+        transition: color 0.3s ease;
+    }
+
+    #addAddressModal .form-control {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 0.9rem;
+        padding: 0.75rem 1rem;
+        background-color: var(--light-bg);
+        color: var(--text);
+        transition: all 0.3s ease;
+        box-shadow: none;
+    }
+
+    #addAddressModal .form-control:focus {
+        border-color: var(--accent);
+        background-color: var(--bg);
+        box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 255, 0, 0), 0.1);
+        outline: none;
+    }
+
+    #addAddressModal .form-control.is-invalid {
+        border-color: var(--accent);
+        background-color: var(--bg);
+    }
+
+    #addAddressModal .invalid-feedback {
+        font-size: 0.75rem;
+        color: var(--accent);
+        margin-top: 0.25rem;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    #addAddressModal .form-control.is-invalid ~ .invalid-feedback {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Submit button */
+    #addAddressModal .btn-primary {
+        background-color: var(--primary);
+        border-color: var(--primary);
+        font-size: 0.9rem;
+        font-weight: 400;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 0.75rem;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #addAddressModal .btn-primary:hover {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    #addAddressModal .btn-primary:disabled {
+        background-color: var(--light-bg);
+        border-color: var(--border);
+        color: var(--light-text);
+        transform: none;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    /* Spinner inside button */
+    #addAddressModal .btn-primary .spinner-border {
+        width: 1.2rem;
+        height: 1.2rem;
+        border-width: 2px;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 576px) {
+        #addAddressModal .modal-dialog {
+            margin: 1rem;
+        }
+
+        #addAddressModal .modal-content {
+            border-radius: 6px;
+        }
+
+        #addAddressModal .modal-header {
+            padding: 1rem 1.5rem;
+        }
+
+        #addAddressModal .modal-body {
+            padding: 1.5rem;
+        }
+
+        #addAddressModal .modal-title {
+            font-size: 1rem;
+        }
+
+        #addAddressModal .btn-primary {
+            font-size: 0.85rem;
+            padding: 0.65rem;
+        }
+    }
     /* General */
     .main-content {
         max-width: 1200px;
@@ -534,56 +725,200 @@
         let total = {{ total|floatformat:2 }};
         let appliedCouponCode = '{{ coupon_code|default:"" }}';
 
-        // Fetch coupons dynamically when modal is shown
-        couponModal.addEventListener('show.bs.modal', async function() {
-            try {
-                const response = await fetch('{% url "offer_and_coupon_app:available_coupons" %}?for_checkout=true', {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrftoken
-                    }
-                });
+        // Address form validation (aligned with user_profile.html)
+        function validateAddressForm(form) {
+            let isValid = true;
+            // Clear existing errors
+            form.querySelectorAll('.invalid-feedback').forEach(el => {
+                el.style.display = 'none';
+                el.textContent = '';
+            });
+            form.querySelectorAll('.form-control').forEach(el => el.classList.remove('is-invalid'));
 
-                const data = await response.json();
-                if (data.success) {
-                    couponList.innerHTML = '';
-                    if (data.coupons.length > 0) {
-                        data.coupons.forEach(coupon => {
-                            const couponItem = `
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>${coupon.code}</strong><br>
-                                        <small>${coupon.discount_percentage}% off on orders above ₹${coupon.minimum_order_amount.toFixed(2)}</small><br>
-                                        <small class="text-muted">Valid until: ${new Date(coupon.valid_to).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small>
-                                    </div>
-                                    <button class="btn btn-dark btn-sm coupon-apply-btn" data-coupon-code="${coupon.code}">Apply</button>
+            // Validate each field
+            form.querySelectorAll('.form-control').forEach(input => {
+                const fieldName = input.previousElementSibling?.textContent || 'Field';
+                const errorEl = document.getElementById(`${input.id}-error`);
+
+                // Check for required fields
+                if (input.required && !input.value.trim()) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorEl) {
+                        errorEl.textContent = `${fieldName} is required.`;
+                        errorEl.style.display = 'block';
+                    }
+                }
+                // Validate phone number
+                else if (input.id === 'phone' && input.value && !/^[6-9]\d{9}$/.test(input.value)) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorEl) {
+                        errorEl.textContent = 'Please enter a valid 10-digit phone number starting with 6-9.';
+                        errorEl.style.display = 'block';
+                    }
+                }
+                // Validate postal code
+                else if (input.id === 'postal_code' && input.value && !/^\d{6}$/.test(input.value)) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorEl) {
+                        errorEl.textContent = 'Please enter a valid 6-digit postal code.';
+                        errorEl.style.display = 'block';
+                    }
+                }
+                // Validate full name (at least 4 characters, letters and spaces only)
+                else if (input.id === 'full_name' && input.value) {
+                    const fullName = input.value.trim();
+                    if (fullName.length < 4) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                        if (errorEl) {
+                            errorEl.textContent = 'Full name must be at least 4 characters long.';
+                            errorEl.style.display = 'block';
+                        }
+                    } else if (!/^[a-zA-Z\s]*$/.test(fullName)) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                        if (errorEl) {
+                            errorEl.textContent = 'Full name can only contain letters and spaces.';
+                            errorEl.style.display = 'block';
+                        }
+                    } else if (fullName.split(/\s+/).length < 2) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                        if (errorEl) {
+                            errorEl.textContent = 'Please provide both first and last name.';
+                            errorEl.style.display = 'block';
+                        }
+                    }
+                }
+                // Validate city, state, country (letters and spaces only)
+                else if (['city', 'state', 'country'].includes(input.id) && input.value && !/^[a-zA-Z\s]*$/.test(input.value)) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorEl) {
+                        errorEl.textContent = `${fieldName} can only contain letters and spaces.`;
+                        errorEl.style.display = 'block';
+                    }
+                }
+                // Validate address_line1 (not empty, reasonable length)
+                else if (input.id === 'address_line1' && input.value && input.value.trim().length < 5) {
+                    isValid = false;
+                    input.classList.add('is-invalid');
+                    if (errorEl) {
+                        errorEl.textContent = 'Address Line 1 must be at least 5 characters long.';
+                        errorEl.style.display = 'block';
+                    }
+                }
+                else {
+                    input.classList.remove('is-invalid');
+                }
+            });
+
+            return isValid;
+        }
+
+        // Real-time validation for address form inputs
+        if (addAddressForm) {
+            addAddressForm.querySelectorAll('.form-control').forEach(input => {
+                input.addEventListener('input', function() {
+                    validateAddressForm(addAddressForm);
+                });
+            });
+
+            addAddressForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!validateAddressForm(this)) return;
+
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+                try {
+                    const formData = new FormData(this);
+                    const response = await fetch("{% url 'user_app:add_address' %}?next={% url 'cart_and_orders_app:user_checkout' %}", {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: 'Address added successfully!'
+                        }).then(() => {
+                            const addressForm = document.getElementById('addressForm') || document.createElement('form');
+                            addressForm.id = 'addressForm';
+                            addressForm.innerHTML = `{% csrf_token %}`; // Ensure CSRF token if newly created
+                            const newAddressHtml = `
+                                <div class="mb-3 address-option">
+                                    <label class="d-flex align-items-start">
+                                        <input type="radio" name="shipping_address" value="${data.address.id}"
+                                            class="form-radio me-3" checked required>
+                                        <span>
+                                            <strong>${data.address.full_name}</strong><br>
+                                            ${data.address.address_line1}${data.address.address_line2 ? ', ' + data.address.address_line2 : ''}<br>
+                                            ${data.address.city}, ${data.address.state} ${data.address.postal_code}<br>
+                                            ${data.address.country}<br>
+                                            Phone: ${data.address.phone}<br>
+                                            ${data.address.is_default ? '<span class="text-success small">Default Address</span>' : ''}
+                                        </span>
+                                    </label>
                                 </div>
                             `;
-                            couponList.insertAdjacentHTML('beforeend', couponItem);
+                            addressForm.insertAdjacentHTML('beforeend', newAddressHtml);
+                            // Remove "No addresses" message if present
+                            const noAddressMsg = document.querySelector('.text-danger.mb-3');
+                            if (noAddressMsg) noAddressMsg.remove();
+                            // Add "Add New Address" button if not present
+                            if (!addressForm.querySelector('button[data-bs-target="#addAddressModal"]')) {
+                                addressForm.insertAdjacentHTML('beforeend', `
+                                    <button type="button" class="btn btn-outline-dark btn-sm mt-3" data-bs-toggle="modal" data-bs-target="#addAddressModal">
+                                        + Add New Address
+                                    </button>
+                                `);
+                            }
+                            bootstrap.Modal.getInstance(document.getElementById('addAddressModal')).hide();
+                            updateFormInputs();
+                            document.querySelectorAll('input[name="shipping_address"]').forEach(radio => {
+                                radio.addEventListener('change', updateFormInputs);
+                            });
                         });
                     } else {
-                        couponList.innerHTML = '<div class="text-center text-muted">No coupons available.</div>';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.message || 'Failed to add address'
+                        });
+                        if (data.errors) {
+                            const errors = JSON.parse(data.errors);
+                            Object.keys(errors).forEach(field => {
+                                const errorEl = document.getElementById(`${field}-error`);
+                                if (errorEl) {
+                                    errorEl.textContent = errors[field][0].message;
+                                    errorEl.style.display = 'block';
+                                    document.getElementById(field).classList.add('is-invalid');
+                                }
+                            });
+                        }
                     }
-                } else {
-                    couponList.innerHTML = '<div class="text-center text-muted">Failed to load coupons.</div>';
+                } catch (error) {
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
-                        text: data.message || 'Failed to load coupons.'
+                        text: `Failed to add address: ${error.message}`
                     });
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Save Address';
                 }
-            } catch (error) {
-                couponList.innerHTML = '<div class="text-center text-muted">Failed to load coupons.</div>';
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'An error occurred while loading coupons.'
-                });
-            }
-        });
+            });
+        }
 
-        // Existing code...
+        // Existing code (unchanged)
         function updateFreeShippingProgress() {
             if (freeShippingContainer) {
                 freeShippingContainer.innerHTML = `
@@ -624,119 +959,6 @@
         }
 
         updateFormInputs();
-
-        function validateForm(form) {
-            let isValid = true;
-            form.querySelectorAll('.invalid-feedback').forEach(el => {
-                el.style.display = 'none';
-                el.textContent = '';
-            });
-            form.querySelectorAll('.form-control').forEach(el => el.classList.remove('is-invalid'));
-
-            form.querySelectorAll('[required]').forEach(input => {
-                const errorId = input.id + '-error';
-                const errorEl = document.getElementById(errorId);
-
-                if (!input.value) {
-                    input.classList.add('is-invalid');
-                    if (errorEl) {
-                        errorEl.textContent = `${input.previousElementSibling?.textContent || 'Field'} is required`;
-                        errorEl.style.display = 'block';
-                    }
-                    isValid = false;
-                } else if (input.pattern && !new RegExp(input.pattern).test(input.value)) {
-                    input.classList.add('is-invalid');
-                    if (errorEl) {
-                        errorEl.textContent = input.id === 'phone'
-                            ? 'Please enter a valid 10-digit phone number starting with 6-9.'
-                            : `${input.previousElementSibling?.textContent || 'Field'} is invalid`;
-                        errorEl.style.display = 'block';
-                    }
-                    isValid = false;
-                }
-            });
-
-            return isValid;
-        }
-
-        if (addAddressForm) {
-            addAddressForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (!validateForm(this)) return;
-
-                const submitBtn = this.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
-
-                try {
-                    const formData = new FormData(this);
-                    const response = await fetch("{% url 'user_app:add_address' %}?next={% url 'cart_and_orders_app:user_checkout' %}", {
-                        method: 'POST',
-                        body: formData,
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-
-                    const data = await response.json();
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success',
-                            text: 'Address added successfully!'
-                        }).then(() => {
-                            const addressForm = document.getElementById('addressForm');
-                            const newAddressHtml = `
-                                <div class="mb-3 address-option">
-                                    <label class="d-flex align-items-start">
-                                        <input type="radio" name="shipping_address" value="${data.address.id}"
-                                            class="form-radio me-3" required>
-                                        <span>
-                                            <strong>${data.address.full_name}</strong><br>
-                                            ${data.address.address_line1}${data.address.address_line2 ? ', ' + data.address.address_line2 : ''}<br>
-                                            ${data.address.city}, ${data.address.state} ${data.address.postal_code}<br>
-                                            ${data.address.country}<br>
-                                            Phone: ${data.address.phone}<br>
-                                            ${data.address.is_default ? '<span class="text-success small">Default Address</span>' : ''}
-                                        </span>
-                                    </label>
-                                </div>
-                            `;
-                            addressForm.insertAdjacentHTML('beforeend', newAddressHtml);
-                            bootstrap.Modal.getInstance(document.getElementById('addAddressModal')).hide();
-                            updateFormInputs();
-                            document.querySelectorAll('input[name="shipping_address"]').forEach(radio => {
-                                radio.addEventListener('change', updateFormInputs);
-                            });
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: data.message || 'Failed to add address'
-                        });
-                        if (data.errors) {
-                            const errors = JSON.parse(data.errors);
-                            Object.keys(errors).forEach(field => {
-                                const errorEl = document.getElementById(`${field}-error`);
-                                if (errorEl) {
-                                    errorEl.textContent = errors[field][0].message;
-                                    errorEl.style.display = 'block';
-                                    document.getElementById(field).classList.add('is-invalid');
-                                }
-                            });
-                        }
-                    }
-                } catch (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: `Failed to add address: ${error.message}`
-                    });
-                } finally {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = 'Save Address';
-                }
-            });
-        }
 
         if (couponModal) {
             couponModal.addEventListener('click', function(e) {
@@ -841,6 +1063,7 @@
             });
         }
 
+        // Place order form submission (unchanged)
         if (placeOrderForm) {
             placeOrderForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1051,6 +1274,55 @@
                 }
             });
         }
+
+        // Fetch coupons dynamically when modal is shown (unchanged)
+        couponModal.addEventListener('show.bs.modal', async function() {
+            try {
+                const response = await fetch('{% url "offer_and_coupon_app:available_coupons" %}?for_checkout=true', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    couponList.innerHTML = '';
+                    if (data.coupons.length > 0) {
+                        data.coupons.forEach(coupon => {
+                            const couponItem = `
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${coupon.code}</strong><br>
+                                        <small>${coupon.discount_percentage}% off on orders above ₹${coupon.minimum_order_amount.toFixed(2)}</small><br>
+                                        <small class="text-muted">Valid until: ${new Date(coupon.valid_to).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small>
+                                    </div>
+                                    <button class="btn btn-dark btn-sm coupon-apply-btn" data-coupon-code="${coupon.code}">Apply</button>
+                                </div>
+                            `;
+                            couponList.insertAdjacentHTML('beforeend', couponItem);
+                        });
+                    } else {
+                        couponList.innerHTML = '<div class="text-center text-muted">No coupons available.</div>';
+                    }
+                } else {
+                    couponList.innerHTML = '<div class="text-center text-muted">Failed to load coupons.</div>';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Failed to load coupons.'
+                    });
+                }
+            } catch (error) {
+                couponList.innerHTML = '<div class="text-center text-muted">Failed to load coupons.</div>';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'An error occurred while loading coupons.'
+                });
+            }
+        });
     });
 </script>
 {% endblock %}

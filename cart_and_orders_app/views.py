@@ -478,7 +478,15 @@ def place_order(request):
                 status='Pending',
                 payment_status='PENDING',
                 order_date=timezone.now(),
-                order_id=f"ORD-{timezone.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
+                order_id=f"ORD-{timezone.now().strftime('%Y%m%d%H%M%S')}-{user.id}",
+                address_full_name=shipping_address.full_name,
+                address_line1=shipping_address.address_line1,
+                address_line2=shipping_address.address_line2,
+                address_city=shipping_address.city,
+                address_state=shipping_address.state,
+                address_postal_code=shipping_address.postal_code,
+                address_country=shipping_address.country,
+                address_phone=shipping_address.phone
             )
             order.save()
 
@@ -538,7 +546,7 @@ def place_order(request):
                     'success': True,
                     'message': 'Order placed successfully!',
                     'order_id': order.order_id,
-                    'redirect': reverse('cart_and_orders_app:user_order_success', args=[order.order_id])
+                    'redirect': reverse('cart_and_orders_app:user_order_success', args=[order.order_id])  
                 })
             elif payment_method == 'WALLET':
                 try:
@@ -648,6 +656,8 @@ def place_order(request):
             'message': f'An error occurred while placing the order: {str(e)}',
             'redirect': reverse('cart_and_orders_app:user_checkout')
         }, status=500)
+    
+
 @login_required
 @csrf_exempt
 def razorpay_callback(request):
@@ -1366,7 +1376,8 @@ def sales_report_detail(request, report_id):
 
 def user_order_success(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-    if order.payment_status != 'PAID' or order.status not in ['Pending', 'Confirmed']:
+    # Allow 'PENDING' payment_status for COD orders
+    if order.payment_status not in ['PAID', 'PENDING'] or order.status not in ['Pending', 'Confirmed']:
         messages.error(request, "Invalid order status.")
         return redirect('cart_and_orders_app:user_order_list')
     subtotal = sum(item.price * item.quantity for item in order.items.all())

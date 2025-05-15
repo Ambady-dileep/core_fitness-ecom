@@ -190,7 +190,9 @@ def available_coupons(request):
 def wallet_dashboard(request):
     try:
         wallet, created = Wallet.objects.get_or_create(user=request.user)
-        transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')
+        transactions = WalletTransaction.objects.filter(
+            wallet=wallet
+        ).order_by('-created_at')
         
         # Add pagination
         paginator = Paginator(transactions, 10)

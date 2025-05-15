@@ -856,6 +856,26 @@ def verify_otp_signup_page(request, email):
     
     return render(request, 'otp_verification.html', {'email': email})
 
+
+def get_referral_transactions(user, page_number):
+    """
+    Fetch paginated referral-related transactions for the user's wallet.
+    Returns a paginated queryset of transactions with 'Referral bonus' or 'Welcome bonus' in description.
+    """
+    try:
+        wallet, _ = Wallet.objects.get_or_create(user=user)
+        transactions = WalletTransaction.objects.filter(
+            Q(description__icontains='Referral bonus') | Q(description__icontains='Welcome bonus'),
+            wallet=wallet
+        ).order_by('-created_at')
+        
+        paginator = Paginator(transactions, 10)  # 10 transactions per page
+        page_obj = paginator.get_page(page_number)
+        return page_obj
+    except Exception as e:
+        logger.error(f"Error fetching referral transactions for user {user.username}: {str(e)}")
+        return None
+
 @login_required
 def referral_dashboard(request):
     referral_code = request.user.referral_code
@@ -865,17 +885,23 @@ def referral_dashboard(request):
     
     referrals = Referral.objects.filter(referrer=request.user).select_related('referred_user')
     wallet, _ = Wallet.objects.get_or_create(user=request.user)
-    transactions = WalletTransaction.objects.filter(wallet=wallet).order_by('-created_at')[:20]
+    
+    # Get paginated referral transactions
+    page_number = request.GET.get('page')
+    page_obj = get_referral_transactions(request.user, page_number)
     
     context = {
         'referral_code': referral_code,
         'referral_url': referral_url,
         'referrals': referrals,
         'wallet': wallet,
-        'transactions': transactions,
+        'transactions': page_obj,
+        'page_obj': page_obj,
     }
     
     return render(request, 'user_app/referral_dashboard.html', context)
+
+
 
 def referral_link(request, referral_code):
     """Store the referral code in session and redirect to signup page"""
