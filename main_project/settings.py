@@ -29,7 +29,7 @@ load_dotenv()
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1','13.126.134.132','www.corefitness.site','corefitness.site']
 

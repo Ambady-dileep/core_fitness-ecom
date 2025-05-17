@@ -434,7 +434,7 @@ def edit_profile(request):
     else:  # GET request
         user_form = UserProfileForm(instance=user)
         profile_form = ProfileForm(instance=profile)
-        return render(request, 'user_edit_profile.html', {
+        return render(request, 'user_app/user_edit_profile.html', {
             'user_form': user_form,
             'profile_form': profile_form,
             'user': user

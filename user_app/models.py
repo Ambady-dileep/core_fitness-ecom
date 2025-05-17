@@ -138,7 +138,7 @@ class Referral(models.Model):
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     is_blocked = models.BooleanField(default=False)
-    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
+    profile_image = CloudinaryField('image', folder='profile_images', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

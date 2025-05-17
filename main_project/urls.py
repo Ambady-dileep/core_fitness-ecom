@@ -25,6 +25,6 @@ urlpatterns = [
     path('', include('cart_and_orders_app.urls')),
     path('', include('offer_and_coupon_app.urls')),
     path('auth/', include('social_django.urls', namespace='social')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 handler404 = 'main_project.views.handler404'

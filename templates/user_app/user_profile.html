@@ -11,13 +11,13 @@
                     <div class="me-4">
                         {% if user.profile.profile_image %}
                         <img src="{{ user.profile.profile_image.url }}" alt="Profile Picture" 
-                        class="rounded-circle" style="height: 80px; width: 80px; object-fit: cover; border: 2px solid #e2e8f0;"
-                        onerror="this.src='{% static 'images/default-profile.png' %}'; this.onerror=null;">
+                            class="rounded-circle" style="height: 80px; width: 80px; object-fit: cover; border: 2px solid #e2e8f0;"
+                            onerror="this.src='{% static 'images/default-profile.png' %}'; this.onerror=null;">
                         {% else %}
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" 
-                                 style="height: 80px; width: 80px; border: 2px solid #e2e8f0;">
-                                <i class="fas fa-user fa-2x text-muted"></i>
-                            </div>
+                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" 
+                            style="height: 80px; width: 80px; border: 2px solid #e2e8f0;">
+                            <i class="fas fa-user fa-2x text-muted"></i>
+                        </div>
                         {% endif %}
                     </div>
                     <div>
