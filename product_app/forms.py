@@ -223,11 +223,18 @@ class ReviewForm(forms.ModelForm):
             review.product.update_average_rating()
         return review
 
+
+from django.core.exceptions import ValidationError
+from .models import Category
+from cloudinary.uploader import upload
+import cloudinary.exceptions
 class CategoryForm(forms.ModelForm):
-    image = CloudinaryFileField(
-        options={'folder': 'categories', 'quality': 'auto'},
+    image = forms.FileField(
         required=False,
-        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': 'image/*'})
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control',
+            'accept': 'image/jpeg,image/png,image/webp'
+        })
     )
 
     class Meta:
@@ -235,7 +242,7 @@ class CategoryForm(forms.ModelForm):
         fields = ['name', 'description', 'image', 'brands', 'offer_percentage', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={
-                'class': 'form-control', 
+                'class': 'form-control',
                 'placeholder': 'Enter category name',
                 'required': True,
                 'minlength': '2',
@@ -243,16 +250,16 @@ class CategoryForm(forms.ModelForm):
                 'pattern': r'^[A-Za-z0-9\s\-\&]+$'
             }),
             'description': forms.Textarea(attrs={
-                'rows': 3, 
-                'class': 'form-control', 
+                'rows': 3,
+                'class': 'form-control',
                 'placeholder': 'Enter category description',
                 'maxlength': '500'
             }),
             'offer_percentage': forms.NumberInput(attrs={
-                'class': 'form-control', 
-                'step': '0.01', 
-                'min': '0', 
-                'max': '100', 
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'max': '100',
                 'placeholder': 'Enter offer percentage (0-100)'
             }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -282,11 +289,11 @@ class CategoryForm(forms.ModelForm):
     def clean_image(self):
         image = self.cleaned_data.get('image')
         if image:
-            if hasattr(image, 'size'):
-                if image.size > 5 * 1024 * 1024:
-                    raise ValidationError("Image file size must not exceed 5MB.")
-                if not image.content_type.startswith('image/'):
-                    raise ValidationError("File must be a valid image (JPEG, PNG, etc.).")
+            if image.size > 5 * 1024 * 1024:
+                raise ValidationError("Image file size must not exceed 5MB.")
+            valid_mime_types = ['image/jpeg', 'image/png', 'image/webp']
+            if image.content_type not in valid_mime_types:
+                raise ValidationError("Please upload a valid image file (JPEG, PNG, or WebP).")
         return image
 
     def clean_brands(self):
@@ -302,6 +309,21 @@ class CategoryForm(forms.ModelForm):
         if offer_percentage < 0 or offer_percentage > 90:
             raise ValidationError("Offer percentage must be between 0 and 90.")
         return offer_percentage
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        image = self.cleaned_data.get('image')
+        if image:
+            try:
+                upload_result = upload(image, folder='categories', quality='auto')
+                instance.image = upload_result['public_id']
+            except cloudinary.exceptions.Error as e:
+                # Handle Cloudinary upload errors
+                raise ValidationError(f"Failed to upload image: {str(e)}")
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 class BrandForm(forms.ModelForm):
     logo = CloudinaryFileField(

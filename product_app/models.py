@@ -14,6 +14,7 @@ User = get_user_model()
 def category_image_path(instance, filename):
     return f'categories/{instance.name}/{filename}'
 
+
 class Category(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=120, unique=True, blank=True)

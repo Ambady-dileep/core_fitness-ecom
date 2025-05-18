@@ -5,6 +5,19 @@
 
 {% block content %}
 <div class="container py-4">
+    <!-- Custom Toast Container -->
+    <div id="toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+        <div id="error-toast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <span id="toast-message">Error message</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Header Section -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -75,10 +88,10 @@
                             {% else %}
                                 {% render_field form.offer_percentage class="form-control" %}
                                 <div class="invalid-feedback">
-                                    Please enter a valid percentage between 0 and 100.
+                                    Please enter a valid percentage between 0 and 90.
                                 </div>
                             {% endif %}
-                            <div class="form-text">Enter a discount percentage (0-100) or leave blank for no offer (0.00%).</div>
+                            <div class="form-text">Enter a discount percentage (0-90) or leave blank for no offer (0.00%).</div>
                         </div>
 
                         <!-- Image Upload -->
@@ -90,12 +103,12 @@
                                     {{ form.image.errors.0 }}
                                 </div>
                             {% else %}
-                                {% render_field form.image class="form-control" %}
+                                {% render_field form.image class="form-control" accept="image/jpeg,image/png,image/webp" %}
                                 <div class="invalid-feedback">
-                                    Please upload a valid image file (max 5MB, JPEG/PNG).
+                                    Please upload a valid image (JPEG, PNG, WebP, max 5MB).
                                 </div>
                             {% endif %}
-                            <div class="form-text">Upload an image (max 5MB, JPEG/PNG).</div>
+                            <div class="form-text">Upload an image (JPEG, PNG, WebP, max 5MB).</div>
                             
                             {% if action == "Edit" and category.image %}
                                 <div class="form-check mt-2">
@@ -134,10 +147,9 @@
                             <div class="form-text">Enter a description (max 500 characters).</div>
                         </div>
 
-
                         <!-- Form Actions -->
                         <div class="d-flex justify-content-between pt-2 mt-2 border-top">
-                            <button type="submit" class="btn btn-primary px-4">
+                            <button type="submit" class="btn btn-primary px-4" id="submit-button">
                                 <i class="fas fa-save me-2"></i>{{ action }} Category
                             </button>
                             <a href="{% url 'product_app:admin_category_list' %}" class="btn btn-outline-secondary">
@@ -172,15 +184,15 @@
                     </div>
                     <div class="mb-4">
                         <h6 class="fw-bold"><i class="fas fa-image text-info me-2"></i>Images</h6>
-                        <p class="text-muted small mb-0">Use high-quality images (max 5MB, JPEG/PNG) with clean backgrounds.</p>
+                        <p class="text-muted small mb-0">Use high-quality images (JPEG, PNG, WebP, max 5MB).</p>
                     </div>
                     <div class="mb-4">
                         <h6 class="fw-bold"><i class="fas fa-percent text-primary me-2"></i>Offer Percentage</h6>
-                        <p class="text-muted small mb-0">Enter a percentage (0-100) to apply discounts or leave blank for no offer (0.00%).</p>
+                        <p class="text-muted small mb-0">Enter a percentage (0-90) or leave blank for no offer (0.00%).</p>
                     </div>
                     <div>
                         <h6 class="fw-bold"><i class="fas fa-file-alt text-secondary me-2"></i>Descriptions</h6>
-                        <p class="text-muted small mb-0">Keep descriptions concise but informative (max 500 characters).</p>
+                        <p class="text-muted small mb-0">Keep descriptions concise (max 500 characters).</p>
                     </div>
                 </div>
             </div>
@@ -190,110 +202,224 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+<style>
+    .toast {
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+    }
+    .toast.show {
+        opacity: 1;
+    }
+</style>
 <script>
-$(document).ready(function() {
-    // Image preview and validation
-    $('#id_image').change(function() {
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Category form script loaded at:', new Date().toISOString());
+
+    // Toast setup
+    const toastContainer = document.getElementById('toast-container');
+    const errorToast = document.getElementById('error-toast');
+    const toastMessage = document.getElementById('toast-message');
+
+    function showToast(message) {
+        console.log('Showing toast:', message);
+        toastMessage.textContent = message;
+        errorToast.classList.add('show');
+        setTimeout(() => {
+            errorToast.classList.remove('show');
+        }, 3000);
+    }
+
+    const bsToast = new bootstrap.Toast(errorToast);
+
+    // Track image validity
+    let isImageValid = true;
+
+    // Image input validation
+    const imageInput = document.getElementById('id_image');
+    if (!imageInput) {
+        console.error('Image input #id_image not found');
+        return;
+    }
+    console.log('Image input #id_image found');
+
+    imageInput.addEventListener('change', function() {
+        console.log('Image input changed at:', new Date().toISOString());
         const file = this.files[0];
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        console.log('Selected file:', file ? file.name : 'No file');
+
         if (file) {
+            const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            const fileType = file.type.split('/')[1] || 'unknown';
+
+            // Validate file type
+            if (!validTypes.includes(file.type)) {
+                console.log(`Invalid file type: ${file.type}`);
+                showToast(`Only JPEG, PNG, or WebP files are allowed, not ${fileType}.`);
+                this.value = '';
+                isImageValid = false;
+                imageInput.classList.add('is-invalid');
+                const imagePreview = document.getElementById('image-preview');
+                if (imagePreview) imagePreview.classList.add('d-none');
+                console.log('Input cleared due to invalid file type');
+                return;
+            }
+
+            // Validate file size
             if (file.size > maxSize) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'File Too Large',
-                    text: 'Image file must not exceed 5MB.',
-                });
+                console.log(`File too large: ${file.size} bytes (max: ${maxSize} bytes)`);
+                showToast('Image must be less than 5MB.');
                 this.value = '';
+                isImageValid = false;
+                imageInput.classList.add('is-invalid');
+                const imagePreview = document.getElementById('image-preview');
+                if (imagePreview) imagePreview.classList.add('d-none');
+                console.log('Input cleared due to file size exceeding limit');
                 return;
             }
-            if (!file.type.startsWith('image/')) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Invalid File',
-                    text: 'Please upload a valid image file (JPEG, PNG, etc.).',
-                });
-                this.value = '';
-                return;
-            }
+
+            // Valid file
+            console.log('Valid image selected:', file.type, file.size, 'bytes');
+            isImageValid = true;
+            imageInput.classList.remove('is-invalid');
+            imageInput.classList.add('is-valid');
             const reader = new FileReader();
             reader.onload = function(e) {
-                $('#preview-img').attr('src', e.target.result);
-                $('#image-preview').removeClass('d-none');
-            }
+                const previewImg = document.getElementById('preview-img');
+                const imagePreview = document.getElementById('image-preview');
+                if (previewImg && imagePreview) {
+                    previewImg.src = e.target.result;
+                    imagePreview.classList.remove('d-none');
+                    console.log('Image preview updated');
+                }
+            };
+            reader.onerror = function() {
+                console.error('Error reading file for preview');
+            };
             reader.readAsDataURL(file);
+        } else {
+            isImageValid = true; // No file is valid (optional field)
+            imageInput.classList.remove('is-invalid');
+            console.log('No file selected');
         }
     });
 
-    // Clear image checkbox handling
-    $('#image-clear').change(function() {
-        if ($(this).is(':checked')) {
-            $('#id_image').val('');
-            $('#preview-img').attr('src', '');
-            $('#image-preview').addClass('d-none');
-        }
-    });
-
-    // Status badge update
-    $('#id_is_active').change(function() {
-        const badge = $('#status-badge');
-        if ($(this).is(':checked')) {
-            badge.removeClass('bg-warning').addClass('bg-success').text('Active');
-        } else {
-            badge.removeClass('bg-success').addClass('bg-warning').text('Inactive');
-        }
-    });
-    $('#id_is_active').trigger('change');
-
-    // Form validation
-    $('#category-form').submit(function(e) {
-        let valid = true;
-
-        // Name validation
-        const name = $('#id_name').val().trim();
-        if (!name || name.length < 2 || name.length > 100 || !/^[A-Za-z0-9\s\-\&]+$/.test(name)) {
-            $('#id_name').addClass('is-invalid').removeClass('is-valid');
-            valid = false;
-        } else {
-            $('#id_name').removeClass('is-invalid').addClass('is-valid');
-        }
-
-        // Description validation
-        const description = $('#id_description').val();
-        if (description && description.length > 500) {
-            $('#id_description').addClass('is-invalid').removeClass('is-valid');
-            valid = false;
-        } else {
-            $('#id_description').removeClass('is-invalid').addClass('is-valid');
-        }
-
-        // Offer percentage validation
-        const offerPercentage = $('#id_offer_percentage').val().trim();
-        if (offerPercentage !== '') {
-            const value = parseFloat(offerPercentage);
-            if (isNaN(value) || value < 0 || value > 100) {
-                $('#id_offer_percentage').addClass('is-invalid').removeClass('is-valid');
-                valid = false;
-            } else {
-                $('#id_offer_percentage').removeClass('is-invalid').addClass('is-valid');
+    // Clear image checkbox
+    const clearCheckbox = document.getElementById('image-clear');
+    if (clearCheckbox) {
+        clearCheckbox.addEventListener('change', function() {
+            console.log('Clear checkbox changed:', this.checked);
+            if (this.checked) {
+                imageInput.value = '';
+                isImageValid = true;
+                imageInput.classList.remove('is-invalid');
+                const imagePreview = document.getElementById('image-preview');
+                const previewImg = document.getElementById('preview-img');
+                if (imagePreview && previewImg) {
+                    imagePreview.classList.add('d-none');
+                    previewImg.src = '';
+                    console.log('Image input and preview cleared via checkbox');
+                }
             }
-        } else {
-            $('#id_offer_percentage').removeClass('is-invalid').addClass('is-valid');
-        }
+        });
+    }
 
-        if (!valid) {
-            e.preventDefault();
-            $('html, body').animate({
-                scrollTop: $('.is-invalid').first().offset().top - 100
-            }, 300);
-            
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: 'Please correct the errors in the form.',
-            });
-        }
-    });
+    // Status badge
+    const statusInput = document.getElementById('id_is_active');
+    if (statusInput) {
+        statusInput.addEventListener('change', function() {
+            console.log('Status input changed:', this.checked);
+            const badge = document.getElementById('status-badge');
+            if (badge) {
+                badge.classList.toggle('bg-success', this.checked);
+                badge.classList.toggle('bg-warning', !this.checked);
+                badge.textContent = this.checked ? 'Active' : 'Inactive';
+                console.log('Status badge updated');
+            }
+        });
+        statusInput.dispatchEvent(new Event('change'));
+    }
+
+    // Form submission validation
+    const categoryForm = document.getElementById('category-form');
+    if (categoryForm) {
+        categoryForm.addEventListener('submit', function(e) {
+            console.log('Form submission attempted at:', new Date().toISOString());
+            let valid = true;
+
+            // Name validation
+            const nameInput = document.getElementById('id_name');
+            const name = nameInput.value.trim();
+            if (!name || name.length < 2 || name.length > 100 || !/^[A-Za-z0-9\s\-\&]+$/.test(name)) {
+                nameInput.classList.add('is-invalid');
+                nameInput.classList.remove('is-valid');
+                valid = false;
+                console.log('Name validation failed:', name);
+            } else {
+                nameInput.classList.remove('is-invalid');
+                nameInput.classList.add('is-valid');
+            }
+
+            // Description validation
+            const descriptionInput = document.getElementById('id_description');
+            const description = descriptionInput.value;
+            if (description && description.length > 500) {
+                descriptionInput.classList.add('is-invalid');
+                descriptionInput.classList.remove('is-valid');
+                valid = false;
+                console.log('Description validation failed:', description.length, 'characters');
+            } else {
+                descriptionInput.classList.remove('is-invalid');
+                descriptionInput.classList.add('is-valid');
+            }
+
+            // Offer percentage validation
+            const offerInput = document.getElementById('id_offer_percentage');
+            const offerPercentage = offerInput.value.trim();
+            if (offerPercentage !== '') {
+                const value = parseFloat(offerPercentage);
+                if (isNaN(value) || value < 0 || value > 90) {
+                    offerInput.classList.add('is-invalid');
+                    offerInput.classList.remove('is-valid');
+                    valid = false;
+                    console.log('Offer percentage validation failed:', value);
+                } else {
+                    offerInput.classList.remove('is-invalid');
+                    offerInput.classList.add('is-valid');
+                }
+            } else {
+                offerInput.classList.remove('is-invalid');
+                offerInput.classList.add('is-valid');
+            }
+
+            // Image validation
+            if (!isImageValid) {
+                valid = false;
+                imageInput.classList.add('is-invalid');
+                showToast('Please upload a valid image file (JPEG, PNG, WebP, max 5MB).');
+                console.log('Form submission blocked: Invalid image file');
+            }
+
+            // Check for file presence (additional safeguard)
+            if (imageInput.files.length > 0 && !isImageValid) {
+                valid = false;
+                showToast('Please upload a valid image file (JPEG, PNG, WebP, max 5MB).');
+                console.log('Form submission blocked: File present but invalid');
+            }
+
+            if (!valid) {
+                e.preventDefault();
+                console.log('Form submission prevented due to validation errors');
+                const firstInvalid = document.querySelector('.is-invalid');
+                if (firstInvalid) {
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                showToast('Please correct the errors in the form.');
+            } else {
+                console.log('Form submission allowed');
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

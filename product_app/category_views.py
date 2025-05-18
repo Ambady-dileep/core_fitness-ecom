@@ -101,7 +101,6 @@ def admin_add_category(request):
             messages.success(request, f"Category '{category.name}' added successfully!")
             return redirect('product_app:admin_category_list')
         else:
-            # Add an explicit error message when form validation fails
             messages.error(request, "Please correct the errors in the form.")
     else:
         form = CategoryForm()
@@ -126,14 +125,10 @@ def admin_edit_category(request, category_id):
             if request.POST.get('image-clear') == 'on' and not request.FILES.get('image'):
                 category.image = None
                 category.save(update_fields=['image'])
-            category = form.save(commit=False)
-            if form.cleaned_data['offer_percentage'] is None or form.cleaned_data['offer_percentage'] == '':
-                category.offer_percentage = 0.00
-            category.save()
+            category = form.save()
             messages.success(request, f"Category '{category.name}' updated successfully!")
             return redirect('product_app:admin_category_list')
         else:
-            # Add an explicit error message when form validation fails
             messages.error(request, "Please correct the errors in the form.")
     else:
         form = CategoryForm(instance=category)
