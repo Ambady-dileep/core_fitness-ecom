@@ -338,10 +338,13 @@ def admin_edit_product(request, slug):
                         delete_image_ids = [id for id in delete_image_ids if id.strip() and id.isdigit()]
 
                         # Log for debugging
-                        logger.debug(f"Variant {i + 1}: delete_image_ids = {delete_image_ids}, primary_image = {primary_image}, new_images = {len(images)}")
+                        logger.debug(f"Processing variant {i + 1}: variant_id={variant_id}, flavor={flavor}, size_weight={size_weight}, "
+                                     f"original_price={original_price}, offer_percentage={offer_percentage}, stock={stock}, "
+                                     f"images_count={len(images)}, primary_image={primary_image}, delete_image_ids={delete_image_ids}")
 
                         # Validate required fields
                         if not original_price or not stock:
+                            logger.warning(f"Validation failed for variant {i + 1}: Missing original_price or stock")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'Original price and stock are required for variant {i + 1}.'
@@ -349,6 +352,7 @@ def admin_edit_product(request, slug):
 
                         # Validate size_weight
                         if size_weight and len(size_weight) > 50:
+                            logger.warning(f"Validation failed for variant {i + 1}: Size/Weight exceeds 50 characters")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'Size/Weight for variant {i + 1} cannot exceed 50 characters.'
@@ -357,9 +361,11 @@ def admin_edit_product(request, slug):
                         # Create or update variant
                         if variant_id and variant_id.isdigit():
                             variant = get_object_or_404(ProductVariant, id=variant_id, product=product)
+                            logger.debug(f"Updating existing variant {variant.id}")
                             submitted_variant_ids.append(int(variant_id))
                         else:
                             variant = ProductVariant(product=product)
+                            logger.debug(f"Creating new variant for product {product.id}")
 
                         variant.flavor = flavor
                         variant.size_weight = size_weight
@@ -369,12 +375,14 @@ def admin_edit_product(request, slug):
                         try:
                             original_price_float = float(original_price)
                             if original_price_float < 0:
+                                logger.warning(f"Validation failed for variant {i + 1}: Negative original price")
                                 return JsonResponse({
                                     'success': False,
                                     'message': f'Original price for variant {i + 1} must be non-negative.'
                                 }, status=400)
                             variant.original_price = original_price_float
                         except (ValueError, TypeError):
+                            logger.warning(f"Validation failed for variant {i + 1}: Invalid original price")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'Invalid original price for variant {i + 1}.'
@@ -385,6 +393,7 @@ def admin_edit_product(request, slug):
                             try:
                                 offer_percentage_float = float(offer_percentage)
                                 if offer_percentage_float < 0 or offer_percentage_float > 100:
+                                    logger.warning(f"Validation failed for variant {i + 1}: Offer percentage out of range")
                                     return JsonResponse({
                                         'success': False,
                                         'message': f'Offer percentage for variant {i + 1} must be between 0 and 100.'
@@ -392,41 +401,54 @@ def admin_edit_product(request, slug):
                                 variant.offer_percentage = offer_percentage_float
                             except (ValueError, TypeError):
                                 variant.offer_percentage = 0.00
+                                logger.debug(f"Set offer_percentage to 0.00 for variant {i + 1} due to invalid input")
                         else:
                             variant.offer_percentage = 0.00
+                            logger.debug(f"Set offer_percentage to 0.00 for variant {i + 1} (empty input)")
 
                         # Handle stock
                         try:
                             stock_int = int(stock)
                             if stock_int < 0:
+                                logger.warning(f"Validation failed for variant {i + 1}: Negative stock")
                                 return JsonResponse({
                                     'success': False,
                                     'message': f'Stock for variant {i + 1} must be non-negative.'
                                 }, status=400)
                             variant.stock = stock_int
                         except (ValueError, TypeError):
+                            logger.warning(f"Validation failed for variant {i + 1}: Invalid stock")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'Invalid stock value for variant {i + 1}.'
                             }, status=400)
 
+                        # Save the variant
                         variant.save()
+                        logger.debug(f"Variant {i + 1} saved with ID {variant.id}")
+
+                        # Add the variant ID to submitted_variant_ids (for new variants)
+                        submitted_variant_ids.append(variant.id)
 
                         # Delete specified images
                         if delete_image_ids:
-                            VariantImage.objects.filter(id__in=delete_image_ids, variant=variant).delete()
+                            deleted_count = VariantImage.objects.filter(id__in=delete_image_ids, variant=variant).delete()[0]
+                            logger.debug(f"Deleted {deleted_count} images for variant {variant.id}: {delete_image_ids}")
 
                         # Calculate total images after deletion
                         existing_images = variant.variant_images.count()
                         total_images = existing_images + len(images)
+                        logger.debug(f"Variant {i + 1}: existing_images={existing_images}, new_images={len(images)}, total_images={total_images}")
 
                         # Validate image count
                         if total_images < 1:
+                            logger.warning(f"Validation failed for variant {i + 1}: No images")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'At least one image is required for variant {i + 1}.'
                             }, status=400)
                         if total_images > 3:
+                            logger.warning(f"Validation failed for variant {i + 1}: Too many images")
                             return JsonResponse({
                                 'success': False,
                                 'message': f'Maximum 3 images allowed for variant {i + 1}.'
@@ -435,11 +457,13 @@ def admin_edit_product(request, slug):
                         # Validate image size and type
                         for image in images:
                             if image.size > 10 * 1024 * 1024:
+                                logger.warning(f"Validation failed for variant {i + 1}: Image exceeds 10MB")
                                 return JsonResponse({
                                     'success': False,
                                     'message': f'Image for variant {i + 1} exceeds 10MB.'
                                 }, status=400)
                             if not image.content_type.startswith('image/'):
+                                logger.warning(f"Validation failed for variant {i + 1}: Invalid image type")
                                 return JsonResponse({
                                     'success': False,
                                     'message': f'Invalid image type for variant {i + 1}.'
@@ -447,28 +471,39 @@ def admin_edit_product(request, slug):
 
                         # Reset primary image status for existing images
                         VariantImage.objects.filter(variant=variant).update(is_primary=False)
+                        logger.debug(f"Reset primary image status for variant {variant.id}")
 
                         # Add new images
                         for idx, image in enumerate(images):
                             is_primary = (primary_image == f'new_{idx}')
-                            VariantImage.objects.create(
+                            variant_image = VariantImage(
                                 variant=variant,
                                 image=image,
                                 is_primary=is_primary,
                                 alt_text=f"{product.product_name} - {variant.flavor or 'Standard'} {variant.size_weight or ''} image {idx + 1}",
                                 image_type='primary' if is_primary else 'detail'
                             )
+                            variant_image.save()
+                            logger.debug(f"Added new image for variant {variant.id}, is_primary={is_primary}")
 
                         # Set primary image for existing images
                         if primary_image and primary_image.startswith('existing_'):
                             existing_image_id = primary_image.split('_')[1]
                             if existing_image_id.isdigit():
                                 if not VariantImage.objects.filter(id=existing_image_id, variant=variant).exists():
+                                    logger.warning(f"Validation failed for variant {i + 1}: Invalid primary image ID")
                                     return JsonResponse({
                                         'success': False,
                                         'message': f'Invalid primary image ID for variant {i + 1}: Image does not exist.'
                                     }, status=400)
                                 VariantImage.objects.filter(id=existing_image_id, variant=variant).update(is_primary=True)
+                                logger.debug(f"Set primary image for variant {variant.id} to existing image {existing_image_id}")
+                            else:
+                                logger.warning(f"Validation failed for variant {i + 1}: Invalid primary image ID format")
+                                return JsonResponse({
+                                    'success': False,
+                                    'message': f'Invalid primary image ID for variant {i + 1}.'
+                                }, status=400)
 
                         # Ensure a primary image is set
                         primary_image_exists = variant.variant_images.filter(is_primary=True).exists()
@@ -478,32 +513,37 @@ def admin_edit_product(request, slug):
                                 first_image.is_primary = True
                                 first_image.image_type = 'primary'
                                 first_image.save()
+                                logger.debug(f"Automatically set first image as primary for variant {variant.id}")
                             else:
+                                logger.warning(f"Validation failed for variant {i + 1}: No primary image selected")
                                 return JsonResponse({
                                     'success': False,
                                     'message': f'Please select a primary image for variant {i + 1}.'
                                 }, status=400)
 
                     # Delete variants not included in the form
-                    product.variants.exclude(id__in=submitted_variant_ids).delete()
+                    deleted_variants = product.variants.exclude(id__in=submitted_variant_ids).delete()[0]
+                    logger.debug(f"Deleted {deleted_variants} variants not in submitted_variant_ids: {submitted_variant_ids}")
 
                     return JsonResponse({
                         'success': True,
                         'message': f"Product '{product.product_name}' updated successfully!"
                     })
             except ValidationError as e:
+                logger.error(f"Validation error during product update: {str(e)}")
                 return JsonResponse({
                     'success': False,
                     'message': f"Validation error: {str(e)}"
                 }, status=400)
             except Exception as e:
-                logger.error(f"Error updating product: {e}")
+                logger.error(f"Error updating product: {str(e)}")
                 return JsonResponse({
                     'success': False,
                     'message': f"Error updating product: {str(e)}"
                 }, status=500)
         else:
             errors = product_form.errors.as_json()
+            logger.warning(f"Form validation failed: {errors}")
             return JsonResponse({
                 'success': False,
                 'message': 'Please correct the errors in the form.',

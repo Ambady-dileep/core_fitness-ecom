@@ -6,6 +6,10 @@ from django.forms import formset_factory
 from django.core.exceptions import ValidationError
 from .models import Category, Brand, Product, ProductVariant, VariantImage
 from django.utils.text import slugify
+from django.core.exceptions import ValidationError
+from .models import Category
+from cloudinary.uploader import upload
+import cloudinary.exceptions
 import re
 
 logger = logging.getLogger(__name__)
@@ -224,10 +228,7 @@ class ReviewForm(forms.ModelForm):
         return review
 
 
-from django.core.exceptions import ValidationError
-from .models import Category
-from cloudinary.uploader import upload
-import cloudinary.exceptions
+
 class CategoryForm(forms.ModelForm):
     image = forms.FileField(
         required=False,
