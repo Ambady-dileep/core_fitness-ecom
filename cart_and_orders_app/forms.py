@@ -105,6 +105,7 @@ class OrderItemCancellationForm(forms.Form):
         
         return cleaned_data
 
+
 class ReturnRequestForm(forms.ModelForm):
     items = forms.ModelMultipleChoiceField(
         queryset=OrderItem.objects.none(),
@@ -128,7 +129,7 @@ class ReturnRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if order:
             self.order = order
-            self.fields['items'].queryset = self.order.items.filter(variant__is_active=True)
+            self.fields['items'].queryset = self.order.items.all()
             self.fields['items'].label = "Select items to return (leave unchecked for full order return)"
 
     def clean_reason(self):
@@ -144,7 +145,7 @@ class ReturnRequestForm(forms.ModelForm):
             if self.order.status != 'Delivered':
                 raise forms.ValidationError("This order cannot be returned as it has not been delivered.")
             if not items:
-                cleaned_data['items'] = self.order.items.filter(is_active=True)  
+                cleaned_data['items'] = self.order.items.all()  
         return cleaned_data
 
 class SalesReportForm(forms.Form):

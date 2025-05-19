@@ -7,6 +7,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.views.decorators.http import require_http_methods
 from django.urls import reverse
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -1617,36 +1618,75 @@ def user_cancel_order_item(request, order_id):
             'message': 'An error occurred while cancelling the items.'
         }, status=500)
 
+
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def user_return_order(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-    if order.status != 'Delivered':
-        messages.error(request, "This order cannot be returned.")
-        return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-    if order.return_requests.exists():
-        messages.error(request, "A return request has already been submitted for this order.")
-        return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-    form = ReturnRequestForm(request.POST, order=order)
-    if not form.is_valid():
-        messages.error(request, "Invalid return request. Please provide a valid reason and select items if applicable.")
-        return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-    try:
-        with transaction.atomic():
-            return_request = ReturnRequest.objects.create(
-                order=order,
-                reason=form.cleaned_data['reason'],
-                requested_at=timezone.now(),
-                is_verified=False,
-                refund_processed=False
-            )
-            if form.cleaned_data.get('items'):
-                return_request.items.set(form.cleaned_data['items'])
-            messages.success(request, "Return request submitted. We will process it shortly.")
-            return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-    except Exception as e:
-        messages.error(request, f"An error occurred: {str(e)}")
-        return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+    
+    if request.method == 'POST':
+        form = ReturnRequestForm(request.POST, order=order)
+        if form.is_valid():
+            try:
+                # Create the return request
+                return_request = form.save(commit=False)
+                return_request.order = order
+                return_request.user = request.user
+                return_request.is_verified = False  # Admin can verify later
+                return_request.refund_processed = False  # Will be set to True after refund
+                
+                # Calculate refund amount (full order, as no item selection in modal)
+                refund_amount = order.total_amount
+                # Adjust for coupon discount if applied
+                if order.coupon_discount > 0:
+                    user_coupon = UserCoupon.objects.filter(order=order, is_used=True).first()
+                    if user_coupon and user_coupon.coupon:
+                        coupon = user_coupon.coupon
+                        _, coupon_discount = coupon.apply_to_subtotal(order.get_subtotal())
+                        refund_amount -= coupon_discount
+                
+                # Ensure refund amount is non-negative
+                refund_amount = max(Decimal('0.00'), refund_amount.quantize(Decimal('0.01')))
+                
+                # Save refund amount to return request
+                return_request.refund_amount = refund_amount
+                return_request.save()
+                # Add all order items to the return request (since no item selection)
+                return_request.items.set(order.items.all())
+                
+                # Credit refund to wallet if amount is positive and order is paid
+                if refund_amount > 0 and order.payment_status == 'PAID':
+                    wallet, created = Wallet.objects.get_or_create(user=request.user)
+                    wallet.add_refunded_funds(
+                        amount=refund_amount,
+                        description=f"Refund for order {order.order_id}"
+                    )
+                    return_request.refund_processed = True
+                    return_request.save()
+                    logger.info(
+                        f"Refund of ₹{refund_amount} credited to wallet for user {request.user.username} "
+                        f"for order {order.order_id}"
+                    )
+                
+                # Update order status to Returned
+                order.status = 'Returned'
+                order.save()
+                
+                messages.success(request, "Return request submitted successfully. Refund has been credited to your wallet.")
+                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+            
+            except Exception as e:
+                logger.error(
+                    f"Error processing return for order {order.order_id} by user {request.user.username}: {str(e)}"
+                )
+                messages.error(request, "An error occurred while processing your return request. Please try again.")
+        else:
+            messages.error(request, "Please correct the errors in the form.")
+    else:
+        form = ReturnRequestForm(order=order)
+    
+    # Since no separate template, redirect to order detail on GET
+    return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 
 def generate_pdf(request, order_id):

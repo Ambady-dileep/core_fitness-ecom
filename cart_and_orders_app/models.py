@@ -627,6 +627,7 @@ class OrderCancellation(models.Model):
 class ReturnRequest(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='return_requests')
     items = models.ManyToManyField(OrderItem, blank=True, related_name='return_requests')
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     reason = models.TextField()
     requested_at = models.DateTimeField(default=timezone.now)
     is_verified = models.BooleanField(default=False)

@@ -176,10 +176,10 @@
                     <h3 class="card-title">Shipping</h3>
                     <div class="minimal-divider"></div>
                     <p class="minimal-text">
-                        {{ order.shipping_address.full_name }}<br>
-                        {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %}<br>
-                        {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}<br>
-                        {{ order.shipping_address.country }}
+                        {{ order.address_full_name }}<br>
+                        {{ order.address_line1 }}{% if order.address_line2 %}, {{ order.address_line2 }}{% endif %}<br>
+                        {{ order.address_city }}, {{ order.address_state }} {{ order.address_postal_code }}<br>
+                        {{ order.address_country }}
                     </p>
                     <p class="minimal-text text-success mt-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#27ae60" viewBox="0 0 16 16">

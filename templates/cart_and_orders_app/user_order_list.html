@@ -93,11 +93,6 @@
                                         <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" class="btn btn-sm btn-outline-primary me-1" aria-label="View order details">
                                             View
                                         </a>
-                                        {% if order.status == 'Delivered' %}
-                                            <a href="{% url 'cart_and_orders_app:user_return_order' order.order_id %}" class="btn btn-sm btn-outline-warning return-order me-1" aria-label="Return order">
-                                                Return
-                                            </a>
-                                        {% endif %}
                                         {% if order.payment_status == 'PAID' %}
                                             <a href="{% url 'cart_and_orders_app:generate_pdf' order.order_id %}" class="btn btn-sm btn-outline-info" aria-label="Download invoice">
                                                 Invoice
@@ -208,15 +203,6 @@
         color: white;
         transform: translateY(-2px);
     }
-    .btn-outline-warning {
-        border-color: #f59e0b;
-        color: #f59e0b;
-    }
-    .btn-outline-warning:hover {
-        background-color: #f59e0b;
-        color: white;
-        transform: translateY(-2px);
-    }
     .btn-outline-info {
         border-color: #3b82f6;
         color: #3b82f6;
@@ -257,27 +243,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 start: "top 85%",
                 toggleActions: "play none none none"
             }
-        });
-    });
-
-    // Return Confirmation
-    document.querySelectorAll('.return-order').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = this.href;
-            Swal.fire({
-                title: 'Are you sure you want to return this order?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Yes',
-                cancelButtonText: 'No',
-                confirmButtonColor: '#f59e0b',
-                cancelButtonColor: '#666'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = url;
-                }
-            });
         });
     });
 
@@ -324,7 +289,7 @@ document.querySelectorAll('.retry-payment-btn').forEach(btn => {
             }
 
             const options = {
-                key: data.key, // Fixed: Use data.key instead of data.razorpay_key
+                key: data.key,
                 amount: data.amount,
                 currency: data.currency,
                 name: 'Core Fitness',
@@ -395,7 +360,7 @@ document.querySelectorAll('.retry-payment-btn').forEach(btn => {
                             this.disabled = false;
                             this.innerText = 'Retry Payment';
                         });
-                    }.bind(this) // Bind `this` to access the button
+                    }.bind(this)
                 }
             };
 
@@ -429,7 +394,7 @@ document.querySelectorAll('.retry-payment-btn').forEach(btn => {
     });
 });
 
-    // CSRF Token Helper (unchanged)
+    // CSRF Token Helper
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
