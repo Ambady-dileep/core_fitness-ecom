@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from datetime import timedelta
+from datetime import timedelta, datetime
 
 class CouponForm(forms.ModelForm):
     class Meta:
@@ -35,45 +36,33 @@ class CouponForm(forms.ModelForm):
             }),
             'valid_from': forms.DateInput(attrs={
                 'class': 'form-control',
-                'type': 'datetime-local'
+                'type': 'date'
             }),
             'valid_to': forms.DateInput(attrs={
                 'class': 'form-control',
-                'type': 'datetime-local'
+                'type': 'date'
             }),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Set default values for valid_from and valid_to
-        current_time = timezone.now()
+        current_date = timezone.now().date()
         if not self.instance.pk:  # New coupon
-            self.initial['valid_from'] = current_time
-            self.initial['valid_to'] = current_time + timedelta(days=30)
+            self.initial['valid_from'] = current_date
+            self.initial['valid_to'] = current_date + timedelta(days=30)
         else:  # Editing existing coupon
-            if self.instance.valid_to <= current_time:
-                self.initial['valid_to'] = current_time + timedelta(days=30)
-
-        # Add help text and error messages
-        self.fields['code'].error_messages = {
-            'required': 'Please enter a coupon code',
-            'unique': 'This coupon code already exists'
-        }
-        self.fields['discount_percentage'].error_messages = {
-            'required': 'Please enter a discount percentage',
-            'min_value': 'Discount must be at least 0.01%',
-            'max_value': 'Discount cannot exceed 50%'
-        }
+            if self.instance.valid_to.date() <= current_date:
+                self.initial['valid_to'] = current_date + timedelta(days=30)
+            # Convert existing DateTimeField to date for form display
+            self.initial['valid_from'] = self.instance.valid_from.date()
+            self.initial['valid_to'] = self.instance.valid_to.date()
 
     def clean_code(self):
         code = self.cleaned_data['code'].strip().upper()
         if not code:
             raise ValidationError("Coupon code cannot be empty.")
-        
-        # Check uniqueness but ignore the current instance if editing
         if Coupon.objects.filter(code=code).exclude(pk=self.instance.pk).exists():
             raise ValidationError("This coupon code already exists.")
-            
         return code
 
     def clean_discount_percentage(self):
@@ -96,9 +85,25 @@ class CouponForm(forms.ModelForm):
     
     def clean_valid_from(self):
         valid_from = self.cleaned_data.get('valid_from')
-        if valid_from and valid_from < timezone.now():
-            raise ValidationError("Valid from date cannot be in the past.")
+        current_date = timezone.now().date()
+        if valid_from:
+            # If valid_from is a datetime (e.g., from existing instance), convert to date
+            if isinstance(valid_from, datetime):
+                valid_from = valid_from.date()
+            if valid_from < current_date:
+                raise ValidationError("Valid from date cannot be in the past.")
         return valid_from
+
+    def clean_valid_to(self):
+        valid_to = self.cleaned_data.get('valid_to')
+        valid_from = self.cleaned_data.get('valid_from')
+        if valid_to and isinstance(valid_to, datetime):
+            valid_to = valid_to.date()
+        if valid_from and isinstance(valid_from, datetime):
+            valid_from = valid_from.date()
+        if valid_from and valid_to and valid_to <= valid_from:
+            raise ValidationError("Valid to date must be after valid from date.")
+        return valid_to
 
     def clean(self):
         cleaned_data = super().clean()
@@ -107,16 +112,17 @@ class CouponForm(forms.ModelForm):
         minimum_order_amount = cleaned_data.get('minimum_order_amount')
         max_discount_amount = cleaned_data.get('max_discount_amount')
 
-        # Validate dates
-        if valid_from and valid_to and valid_to <= valid_from:
-            self.add_error('valid_to', "Valid to date must be after valid from date.")
+        if valid_from and valid_to:
+            # Ensure both are dates for comparison
+            valid_from_date = valid_from.date() if isinstance(valid_from, datetime) else valid_from
+            valid_to_date = valid_to.date() if isinstance(valid_to, datetime) else valid_to
+            if valid_to_date <= valid_from_date:
+                self.add_error('valid_to', "Valid to date must be after valid from date.")
 
-        # Validate amounts: Minimum Order Amount must be greater than Maximum Discount Amount
         if minimum_order_amount is not None and max_discount_amount is not None:
             if max_discount_amount > 0 and minimum_order_amount < max_discount_amount:
                 self.add_error('minimum_order_amount', "Minimum order amount must be greater than maximum discount amount.")
 
-        # Auto-set is_active to True for new coupons or keep existing value
         if not self.instance.pk:
             cleaned_data['is_active'] = True
             
@@ -124,7 +130,24 @@ class CouponForm(forms.ModelForm):
 
     def save(self, commit=True):
         coupon = super().save(commit=False)
-        # For new coupons, ensure is_active is set to True
+        # Convert date to datetime (start of day in IST)
+        if self.cleaned_data['valid_from']:
+            valid_from = self.cleaned_data['valid_from']
+            if isinstance(valid_from, datetime):
+                valid_from = valid_from.date()
+            coupon.valid_from = timezone.make_aware(
+                datetime.combine(valid_from, datetime.min.time()),
+                timezone=timezone.get_current_timezone()
+            )
+        if self.cleaned_data['valid_to']:
+            valid_to = self.cleaned_data['valid_to']
+            if isinstance(valid_to, datetime):
+                valid_to = valid_to.date()
+            # Set valid_to to end of day
+            coupon.valid_to = timezone.make_aware(
+                datetime.combine(valid_to, datetime.max.time()),
+                timezone=timezone.get_current_timezone()
+            )
         if not self.instance.pk:
             coupon.is_active = True
         if commit:

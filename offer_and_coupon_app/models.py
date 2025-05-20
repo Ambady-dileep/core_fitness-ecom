@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_UP
 from datetime import timedelta
+from datetime import timedelta, datetime
 from django.db import transaction
 
 
@@ -45,7 +46,6 @@ class Coupon(models.Model):
             raise ValidationError("Valid to date must be after valid from date")
         if self.discount_percentage <= 0:
             raise ValidationError("Discount percentage must be greater than 0")
-
 
     def is_valid(self):
         now = timezone.now()

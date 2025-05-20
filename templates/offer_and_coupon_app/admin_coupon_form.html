@@ -113,37 +113,19 @@
         
         // Set min date for valid_from field to today
         const today = new Date();
-        const formattedDate = today.toISOString().slice(0, 10); // Format: YYYY-MM-DD
+        const formattedDate = today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
         validFromField.setAttribute('min', formattedDate);
-
-        // Set min date for valid_to based on valid_from
-        if (validFromField.value) {
-            validToField.setAttribute('min', validFromField.value);
-        }
-
-        // Adjust valid_to if it's before valid_from when the form loads
-        if (validFromField.value && validToField.value) {
-            const validFromDate = new Date(validFromField.value);
-            const validToDate = new Date(validToField.value);
-            if (validToDate <= validFromDate) {
-                // Set valid_to to 30 days after valid_from
-                const newValidTo = new Date(validFromDate);
-                newValidTo.setDate(validFromDate.getDate() + 30);
-                validToField.value = newValidTo.toISOString().slice(0, 10);
-            }
-        }
 
         // Update min date for valid_to when valid_from changes
         validFromField.addEventListener('change', function() {
             if (validFromField.value) {
                 validToField.setAttribute('min', validFromField.value);
                 // If valid_to is before the new valid_from, adjust it
-                const validFromDate = new Date(validFromField.value);
-                const validToDate = new Date(validToField.value);
-                if (!validToField.value || validToDate <= validFromDate) {
+                if (validToField.value && validToField.value <= validFromField.value) {
+                    const validFromDate = new Date(validFromField.value);
                     const newValidTo = new Date(validFromDate);
                     newValidTo.setDate(validFromDate.getDate() + 30);
-                    validToField.value = newValidTo.toISOString().slice(0, 10);
+                    validToField.value = newValidTo.toISOString().split('T')[0];
                 }
             }
         });
