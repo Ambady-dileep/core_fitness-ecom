@@ -535,7 +535,6 @@ class Order(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Only recalculate for modifications like cancellations or returns
         if hasattr(self, 'needs_recalculation') and self.needs_recalculation:
             self.recalculate_totals()
             self.needs_recalculation = False
@@ -550,10 +549,11 @@ class Order(models.Model):
                 user_coupon.save()
                 logger.info(f"UserCoupon updated for order {self.order_id}, coupon {self.coupon.code}")
             except UserCoupon.DoesNotExist:
-                logger.warning(f"No valid UserCoupon found for user {self.user.id}, coupon {self.coupon.code}")
-                self.coupon = None
-                self.recalculate_totals()
-                super().save(update_fields=['total_amount', 'coupon_discount'])
+                if self.coupon_discount <= 0:
+                    logger.warning(f"No valid UserCoupon found for user {self.user.id}, coupon {self.coupon.code}")
+                    self.coupon = None
+                    self.recalculate_totals()
+                    super().save(update_fields=['total_amount', 'coupon_discount'])
 
     def decrease_stock(self):
         with transaction.atomic():

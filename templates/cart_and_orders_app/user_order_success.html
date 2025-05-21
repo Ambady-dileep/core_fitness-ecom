@@ -112,10 +112,11 @@
       <div class="order-detail">
         <span>Shipping Address</span>
         <div class="text-end">
-          <strong>{{ order.shipping_address.full_name }}</strong><br>
-          {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %},
-          {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }},
-          {{ order.shipping_address.country }}
+          <strong>{{ order.address_full_name }}</strong><br>
+          {{ order.address_line1 }}{% if order.address_line2 %}, {{ order.address_line2 }}{% endif %}<br>
+          {{ order.address_city }}, {{ order.address_state }} {{ order.address_postal_code }}<br>
+          {{ order.address_country }}
+          {% if order.address_phone %}<br>Phone: {{ order.address_phone }}{% endif %}
         </div>
       </div>
       
@@ -135,13 +136,14 @@
       <div class="order-detail">
         <span>Shipping Cost</span>
         <span>
-            {% if shipping_cost == 0 %}
-                <strong class="text-success">Free Shipping!</strong>
-            {% else %}
-                <strong>₹{{ shipping_cost|floatformat:2 }}</strong>
-            {% endif %}
+          {% if shipping_cost == 0 %}
+            <strong class="text-success">Free Shipping!</strong>
+          {% else %}
+            <strong>₹{{ shipping_cost|floatformat:2 }}</strong>
+          {% endif %}
         </span>
-    </div>
+      </div>
+      
       <div class="order-detail">
         <span><strong>Total Amount Paid</strong></span>
         <span><strong>₹{{ order.total_amount|floatformat:2 }}</strong></span>
@@ -216,6 +218,15 @@
         shapes: ['circle', 'square']
       });
     }, 250);
+
+    // Update cart count to 0 on page load
+    const cartCountBadge = document.getElementById('cart-count');
+    if (cartCountBadge) {
+      cartCountBadge.textContent = '0';
+      cartCountBadge.style.display = 'none';
+    }
+    localStorage.setItem('cartCount', '0');
+    document.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: 0 } }));
   });
 </script>
 {% endblock %}

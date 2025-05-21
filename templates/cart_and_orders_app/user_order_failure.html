@@ -1,5 +1,3 @@
-
-
 {% extends 'base.html' %}
 {% load static %}
 
@@ -7,155 +5,352 @@
 
 {% block extra_css %}
 <style>
-  .failure-container {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem;
-  }
-  
-  .order-card {
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    overflow: hidden;
-    background-color: #fff;
-    margin-bottom: 2rem;
-  }
-  
-  .order-header {
-    padding: 1.5rem;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #eee;
-  }
-  
-  .order-body {
-    padding: 1.5rem;
+  :root {
+    --primary-color: #3a6cf4;
+    --danger-color: #fc5a5a;
+    --text-color: #333;
+    --text-muted: #666;
+    --light-bg: #f9fafb;
+    --border-color: #eaedf0;
+    --shadow: 0 10px 25px rgba(0,0,0,0.03);
+    --radius: 16px;
   }
 
-  .failure-icon {
-    width: 80px;
-    height: 80px;
-    background-color: #dc3545;
+  body {
+    background-color: var(--light-bg);
+    color: var(--text-color);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .failure-container {
+    max-width: 640px;
+    margin: 3rem auto;
+    padding: 0 1.5rem;
+  }
+  
+  .status-circle {
+    width: 90px;
+    height: 90px;
+    background-color: var(--danger-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 1.5rem;
+    margin: 0 auto 2rem;
     color: white;
-    font-size: 2rem;
+    font-size: 2.5rem;
+    box-shadow: 0 8px 15px rgba(252, 90, 90, 0.2);
   }
   
-  .order-detail {
-    display: flex;
-    justify-content: space-between;
-    border-bottom: 1px solid #f0f0f0;
-    padding: 0.75rem 0;
+  .page-title {
+    font-weight: 700;
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
   }
   
-  .order-detail:last-child {
+  .status-message {
+    color: var(--text-muted);
+    margin-bottom: 2.5rem;
+    font-size: 1.05rem;
+  }
+  
+  .order-card {
+    border-radius: var(--radius);
+    background-color: #fff;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-bottom: 2.5rem;
+    border: 1px solid var(--border-color);
+  }
+  
+  .order-header {
+    padding: 1.5rem 1.75rem;
+    background-color: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .order-header .badge {
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+  }
+  
+  .order-timestamp {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+  }
+  
+  .order-body {
+    padding: 1.75rem;
+  }
+  
+  .order-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .order-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
     border-bottom: none;
   }
   
+  .section-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+  
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+  }
+  
+  .detail-row:last-child {
+    margin-bottom: 0;
+  }
+  
+  .detail-label {
+    color: var(--text-muted);
+  }
+  
+  .detail-value {
+    font-weight: 500;
+    text-align: right;
+  }
+  
+  .address-block {
+    text-align: right;
+    line-height: 1.5;
+  }
+  
+  .address-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  
+  .total-row {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--border-color);
+  }
+  
+  .free-shipping {
+    color: #38b16a;
+    font-weight: 600;
+  }
+  
+  .discount-text {
+    color: var(--danger-color);
+  }
+  
   .buttons {
-    margin-top: 2rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
   }
   
   .btn {
-    padding: 0.6rem 1.5rem;
-    border-radius: 6px;
-    font-weight: 500;
+    padding: 0.85rem 1.75rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 4px 12px rgba(58, 108, 244, 0.15);
+  }
+  
+  .btn-primary:hover {
+    background-color: #2555d7;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(58, 108, 244, 0.2);
+  }
+  
+  .btn-warning {
+    background-color: #ff9900;
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.15);
+  }
+  
+  .btn-warning:hover {
+    background-color: #e68a00;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(255, 153, 0, 0.2);
+  }
+  
+  .btn-outline {
+    background-color: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+  }
+  
+  .btn-outline:hover {
+    background-color: #f5f5f5;
+    transform: translateY(-2px);
+  }
+  
+  @media (max-width: 576px) {
+    .failure-container {
+      margin: 1.5rem auto;
+    }
+    
+    .order-header, .order-body {
+      padding: 1.25rem;
+    }
+    
+    .buttons {
+      flex-direction: column;
+    }
+    
+    .btn {
+      width: 100%;
+    }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="failure-container">
-  <div class="text-center mb-4">
-    <div class="failure-icon">
+  <div class="text-center">
+    <div class="status-circle">
       <i class="fas fa-times"></i>
     </div>
-    <h2 class="mb-2">Payment Failed</h2>
-    <p class="text-muted">We're sorry, but the payment for your order <strong>#{{ order.order_id }}</strong> could not be processed.</p>
+    <h1 class="page-title">Payment Failed</h1>
+    <p class="status-message">We're sorry, but the payment for your order <strong>#{{ order.order_id }}</strong> could not be processed.</p>
   </div>
   
   <div class="order-card">
     <div class="order-header">
       <div class="d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Order #{{ order.order_id }}</h5>
+        <h2 style="font-size: 1.25rem; margin: 0;">Order #{{ order.order_id }}</h2>
         <span class="badge bg-danger">{{ order.status }}</span>
       </div>
-      <small class="text-muted">Placed on {{ order.created_at|date:"d M Y, h:i A" }}</small>
-    </div>
-    <div class="order-body">
-      <div class="order-detail">
-        <span>Customer</span>
-        <span><strong>{{ order.user.get_full_name|default:order.user.username }}</strong></span>
-      </div>
-      <div class="order-detail">
-        <span>Payment Method</span>
-        <span><strong>{{ order.payment_method }}</strong></span>
-      </div>
-      <div class="order-detail">
-        <span>Payment Status</span>
-        <span><strong>{{ order.payment_status }}</strong></span>
-      </div>
-      <div class="order-detail">
-        <span>Shipping Address</span>
-        <div class="text-end">
-          <strong>{{ order.shipping_address.full_name }}</strong><br>
-          {{ order.shipping_address.address_line1 }}{% if order.shipping_address.address_line2 %}, {{ order.shipping_address.address_line2 }}{% endif %},
-          {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }},
-          {{ order.shipping_address.country }}
-        </div>
-      </div>
-      <!-- Order Financial Breakdown -->
-      <div class="order-detail">
-        <span>Subtotal</span>
-        <span><strong>₹{{ subtotal|floatformat:2 }}</strong></span>
-      </div>
-      {% if total_offer_discount > 0 %}
-      <div class="order-detail">
-        <span>Offer Discount</span>
-        <span><strong>-₹{{ total_offer_discount|floatformat:2 }}</strong></span>
-      </div>
-      {% endif %}
-      {% if coupon_discount > 0 %}
-      <div class="order-detail">
-        <span>Coupon Discount ({{ coupon_code }})</span>
-        <span><strong>-₹{{ coupon_discount|floatformat:2 }}</strong></span>
-      </div>
-      {% endif %}
-      <div class="order-detail">
-        <span>Shipping Cost</span>
-        <span>
-            {% if shipping_cost == 0 %}
-                <strong class="text-success">Free Shipping!</strong>
-            {% else %}
-                <strong>₹{{ shipping_cost|floatformat:2 }}</strong>
-            {% endif %}
-        </span>
-      </div>
-      <div class="order-detail">
-        <span><strong>Total Amount</strong></span>
-        <span><strong>₹{{ order.total_amount|floatformat:2 }}</strong></span>
-      </div>
+      <div class="order-timestamp">{{ order.created_at|date:"d M Y, h:i A" }}</div>
     </div>
     
+    <div class="order-body">
+      <div class="order-section">
+        <h3 class="section-title">Customer Details</h3>
+        <div class="detail-row">
+          <span class="detail-label">Name</span>
+          <span class="detail-value">{{ order.user.get_full_name|default:order.user.username }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Payment Method</span>
+          <span class="detail-value">{{ order.payment_method }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Payment Status</span>
+          <span class="detail-value">{{ order.payment_status }}</span>
+        </div>
+      </div>
+      
+      <div class="order-section">
+        <h3 class="section-title">Shipping Address</h3>
+        <div class="address-block">
+          <div class="address-name">{{ order.address_full_name }}</div>
+          <div>{{ order.address_line1 }}{% if order.address_line2 %}, {{ order.address_line2 }}{% endif %}</div>
+          <div>{{ order.address_city }}, {{ order.address_state }} {{ order.address_postal_code }}</div>
+          <div>{{ order.address_country }}</div>
+          {% if order.address_phone %}<div>Phone: {{ order.address_phone }}</div>{% endif %}
+        </div>
+      </div>
+      
+      <div class="order-section">
+        <h3 class="section-title">Order Summary</h3>
+        <div class="detail-row">
+          <span class="detail-label">Original Price</span>
+          <span class="detail-value">₹{{ original_total|floatformat:2 }}</span>
+        </div>
+        
+        {% if total_offer_discount > 0 %}
+        <div class="detail-row">
+          <span class="detail-label">Offer Discount</span>
+          <span class="detail-value discount-text">-₹{{ total_offer_discount|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="detail-row">
+          <span class="detail-label">Best Price Total</span>
+          <span class="detail-value">₹{{ subtotal|floatformat:2 }}</span>
+        </div>
+        
+        {% if coupon_discount > 0 %}
+        <div class="detail-row">
+          <span class="detail-label">Coupon Discount ({{ coupon_code }})</span>
+          <span class="detail-value discount-text">-₹{{ coupon_discount|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="detail-row">
+          <span class="detail-label">Shipping</span>
+          <span class="detail-value">
+            {% if shipping_cost == 0 %}
+              <span class="free-shipping">Free Shipping</span>
+            {% else %}
+              ₹{{ shipping_cost|floatformat:2 }}
+            {% endif %}
+          </span>
+        </div>
+        
+        <div class="detail-row total-row">
+          <span class="detail-label">Total Amount</span>
+          <span class="detail-value">₹{{ order.total_amount|floatformat:2 }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
   
-  <div class="buttons text-center">
+  <div class="buttons">
     {% if order.payment_method == 'CARD' and order.payment_status == 'FAILED' and order.status == 'Pending' %}
-    <button class="btn btn-warning retry-payment-btn" data-order-id="{{ order.order_id }}">Retry Payment</button>
+    <button class="btn btn-warning retry-payment-btn" data-order-id="{{ order.order_id }}">
+      <i class="fas fa-sync-alt mr-2"></i> Retry Payment
+    </button>
     {% endif %}
-    <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="btn btn-outline-dark">Back to Orders</a>
-    <a href="{% url 'user_app:user_home' %}" class="btn btn-outline-dark">Continue Shopping</a>
+    <a href="{% url 'cart_and_orders_app:user_order_list' %}" class="btn btn-outline">
+      <i class="fas fa-list mr-2"></i> My Orders
+    </a>
+    <a href="{% url 'user_app:user_home' %}" class="btn btn-outline">
+      <i class="fas fa-shopping-bag mr-2"></i> Continue Shopping
+    </a>
   </div>
 </div>
 {% endblock %}
+
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
+      // Update cart count to 0 on page load (initial failure)
+      const cartCountBadge = document.getElementById('cart-count');
+      if (cartCountBadge) {
+          cartCountBadge.textContent = '0';
+          cartCountBadge.style.display = 'none';
+      }
+      localStorage.setItem('cartCount', '0');
+      document.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: 0 } }));
+
+      // Existing retry payment logic
       document.querySelectorAll('.retry-payment-btn').forEach(button => {
           button.addEventListener('click', function() {
               const orderId = this.getAttribute('data-order-id');
@@ -165,7 +360,12 @@
                   icon: 'info',
                   showCancelButton: true,
                   confirmButtonText: 'Proceed',
-                  cancelButtonText: 'Cancel'
+                  cancelButtonText: 'Cancel',
+                  confirmButtonColor: '#3a6cf4',
+                  cancelButtonColor: '#6c757d',
+                  customClass: {
+                      popup: 'swal-modern'
+                  }
               }).then((result) => {
                   if (result.isConfirmed) {
                     fetch(`/orders/${orderId}/retry-payment/`, {
@@ -194,7 +394,7 @@
                                   email: data.prefill.email,
                                   contact: data.prefill.contact
                               },
-                              theme: { color: "#3399cc" },
+                              theme: { color: "#3a6cf4" },
                               handler: function(response) {
                                   console.log('Payment successful:', response);
                                   // Update cart count to 0 and dispatch cart-updated event
@@ -213,7 +413,8 @@
                                       Swal.fire({
                                           icon: 'info',
                                           title: 'Payment Cancelled',
-                                          text: 'You cancelled the payment. You can retry again later.'
+                                          text: 'You cancelled the payment. You can retry again later.',
+                                          confirmButtonColor: '#3a6cf4'
                                       });
                                   }
                               }
@@ -221,10 +422,19 @@
                           const rzp = new Razorpay(options);
                           rzp.on('payment.failed', function(response) {
                               console.log('Payment failed:', response);
+                              // Ensure cart count remains 0 on retry failure
+                              const cartCountBadge = document.getElementById('cart-count');
+                              if (cartCountBadge) {
+                                  cartCountBadge.textContent = '0';
+                                  cartCountBadge.style.display = 'none';
+                              }
+                              localStorage.setItem('cartCount', '0');
+                              document.dispatchEvent(new CustomEvent('cart-updated', { detail: { count: 0 } }));
                               Swal.fire({
                                   icon: 'error',
                                   title: 'Payment Failed',
-                                  text: 'Payment failed. Please try again.'
+                                  text: 'Payment failed. Please try again.',
+                                  confirmButtonColor: '#3a6cf4'
                               }).then(() => {
                                   window.location.href = `/order/${orderId}/failure/`;
                               });
@@ -234,7 +444,8 @@
                           Swal.fire({
                               icon: 'error',
                               title: 'Error',
-                              text: data.message || 'Failed to initiate retry payment.'
+                              text: data.message || 'Failed to initiate retry payment.',
+                              confirmButtonColor: '#3a6cf4'
                           }).then(() => {
                               if (data.redirect) {
                                   window.location.href = data.redirect;
@@ -247,7 +458,8 @@
                       Swal.fire({
                           icon: 'error',
                           title: 'Error',
-                          text: 'An error occurred while initiating retry payment.'
+                          text: 'An error occurred while initiating retry payment.',
+                          confirmButtonColor: '#3a6cf4'
                       });
                   });
                   }
@@ -256,4 +468,10 @@
       });
   });
 </script>
+<style>
+  .swal-modern {
+    border-radius: 16px !important;
+    padding: 1.5rem !important;
+  }
+</style>
 {% endblock %}

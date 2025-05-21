@@ -815,58 +815,131 @@ def retry_payment(request, order_id):
         payment_status='FAILED'
     )
     try:
-        # Log Razorpay keys for debugging
-        logger.debug(f"RAZORPAY_KEY_ID: {settings.RAZORPAY_KEY_ID}")
-        logger.debug(f"RAZORPAY_KEY_SECRET: {settings.RAZORPAY_KEY_SECRET}")
+        logger.debug(f"Retry payment for order {order.order_id}: total_amount={order.total_amount}, coupon={order.coupon}, coupon_discount={order.coupon_discount}")
 
-        # Check if a coupon was previously applied (even if order.coupon is None)
-        user_coupon = UserCoupon.objects.filter(order=order, user=request.user).first()
-        if user_coupon and user_coupon.coupon.is_valid():
-            # Restore the coupon if it was previously applied and is still valid
-            order.coupon = user_coupon.coupon
-            # Recalculate coupon discount based on the current subtotal
-            subtotal = sum(item.price * item.quantity for item in order.items.all())
-            _, order.coupon_discount = user_coupon.coupon.apply_to_subtotal(subtotal)
-            order.save()
-        elif order.coupon:
-            # If coupon exists but is invalid, clear it
-            if not order.coupon.is_valid():
-                UserCoupon.objects.filter(user=request.user, coupon=order.coupon, order=order).update(is_used=False, used_at=None, order=None)
-                order.coupon = None
-                order.coupon_discount = Decimal('0.00')
+        # Calculate subtotal
+        subtotal = sum(item.price * Decimal(item.quantity) for item in order.items.all())
+        coupon_discount = order.coupon_discount or Decimal('0.00')
+        coupon = order.coupon
+
+        # Check for previously applied UserCoupon or order.coupon
+        user_coupon = UserCoupon.objects.filter(order=order, user=request.user, is_used=True).select_related('coupon').first()
+        if user_coupon and user_coupon.coupon.is_valid() and subtotal >= user_coupon.coupon.minimum_order_amount:
+            coupon = user_coupon.coupon
+            _, coupon_discount = coupon.apply_to_subtotal(subtotal)
+            logger.debug(f"Valid UserCoupon found: {coupon.code}, Discount: {coupon_discount}")
+        elif order.coupon and order.coupon.is_valid() and subtotal >= order.coupon.minimum_order_amount:
+            coupon = order.coupon
+            _, coupon_discount = coupon.apply_to_subtotal(subtotal)
+            logger.debug(f"Valid order.coupon found: {coupon.code}, Discount: {coupon_discount}")
+            UserCoupon.objects.update_or_create(
+                user=request.user,
+                coupon=coupon,
+                order=order,
+                defaults={'is_used': True, 'used_at': timezone.now()}
+            )
+        elif user_coupon and order.coupon_discount > 0:
+            coupon = user_coupon.coupon
+            coupon_discount = order.coupon_discount
+            logger.debug(f"Using stored coupon_discount {coupon_discount} for invalid coupon {coupon.code}")
+        elif order.coupon and order.coupon_discount > 0:
+            coupon = order.coupon
+            coupon_discount = order.coupon_discount
+            logger.debug(f"Using stored coupon_discount {coupon_discount} for invalid coupon {coupon.code}")
+        else:
+            coupon = None
+            coupon_discount = Decimal('0.00')
+            if user_coupon:
+                logger.warning(f"Invalid UserCoupon {user_coupon.coupon.code} for user {request.user.id}, resetting")
+                user_coupon.is_used = False
+                user_coupon.used_at = None
+                user_coupon.order = None
+                user_coupon.save()
+
+        # Calculate expected total
+        expected_total = subtotal - coupon_discount
+        expected_total = max(expected_total, Decimal('0.00'))
+
+        # Verify stock availability
+        out_of_stock_items = []
+        for item in order.items.all():
+            if item.quantity > item.variant.stock:
+                out_of_stock_items.append(
+                    f"{item.variant.product.product_name} (Available: {item.variant.stock}, Requested: {item.quantity})"
+                )
+        if out_of_stock_items:
+            error_message = f"Insufficient stock for: {', '.join(out_of_stock_items)}"
+            logger.warning(error_message)
+            return JsonResponse({'success': False, 'message': error_message}, status=400)
+
+        # Update order within a transaction
+        with transaction.atomic():
+            if (order.total_amount != expected_total or
+                order.coupon_discount != coupon_discount or
+                order.coupon != coupon):
+                logger.debug(
+                    f"Updating order {order.order_id}: total_amount={order.total_amount} to {expected_total}, "
+                    f"coupon_discount={order.coupon_discount} to {coupon_discount}, "
+                    f"coupon={order.coupon} to {coupon}"
+                )
+                order.total_amount = expected_total
+                order.coupon_discount = coupon_discount
+                order.coupon = coupon
                 order.save()
 
-        # Initiate Razorpay payment
-        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-        razorpay_order = client.order.create({
-            'amount': int(order.total_amount * 100),
-            'currency': 'INR',
-            'payment_capture': 1
-        })
-        order.razorpay_order_id = razorpay_order['id']
-        order.save()
+            # Initiate Razorpay payment
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            logger.debug(f"Creating Razorpay order for {order.order_id} with amount={int(order.total_amount * 100)}")
+            razorpay_order = client.order.create({
+                'amount': int(order.total_amount * 100),
+                'currency': 'INR',
+                'payment_capture': 1,
+                'receipt': f'retry_order_{order.order_id}',
+            })
+            order.razorpay_order_id = razorpay_order['id']
+            order.payment_status = 'PENDING'  # Ensure payment status is PENDING before payment
+            order.save()
 
         # Prepare prefill data
         prefill = {
             'name': request.user.get_full_name() or request.user.username,
             'email': request.user.email or '',
-            'contact': order.shipping_address.phone if order.shipping_address and hasattr(order.shipping_address, 'phone') else ''
+            'contact': order.address_phone or ''
         }
 
+        logger.debug(f"Razorpay order created for {order.order_id}: amount={int(order.total_amount * 100)}")
         return JsonResponse({
             'success': True,
             'razorpay_order_id': razorpay_order['id'],
             'amount': int(order.total_amount * 100),
             'currency': 'INR',
             'key': settings.RAZORPAY_KEY_ID,
-            'description': f'Payment for order {order.order_id}',
+            'description': f'Retry payment for order {order.order_id}',
             'callback_url': reverse('cart_and_orders_app:razorpay_callback'),
             'order_id': order.order_id,
             'prefill': prefill
         })
+    except razorpay.errors.BadRequestError as e:
+        logger.error(f"Razorpay error for order {order.order_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Payment processing failed: {str(e)}. Please try again.',
+            'redirect': reverse('cart_and_orders_app:user_order_failure', args=[order.order_id])
+        }, status=400)
+    except razorpay.errors.ServerError as e:
+        logger.error(f"Razorpay server error for order {order.order_id}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'Payment processing failed due to a server error. Please try again later.',
+            'redirect': reverse('cart_and_orders_app:user_order_failure', args=[order.order_id])
+        }, status=500)
     except Exception as e:
         logger.error(f"Error in retry_payment for order {order_id}: {str(e)}")
-        return JsonResponse({'success': False, 'message': f'An error occurred while retrying payment: {str(e)}'}, status=500)
+        return JsonResponse({
+            'success': False,
+            'message': f'An error occurred while retrying payment: {str(e)}',
+            'redirect': reverse('cart_and_orders_app:user_order_failure', args=[order.order_id])
+        }, status=500)
 
 
 @login_required
@@ -1416,21 +1489,51 @@ def user_order_success(request, order_id):
 def user_order_failure(request, order_id):
     try:
         order = Order.objects.get(order_id=order_id, user=request.user)
-        # Calculate totals for display
-        subtotal = order.total_amount + order.coupon_discount
+        # Calculate financial breakdown
+        subtotal = sum(item.price * item.quantity for item in order.items.all())
         total_offer_discount = sum(
             (item.variant.best_price['original_price'] - item.price) * item.quantity
             for item in order.items.all()
         )
-        coupon_discount = order.coupon_discount
-        coupon_code = order.coupon.code if order.coupon else None
+        original_total = sum(item.variant.best_price['original_price'] * item.quantity for item in order.items.all())
+        coupon_discount = order.coupon_discount or Decimal('0.00')
+        coupon_code = None
+
+        # Recalculate coupon discount if necessary
+        if coupon_discount == 0 and order.coupon and order.coupon.is_valid():
+            _, coupon_discount = order.coupon.apply_to_subtotal(subtotal)
+            order.coupon_discount = coupon_discount
+            order.total_amount = subtotal - coupon_discount
+            order.save()
+        elif coupon_discount == 0:
+            user_coupon = UserCoupon.objects.filter(order=order, user=request.user, is_used=True).first()
+            if user_coupon and user_coupon.coupon.is_valid():
+                coupon_code = user_coupon.coupon.code
+                _, coupon_discount = user_coupon.coupon.apply_to_subtotal(subtotal)
+                order.coupon = user_coupon.coupon
+                order.coupon_discount = coupon_discount
+                order.total_amount = subtotal - coupon_discount
+                order.save()
+        else:
+            coupon_code = order.coupon.code if order.coupon else None
+
+        # Verify total_amount consistency
+        expected_total = subtotal - coupon_discount
+        if order.total_amount != expected_total:
+            logger.warning(
+                f"Total amount mismatch for order {order.order_id}: "
+                f"Stored={order.total_amount}, Expected={expected_total}"
+            )
+            order.total_amount = expected_total
+            order.save()
 
         context = {
             'order': order,
             'subtotal': subtotal,
+            'original_total': original_total, 
             'total_offer_discount': total_offer_discount,
             'coupon_discount': coupon_discount,
-            'coupon_code': coupon_code,  # Add coupon code to context
+            'coupon_code': coupon_code,
             'shipping_cost': Decimal('0.00'),
         }
         return render(request, 'cart_and_orders_app/user_order_failure.html', context)
@@ -1438,12 +1541,14 @@ def user_order_failure(request, order_id):
         context = {
             'order': None,
             'subtotal': Decimal('0.00'),
+            'original_total': Decimal('0.00'),  
             'total_offer_discount': Decimal('0.00'),
             'coupon_discount': Decimal('0.00'),
             'coupon_code': None,
             'shipping_cost': Decimal('0.00'),
         }
         return render(request, 'cart_and_orders_app/user_order_failure.html', context)
+
 
 @login_required
 @never_cache

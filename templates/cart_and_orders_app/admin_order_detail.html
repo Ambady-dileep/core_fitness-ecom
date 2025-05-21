@@ -41,10 +41,32 @@
                     ₹{{ order.total_amount|floatformat:2 }}
                 {% endif %}
             </p>
-            <p><strong>Coupon Discount:</strong> ₹{{ order.coupon_discount|floatformat:2 }}</p>
-            <p><strong>Coupon:</strong> {{ order.coupon.code|default:"N/A" }}</p>
+            <p><strong>Coupon Discount:</strong> 
+                {% if order.coupon and order.coupon.is_valid %}
+                    ₹{{ order.coupon_discount|floatformat:2 }}
+                {% else %}
+                    ₹0.00
+                {% endif %}
+            </p>
+            <p><strong>Coupon:</strong> 
+                {% if order.coupon and order.coupon.is_valid %}
+                    {{ order.coupon.code }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </p>
             <p><strong>Shipping Address:</strong> 
-                {{ order.shipping_address.full_address|default:"N/A" }}
+                {% if order.shipping_address and order.shipping_address.full_address %}
+                    {{ order.shipping_address.full_address }}
+                {% elif order.address_full_name %}
+                    {{ order.address_full_name }},
+                    {{ order.address_line1 }}{% if order.address_line2 %}, {{ order.address_line2 }}{% endif %},
+                    {{ order.address_city }}, {{ order.address_state }} {{ order.address_postal_code }},
+                    {{ order.address_country }}
+                    {% if order.address_phone %} (Phone: {{ order.address_phone }}) {% endif %}
+                {% else %}
+                    N/A
+                {% endif %}
             </p>
             {% if order.status in 'Pending,Processing' %}
                 <a href="{% url 'cart_and_orders_app:admin_cancel_order' order.order_id %}" class="btn btn-danger btn-sm mt-2">
