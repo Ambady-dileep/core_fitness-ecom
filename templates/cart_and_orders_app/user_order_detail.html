@@ -126,30 +126,14 @@
                                 </tfoot>
                             </table>
                         </div>
-
-                        <!-- Cancellation Form Fields -->
-                        {% if order.status in 'Pending,Processing,Confirmed' and order.items.exists %}
-                        <div class="mt-4">
-                            <h3 class="card-title">Cancel Items</h3>
-                            <div class="minimal-divider"></div>
-                            <div class="mb-3">
-                                <label for="id_reason" class="form-label">Reason for Cancellation</label>
-                                {{ cancel_item_form.reason|add_class:"form-select" }}
-                                {% if cancel_item_form.reason.errors %}
-                                    <div class="text-danger small">{{ cancel_item_form.reason.errors }}</div>
-                                {% endif %}
-                            </div>
-                            <div class="mb-3" id="other-reason-container" style="display: none;">
-                                <label for="id_other_reason" class="form-label">Details</label>
-                                {{ cancel_item_form.other_reason|add_class:"form-control" }}
-                                {% if cancel_item_form.other_reason.errors %}
-                                    <div class="text-danger small">{{ cancel_item_form.other_reason.errors }}</div>
-                                {% endif %}
-                            </div>
-                            <button type="submit" class="btn btn-danger" id="cancel-items-btn" disabled>Cancel Selected Items</button>
-                        </div>
-                        {% endif %}
                     </form>
+
+                    <!-- Cancel Items Button -->
+                    {% if order.status in 'Pending,Processing,Confirmed' and has_cancellable_items %}
+                    <div class="mt-4">
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelItemsModal" id="cancel-items-btn" disabled>Cancel Selected Items</button>
+                    </div>
+                    {% endif %}
 
                     <!-- Action Buttons -->
                     <div class="d-flex gap-2 mt-3">
@@ -157,7 +141,7 @@
                             <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#returnOrderModal">Return Order</button>
                         {% endif %}
                         {% if order.status in 'Pending,Processing,Confirmed' and order.items.exists %}
-                            <button class="btn btn-outline-light cancel-order-btn">Cancel Order</button>
+                            <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
                         {% endif %}
                         {% if order.payment_status == 'FAILED' and order.payment_method == 'CARD' and order.status == 'Pending' and not order.razorpay_payment_id %}
                             <button class="btn btn-outline-light retry-payment-btn" data-order-id="{{ order.order_id }}">Retry Payment</button>
@@ -232,6 +216,66 @@
         </div>
     </div>
 
+    <!-- Cancel Order Modal -->
+    <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">Cancel Order #{{ order.order_id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="cancel-order-form" method="POST" action="{% url 'cart_and_orders_app:user_cancel_order' order.order_id %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Reason for Cancellation (Optional)</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="4"></textarea>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">Cancel Order</button>
+                            <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancel Items Modal -->
+    <div class="modal fade" id="cancelItemsModal" tabindex="-1" aria-labelledby="cancelItemsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cancelItemsModalLabel">Cancel Selected Items</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="cancel-items-modal-form">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_reason" class="form-label">Reason for Cancellation</label>
+                            {{ cancel_item_form.reason|add_class:"form-select" }}
+                            {% if cancel_item_form.reason.errors %}
+                                <div class="text-danger small">{{ cancel_item_form.reason.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3" id="other-reason-container" style="display: none;">
+                            <label for="id_other_reason" class="form-label">Details</label>
+                            {{ cancel_item_form.other_reason|add_class:"form-control" }}
+                            {% if cancel_item_form.other_reason.errors %}
+                                <div class="text-danger small">{{ cancel_item_form.other_reason.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-danger" onclick="submitCancelItemsForm();">Cancel Selected Items</button>
+                            <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Return Order Modal -->
     <div class="modal fade" id="returnOrderModal" tabindex="-1" aria-labelledby="returnOrderModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -241,18 +285,25 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form method="post" action="{% url 'cart_and_orders_app:user_return_order' order.order_id %}">
+                    <form method="POST" action="{% url 'cart_and_orders_app:user_return_order' order.order_id %}">
                         {% csrf_token %}
                         <div class="mb-3">
+                            <label class="form-label">Items to Return (leave unchecked for full order return)</label>
+                            {{ return_form.items }}
+                            {% if return_form.items.errors %}
+                                <div class="text-danger small">{{ return_form.items.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
                             <label for="{{ return_form.reason.id_for_label }}" class="form-label">Reason</label>
-                            {% render_field return_form.reason class="form-control" rows="3" placeholder="Enter reason" %}
+                            {{ return_form.reason|add_class:"form-control" }}
                             {% if return_form.reason.errors %}
                                 <div class="text-danger small">{{ return_form.reason.errors }}</div>
                             {% endif %}
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">Submit</button>
-                            <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Submit Return</button>
+                            <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
                         </div>
                     </form>
                 </div>
@@ -262,192 +313,35 @@
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.order-wrapper {
-    background: var(--bg);
-    border-radius: 4px;
-    transition: all 0.3s ease;
-}
-
-.breadcrumb {
-    font-size: 0.85rem;
-    background: transparent;
-}
-
-.breadcrumb-item a {
-    color: var(--light-text);
-    text-decoration: none;
-}
-
-.breadcrumb-item a:hover {
-    color: var(--accent);
-}
-
-.card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.03);
-}
-
-.card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 15px 30px rgba(0,0,0,0.08);
-}
-
-.card-body {
-    padding: 1.5rem;
-}
-
-.minimal-text {
-    font-size: 0.9rem;
-    color: var(--text);
-    line-height: 1.6;
-}
-
-.table {
-    font-size: 0.9rem;
-    color: var(--text);
-}
-
-.table th, .table td {
-    padding: 0.75rem;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--border);
-}
-
-.table thead th {
-    border-bottom: 2px solid var(--border);
-    color: var(--text);
-    font-weight: 400;
-    text-transform: uppercase;
-    font-size: 0.85rem;
-}
-
-.table tfoot td {
-    font-weight: 500;
-}
-
-.table-secondary {
-    background-color: var(--light-bg);
-}
-
-.status-pending { background: #f39c12; }
-.status-processing { background: #e67e22; }
-.status-confirmed { background: #8e44ad; }
-.status-shipped { background: #3498db; }
-.status-out-for-delivery { background: #2980b9; }
-.status-delivered { background: #27ae60; }
-.status-cancelled { background: #e74c3c; }
-
-.progress-steps {
-    display: flex;
-    justify-content: space-between;
-    position: relative;
-    margin-top: 1.5rem;
-}
-
-.progress-line {
-    position: absolute;
-    top: 15px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--border);
-    z-index: 1;
-}
-
-.progress-step {
-    flex: 1;
-    text-align: center;
-    position: relative;
-    z-index: 2;
-}
-
-.progress-step.active .step-icon {
-    background: var(--accent);
-    color: #fff;
-}
-
-.step-icon {
-    width: 32px;
-    height: 32px;
-    background: var(--light-bg);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-}
-
-.form-label {
-    font-size: 0.9rem;
-    color: var(--text);
-}
-
-.form-control, .form-select {
-    font-size: 0.9rem;
-    border-radius: 2px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-}
-
-.form-control:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.2);
-}
-
-.text-success {
-    color: #27ae60 !important;
-}
-
-.text-muted {
-    color: var(--light-text) !important;
-}
-
-.btn-danger {
-    background-color: #e74c3c;
-    border-color: #e74c3c;
-    color: #fff;
-}
-
-.btn-danger:hover {
-    background-color: #c0392b;
-    border-color: #c0392b;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-
-@media (max-width: 991px) {
-    .order-wrapper {
-        padding: 1rem;
-    }
-    .card-body {
-        padding: 1rem;
-    }
-    .table th, .table td {
-        padding: 0.5rem;
-    }
-}
-</style>
-{% endblock %}
-
 {% block extra_js %}
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Utility function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
     // Handle Cancel Items Form
     const cancelItemsForm = document.getElementById('cancel-items-form');
     const cancelItemsBtn = document.getElementById('cancel-items-btn');
     const checkboxes = document.querySelectorAll('.cancel-item-checkbox');
     const reasonSelect = document.getElementById('id_reason');
+    const otherReasonInput = document.getElementById('id_other_reason');
     const otherReasonContainer = document.getElementById('other-reason-container');
 
-    if (cancelItemsForm && cancelItemsBtn && reasonSelect && otherReasonContainer) {
+    if (cancelItemsForm && cancelItemsBtn && checkboxes.length > 0) {
         // Enable/disable cancel button based on checkbox selection
         function updateCancelButton() {
             const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
@@ -458,106 +352,119 @@ document.addEventListener('DOMContentLoaded', function() {
             checkbox.addEventListener('change', updateCancelButton);
         });
 
-        // Show/hide other reason textarea
+        // Initial check
+        updateCancelButton();
+    } else if (cancelItemsBtn) {
+        // Hide button if no cancellable items
+        cancelItemsBtn.style.display = 'none';
+    }
+
+    // Show/hide other reason textarea
+    if (reasonSelect && otherReasonContainer) {
         function updateOtherReasonVisibility() {
             otherReasonContainer.style.display = reasonSelect.value === 'Other' ? 'block' : 'none';
         }
 
         reasonSelect.addEventListener('change', updateOtherReasonVisibility);
         updateOtherReasonVisibility();
-
-        // Handle form submission via AJAX
-        cancelItemsForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            // Validate that at least one item is selected
-            const selectedItems = Array.from(checkboxes).filter(cb => cb.checked);
-            if (selectedItems.length === 0) {
-                window.showAlert('Please select at least one item to cancel.', 'warning');
-                return;
-            }
-
-            if (confirm('Are you sure you want to cancel the selected items?')) {
-                const formData = new FormData(cancelItemsForm);
-                selectedItems.forEach(item => {
-                    formData.append('items', item.value);
-                });
-
-                fetch(cancelItemsForm.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        window.showAlert(data.message, 'success');
-                        setTimeout(() => {
-                            if (data.redirect) {
-                                window.location.href = data.redirect;
-                            } else {
-                                window.location.reload();
-                            }
-                        }, 1000);
-                    } else {
-                        let errorMessage = data.message || 'Failed to cancel the items.';
-                        if (errorMessage.includes('cannot be cancelled')) {
-                            errorMessage = 'The selected items cannot be cancelled because the order is not in a cancellable status (must be Pending, Processing, or Confirmed).';
-                        } else if (data.errors) {
-                            errorMessage = Object.values(data.errors).flat().join(' ');
-                        }
-                        window.showAlert(errorMessage, 'danger');
-                    }
-                })
-                .catch(error => {
-                    window.showAlert('An error occurred while cancelling the items.', 'danger');
-                    console.error('Cancel items error:', error);
-                });
-            }
-        });
     }
 
-    // Handle Cancel Order
-    document.querySelectorAll('.cancel-order-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const reason = prompt('Please provide a reason for cancelling the order:');
-            if (reason === null || reason.trim() === '') {
-                window.showAlert('Please provide a valid reason.', 'warning');
-                return;
-            }
+    // Function to submit the cancel items form
+    window.submitCancelItemsForm = function() {
+        if (!reasonSelect || !reasonSelect.value) {
+            window.showAlert('Please select a reason for cancellation.', 'warning');
+            return;
+        }
 
-            if (confirm(`Are you sure you want to cancel Order #{{ order.order_id }}?`)) {
-                const formData = new FormData();
-                formData.append('reason', reason);
-                formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+        if (reasonSelect.value === 'Other' && (!otherReasonInput || !otherReasonInput.value.trim())) {
+            window.showAlert('Please provide details for "Other" reason.', 'warning');
+            return;
+        }
 
-                fetch("{% url 'cart_and_orders_app:user_cancel_order' order.order_id %}", {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        window.showAlert(data.message, 'success');
-                        setTimeout(() => window.location.reload(), 1000);
-                    } else {
-                        window.showAlert(data.message || 'Failed to cancel the order.', 'danger');
-                    }
-                })
-                .catch(error => {
-                    window.showAlert('An error occurred while cancelling the order.', 'danger');
-                    console.error('Cancel order error:', error);
-                });
-            }
+        const selectedItems = Array.from(checkboxes).filter(cb => cb.checked);
+        if (selectedItems.length === 0) {
+            window.showAlert('Please select at least one item to cancel.', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        selectedItems.forEach(item => {
+            formData.append('items', item.value);
         });
-    });
+        formData.append('reason', reasonSelect.value);
+        if (reasonSelect.value === 'Other' && otherReasonInput) {
+            formData.append('other_reason', otherReasonInput.value);
+        }
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+        fetch(cancelItemsForm.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.showAlert('Selected items cancelled successfully. Refund credited to your wallet.', 'success');
+                setTimeout(() => {
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        window.location.reload();
+                    }
+                }, 1000);
+            } else {
+                let errorMessage = data.message || 'Failed to cancel the items.';
+                if (data.errors) {
+                    errorMessage = Object.values(data.errors).flat().join(' ');
+                }
+                window.showAlert(errorMessage, 'danger');
+            }
+        })
+        .catch(error => {
+            window.showAlert('An error occurred while cancelling the items.', 'danger');
+            console.error('Cancel items error:', error);
+        });
+
+        // Close the modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('cancelItemsModal'));
+        if (modal) {
+            modal.hide();
+        }
+    };
+
+    // Handle Cancel Order Form
+    const cancelOrderForm = document.getElementById('cancel-order-form');
+    if (cancelOrderForm) {
+        cancelOrderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(cancelOrderForm);
+
+            fetch(cancelOrderForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.showAlert(data.message, 'success');
+                    setTimeout(() => window.location.href = '{% url 'cart_and_orders_app:user_order_list' %}', 1000);
+                } else {
+                    window.showAlert(data.message || 'Failed to cancel the order.', 'danger');
+                }
+            })
+            .catch(error => {
+                window.showAlert('An error occurred while cancelling the order.', 'danger');
+                console.error('Cancel order error:', error);
+            });
+        });
+    }
 
     // Handle Retry Payment
     document.querySelectorAll('.retry-payment-btn').forEach(button => {
@@ -565,123 +472,121 @@ document.addEventListener('DOMContentLoaded', function() {
             const orderId = this.getAttribute('data-order-id');
             const markFailedUrl = `/orders/${orderId}/mark-payment-failed/`;
 
-            if (confirm(`Retry payment for Order #${orderId}?`)) {
-                fetch(`{% url 'cart_and_orders_app:retry_payment' 'ORDER_ID' %}`.replace('ORDER_ID', orderId), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ order_id: orderId })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const options = {
-                            key: data.key,
-                            amount: data.amount,
-                            currency: data.currency,
-                            name: "Core Fitness",
-                            description: data.description,
-                            order_id: data.razorpay_order_id,
-                            callback_url: data.callback_url,
-                            prefill: {
-                                name: data.prefill.name,
-                                email: data.prefill.email,
-                                contact: data.prefill.contact
-                            },
-                            theme: { color: "#ff0000" },
-                            handler: function(response) {
-                                fetch(data.callback_url, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/x-www-form-urlencoded',
-                                        'X-CSRFToken': getCookie('csrftoken'),
-                                        'X-Requested-With': 'XMLHttpRequest'
-                                    },
-                                    body: new URLSearchParams({
-                                        razorpay_payment_id: response.razorpay_payment_id,
-                                        razorpay_order_id: response.razorpay_order_id,
-                                        razorpay_signature: response.razorpay_signature
-                                    })
-                                })
-                                .then(res => res.json())
-                                .then(callbackData => {
-                                    if (callbackData.success) {
-                                        window.showAlert(callbackData.message, 'success');
-                                        setTimeout(() => window.location.href = callbackData.redirect, 1000);
-                                    } else {
-                                        window.showAlert(callbackData.message, 'danger');
-                                        setTimeout(() => window.location.href = callbackData.redirect, 1000);
-                                    }
-                                })
-                                .catch(error => {
-                                    window.showAlert('An error occurred during payment processing.', 'danger');
-                                    console.error('Callback error:', error);
-                                });
-                            },
-                            modal: {
-                                ondismiss: function() {
-                                    fetch(markFailedUrl, {
-                                        method: 'POST',
-                                        headers: {
-                                            'X-CSRFToken': getCookie('csrftoken'),
-                                            'X-Requested-With': 'XMLHttpRequest'
-                                        }
-                                    })
-                                    .then(res => res.json())
-                                    .then(result => {
-                                        if (result.success) {
-                                            window.showAlert('You cancelled the payment. You can retry again later.', 'warning');
-                                            setTimeout(() => window.location.reload(), 1000);
-                                        } else {
-                                            window.showAlert('Failed to update payment status.', 'danger');
-                                        }
-                                    })
-                                    .catch(error => {
-                                        window.showAlert('An error occurred while updating payment status.', 'danger');
-                                        console.error('Mark payment failed error:', error);
-                                    });
-                                }
-                            }
-                        };
-                        const rzp = new Razorpay(options);
-                        rzp.on('payment.failed', function(response) {
-                            fetch(markFailedUrl, {
+            fetch(`{% url 'cart_and_orders_app:retry_payment' 'ORDER_ID' %}`.replace('ORDER_ID', orderId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ order_id: orderId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const options = {
+                        key: data.key,
+                        amount: data.amount,
+                        currency: data.currency,
+                        name: "Core Fitness",
+                        description: data.description,
+                        order_id: data.razorpay_order_id,
+                        callback_url: data.callback_url,
+                        prefill: {
+                            name: data.prefill.name,
+                            email: data.prefill.email,
+                            contact: data.prefill.contact
+                        },
+                        theme: { color: "#ff0000" },
+                        handler: function(response) {
+                            fetch(data.callback_url, {
                                 method: 'POST',
                                 headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
                                     'X-CSRFToken': getCookie('csrftoken'),
                                     'X-Requested-With': 'XMLHttpRequest'
-                                }
+                                },
+                                body: new URLSearchParams({
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_signature: response.razorpay_signature
+                                })
                             })
                             .then(res => res.json())
-                            .then(result => {
-                                if (result.success) {
-                                    window.showAlert('Payment failed. Please try again.', 'danger');
-                                    setTimeout(() => window.location.href = `/order/${orderId}/failure/`, 1000);
+                            .then(callbackData => {
+                                if (callbackData.success) {
+                                    window.showAlert(callbackData.message, 'success');
+                                    setTimeout(() => window.location.href = callbackData.redirect, 1000);
                                 } else {
-                                    window.showAlert('Failed to update payment status.', 'danger');
+                                    window.showAlert(callbackData.message, 'danger');
+                                    setTimeout(() => window.location.href = callbackData.redirect, 1000);
                                 }
                             })
                             .catch(error => {
-                                window.showAlert('An error occurred while updating payment status.', 'danger');
-                                console.error('Mark payment failed error:', error);
+                                window.showAlert('An error occurred during payment processing.', 'danger');
+                                console.error('Callback error:', error);
                             });
-                        });
-                        rzp.open();
-                    } else {
-                        window.showAlert(data.message || 'Failed to initiate retry payment.', 'danger');
-                        if (data.redirect) {
-                            setTimeout(() => window.location.href = data.redirect, 1000);
+                        },
+                        modal: {
+                            ondismiss: function() {
+                                fetch(markFailedUrl, {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-CSRFToken': getCookie('csrftoken'),
+                                        'X-Requested-With': 'XMLHttpRequest'
+                                    }
+                                })
+                                .then(res => res.json())
+                                .then(result => {
+                                    if (result.success) {
+                                        window.showAlert('You cancelled the payment. You can retry again later.', 'warning');
+                                        setTimeout(() => window.location.reload(), 1000);
+                                    } else {
+                                        window.showAlert('Failed to update payment status.', 'danger');
+                                    }
+                                })
+                                .catch(error => {
+                                    window.showAlert('An error occurred while updating payment status.', 'danger');
+                                    console.error('Mark payment failed error:', error);
+                                });
+                            }
                         }
+                    };
+                    const rzp = new Razorpay(options);
+                    rzp.on('payment.failed', function(response) {
+                        fetch(markFailedUrl, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken'),
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(res => res.json())
+                        .then(result => {
+                            if (result.success) {
+                                window.showAlert('Payment failed. Please try again.', 'danger');
+                                setTimeout(() => window.location.href = `/order/${orderId}/failure/`, 1000);
+                            } else {
+                                window.showAlert('Failed to update payment status.', 'danger');
+                            }
+                        })
+                        .catch(error => {
+                            window.showAlert('An error occurred while updating payment status.', 'danger');
+                            console.error('Mark payment failed error:', error);
+                        });
+                    });
+                    rzp.open();
+                } else {
+                    window.showAlert(data.message || 'Failed to initiate retry payment.', 'danger');
+                    if (data.redirect) {
+                        setTimeout(() => window.location.href = data.redirect, 1000);
                     }
-                })
-                .catch(error => {
-                    window.showAlert('An error occurred while initiating retry payment.', 'danger');
-                    console.error('Retry payment error:', error);
-                });
-            }
+                }
+            })
+            .catch(error => {
+                window.showAlert('An error occurred while initiating retry payment.', 'danger');
+                console.error('Retry payment error:', error);
+            });
         });
     });
 });

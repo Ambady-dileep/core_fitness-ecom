@@ -1577,155 +1577,122 @@ def user_order_list(request):
     }
     return render(request, 'cart_and_orders_app/user_order_list.html', context)
 
-
 @login_required
 def user_order_detail(request, order_id):
-    order = get_object_or_404(
-        Order.objects.select_related('user', 'coupon', 'shipping_address')
-                    .prefetch_related('items__variant__product'),
-        order_id=order_id,
-        user=request.user
-    )
-    subtotal = sum(item.price * item.quantity for item in order.items.all())
-    total_offer_discount = sum(
-        (item.variant.best_price['original_price'] - item.price) * item.quantity
-        for item in order.items.all()
-    )
-    shipping_cost = Decimal('0.00')
-    
-    # Get coupon details
-    coupon_discount = order.coupon_discount or Decimal('0.00')
-    coupon_code = None
-    if order.coupon:
-        coupon_code = order.coupon.code
-        # Recalculate discount if coupon_discount is 0 but coupon exists
-        if coupon_discount == 0 and order.coupon.is_valid():
-            _, coupon_discount = order.coupon.apply_to_subtotal(subtotal)
-    else:
-        # Fallback to UserCoupon if order.coupon is not set
-        user_coupon = UserCoupon.objects.filter(order=order, is_used=True).select_related('coupon').first()
-        if user_coupon and user_coupon.coupon.is_valid():
-            coupon_code = user_coupon.coupon.code
-            _, coupon_discount = user_coupon.coupon.apply_to_subtotal(subtotal)
-
-    cancel_item_form = OrderItemCancellationForm()
-    return_form = ReturnRequestForm(order=order)
-    
-    # Compute cancelled items and their count
+    order = get_object_or_404(Order, order_id=order_id, user=request.user)
     cancelled_items = order.cancellations.filter(item__isnull=False)
     cancelled_items_count = cancelled_items.count()
-
+    
+    # Calculate subtotal
+    subtotal = order.get_subtotal()
+    
+    # Calculate coupon discount
+    coupon_discount = order.coupon_discount if order.coupon else Decimal('0.00')
+    
+    # Calculate shipping cost
+    shipping_cost = Decimal('0.00')  # Assuming free shipping as per template
+    
+    # Check if there are cancellable items
+    has_cancellable_items = order.items.filter(cancellations__isnull=True).exists()
+    
+    # Initialize forms
+    cancel_item_form = OrderItemCancellationForm(order=order)
+    return_form = ReturnRequestForm(order=order)
+    
     context = {
         'order': order,
-        'subtotal': float(subtotal),
-        'total_offer_discount': float(total_offer_discount),
-        'shipping_cost': float(shipping_cost),
-        'coupon_discount': float(coupon_discount),
-        'coupon_code': coupon_code,  # New context variable for coupon code
-        'return_form': return_form,
-        'cancel_item_form': cancel_item_form,
-        'is_free_delivery': order.total_amount > 0,
         'cancelled_items': cancelled_items,
         'cancelled_items_count': cancelled_items_count,
+        'subtotal': subtotal,
+        'coupon_discount': coupon_discount,
+        'shipping_cost': shipping_cost,
+        'cancel_item_form': cancel_item_form,
+        'return_form': return_form,
+        'has_cancellable_items': has_cancellable_items,
     }
+    
     return render(request, 'cart_and_orders_app/user_order_detail.html', context)
 
+
 @login_required
-@require_POST
 def user_cancel_order(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-
-    # Check if the order is in a cancellable status
-    if order.status not in ['Pending', 'Processing', 'Confirmed']:
-        return JsonResponse({
-            'success': False,
-            'message': f"Order {order.order_id} cannot be cancelled in its current status ({order.status})."
-        }, status=400)
-
-    # Check if the payment status is valid for cancellation
-    if order.payment_status not in ['PAID', 'PENDING']:
-        return JsonResponse({
-            'success': False,
-            'message': f"Order {order.order_id} cannot be cancelled because the payment status is {order.payment_status}."
-        }, status=400)
-
-    # Process the cancellation
-    form = OrderCancellationForm(request.POST)
-    if form.is_valid():
-        reason = form.cleaned_data.get('reason', '')
-        try:
-            order.cancel_order(reason=reason)
-            return JsonResponse({
-                'success': True,
-                'message': f"Order {order.order_id} has been successfully cancelled."
-            })
-        except ValidationError as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-    else:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid cancellation form data.'
-        }, status=400)
+    
+    if request.method == 'POST':
+        form = OrderCancellationForm(request.POST)
+        if form.is_valid():
+            try:
+                reason = form.cleaned_data.get('reason')
+                order.cancel_order(reason=reason)
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Order cancelled successfully.',
+                        'redirect': reverse('cart_and_orders_app:user_order_list')
+                    })
+                messages.success(request, "Order cancelled successfully.")
+                return redirect('cart_and_orders_app:user_order_list')
+            except Exception as e:
+                logger.error(f"Error cancelling order {order_id}: {str(e)}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'message': str(e)
+                    }, status=400)
+                messages.error(request, str(e))
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid cancellation data.',
+                    'errors': form.errors
+                }, status=400)
+            messages.error(request, "Invalid cancellation data.")
+    
+    return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 @login_required
-@require_POST
 def user_cancel_order_item(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
-    if order.status not in ['Pending', 'Processing', 'Confirmed']:
-        return JsonResponse({
-            'success': False,
-            'message': 'Items cannot be cancelled at this stage (order must be in Pending, Processing, or Confirmed status).'
-        }, status=400)
     
-    form = OrderItemCancellationForm(request.POST, order=order)
-    if not form.is_valid():
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid cancellation data provided.',
-            'errors': form.errors
-        }, status=400)
-    
-    try:
-        with transaction.atomic():
+    if request.method == 'POST':
+        form = OrderItemCancellationForm(request.POST, order=order)
+        if form.is_valid():
             items = form.cleaned_data['items']
             reason = form.cleaned_data['combined_reason']
-            cancelled_items = []
-            
-            for order_item in items:
-                if order_item.order != order:
-                    raise ValidationError(f"Item {order_item.id} does not belong to order {order.order_id}.")
-                order.cancel_item(order_item, reason=reason)
-                cancelled_items.append(order_item.variant.product.product_name)
-            
-            cancelled_items_str = ", ".join(cancelled_items)
-            
-            response_data = {
-                'success': True,
-                'message': f"Items cancelled successfully: {cancelled_items_str}.",
-            }
-            if order.status == 'Cancelled':
-                response_data['redirect'] = reverse('cart_and_orders_app:user_order_list')
-            else:
-                response_data['redirect'] = reverse('cart_and_orders_app:user_order_detail', args=[order.order_id])
-            
-            return JsonResponse(response_data)
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'message': str(e)
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': 'An error occurred while cancelling the items.'
-        }, status=500)
+            try:
+                for item in items:
+                    order.cancel_item(item, reason=reason)
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Selected items cancelled successfully.',
+                        'redirect': reverse('cart_and_orders_app:user_order_detail', kwargs={'order_id': order.order_id})
+                    })
+                messages.success(request, "Selected items cancelled successfully.")
+                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+            except ValidationError as e:
+                logger.error(f"Error cancelling items for order {order_id}: {str(e)}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'message': str(e)
+                    }, status=400)
+                messages.error(request, str(e))
+        else:
+            logger.warning(f"Invalid form data for item cancellation in order {order_id}: {form.errors}")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid cancellation data.',
+                    'errors': form.errors
+                }, status=400)
+            messages.error(request, "Invalid cancellation data.")
+    
+    return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 
 @login_required
-@require_http_methods(["GET", "POST"])
 def user_return_order(request, order_id):
     order = get_object_or_404(Order, order_id=order_id, user=request.user)
     
@@ -1733,64 +1700,54 @@ def user_return_order(request, order_id):
         form = ReturnRequestForm(request.POST, order=order)
         if form.is_valid():
             try:
-                # Create the return request
-                return_request = form.save(commit=False)
-                return_request.order = order
-                return_request.user = request.user
-                return_request.is_verified = False  # Admin can verify later
-                return_request.refund_processed = False  # Will be set to True after refund
+                items = form.cleaned_data['items']
+                reason = form.cleaned_data['reason']
                 
-                # Calculate refund amount (full order, as no item selection in modal)
-                refund_amount = order.total_amount
-                # Adjust for coupon discount if applied
-                if order.coupon_discount > 0:
-                    user_coupon = UserCoupon.objects.filter(order=order, is_used=True).first()
-                    if user_coupon and user_coupon.coupon:
-                        coupon = user_coupon.coupon
-                        _, coupon_discount = coupon.apply_to_subtotal(order.get_subtotal())
-                        refund_amount -= coupon_discount
+                # Calculate refund amount
+                refund_amount = order.get_item_refund(items)
+                if refund_amount <= 0:
+                    logger.warning(f"No refundable amount for return request in order {order_id}")
+                    refund_amount = Decimal('0.00')
                 
-                # Ensure refund amount is non-negative
-                refund_amount = max(Decimal('0.00'), refund_amount.quantize(Decimal('0.01')))
-                
-                # Save refund amount to return request
-                return_request.refund_amount = refund_amount
-                return_request.save()
-                # Add all order items to the return request (since no item selection)
-                return_request.items.set(order.items.all())
-                
-                # Credit refund to wallet if amount is positive and order is paid
-                if refund_amount > 0 and order.payment_status == 'PAID':
-                    wallet, created = Wallet.objects.get_or_create(user=request.user)
-                    wallet.add_refunded_funds(
-                        amount=refund_amount,
-                        description=f"Refund for order {order.order_id}"
-                    )
-                    return_request.refund_processed = True
-                    return_request.save()
-                    logger.info(
-                        f"Refund of ₹{refund_amount} credited to wallet for user {request.user.username} "
-                        f"for order {order.order_id}"
-                    )
-                
-                # Update order status to Returned
-                order.status = 'Returned'
-                order.save()
-                
-                messages.success(request, "Return request submitted successfully. Refund has been credited to your wallet.")
-                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
-            
-            except Exception as e:
-                logger.error(
-                    f"Error processing return for order {order.order_id} by user {request.user.username}: {str(e)}"
+                # Create return request
+                return_request = ReturnRequest.objects.create(
+                    order=order,
+                    reason=reason,
+                    refund_amount=refund_amount
                 )
-                messages.error(request, "An error occurred while processing your return request. Please try again.")
+                if items:
+                    return_request.items.set(items)
+                else:
+                    return_request.items.set(order.items.all())
+                
+                logger.info(f"Return request created for order {order_id}, refund_amount={refund_amount}")
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Return request submitted successfully.',
+                        'redirect': reverse('cart_and_orders_app:user_order_detail', kwargs={'order_id': order.order_id})
+                    })
+                messages.success(request, "Return request submitted successfully.")
+                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+            except Exception as e:
+                logger.error(f"Error creating return request for order {order_id}: {str(e)}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'message': str(e)
+                    }, status=400)
+                messages.error(request, str(e))
         else:
-            messages.error(request, "Please correct the errors in the form.")
-    else:
-        form = ReturnRequestForm(order=order)
+            logger.warning(f"Invalid form data for return request in order {order_id}: {form.errors}")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Invalid return request data.',
+                    'errors': form.errors
+                }, status=400)
+            messages.error(request, "Invalid return request data.")
     
-    # Since no separate template, redirect to order detail on GET
     return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
 
 

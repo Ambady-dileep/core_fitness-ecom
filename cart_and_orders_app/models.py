@@ -218,62 +218,50 @@ class Order(models.Model):
     
 
     def get_item_refund(self, items):
-        """Calculate the refund amount for one or more order items."""
-        from decimal import Decimal
         refund_amount = Decimal('0.00')
-        
-        # Handle single OrderItem by wrapping it in a list
         if isinstance(items, OrderItem):
             items = [items]
-        elif not items:  # Handle empty input
+        elif not items:
             return refund_amount
-
-        # If no coupon is applied, refund the full item total
         if not self.coupon or not self.coupon_discount:
             return sum(item.total_price for item in items).quantize(Decimal('0.01'))
-
-        # If coupon is applied, calculate proportional coupon discount
         total_coupon_discount = self.coupon_discount or Decimal('0.00')
         total_order_items = sum(item.total_price for item in self.items.all())
-
         for item in items:
             if total_order_items > 0:
                 item_proportion = item.total_price / total_order_items
                 coupon_share = total_coupon_discount * item_proportion
                 refund_amount += item.total_price - coupon_share
-
         return refund_amount.quantize(Decimal('0.01'))
 
+    
     def cancel_item(self, order_item, reason=None):
-
         if self.status not in ['Pending', 'Processing', 'Confirmed']:
             raise ValidationError(f"Order {self.order_id} cannot have items cancelled in status {self.status}.")
-        
+        if order_item.order != self:
+            raise ValidationError(f"Item {order_item.id} does not belong to order {self.order_id}.")
         if order_item.cancellations.exists():
-            raise ValidationError(f"Item {order_item.id} in order {self.order_id} is already cancelled.")
+            raise ValidationError(f"Item {order_item.variant.product.product_name} is already cancelled.")
         
-        if self.payment_method == 'CARD' and self.payment_status != 'PAID':
-            raise ValidationError(f"Cannot refund item in order {self.order_id}: Payment status is {self.payment_status}, expected PAID.")
-
         with transaction.atomic():
-            # Restore stock for the item
+            # Restore stock
             variant = order_item.variant
             variant.stock += order_item.quantity
             variant.save()
-
-            # Calculate refund amount for the item
+            logger.info(f"Restored {order_item.quantity} stock for variant {variant.id} in order {self.order_id}")
+            
+            # Calculate refund amount
             refund_amount = self.get_item_refund(order_item)
             if refund_amount <= 0:
-                logger.warning(f"No refundable amount for item {order_item.id} in order {self.order_id}")
+                logger.warning(f"No refundable amount calculated for item {order_item.id} in order {self.order_id}")
                 refund_amount = Decimal('0.00')
-
-            # Check total refunded amount against original payment
+            else:
+                logger.info(f"Calculated refund amount {refund_amount} for item {order_item.id} in order {self.order_id}")
+            
+            # Check total refunded amount
             prior_refunded = sum(c.refunded_amount for c in self.cancellations.all())
             total_proposed_refunded = prior_refunded + refund_amount
-            # Use total_amount as the actual amount paid (after coupon)
-            original_payment = self.total_amount
-
-            # Ensure refund doesn't exceed payment
+            original_payment = self.total_amount + prior_refunded
             if total_proposed_refunded > original_payment:
                 logger.warning(
                     f"Adjusting refund for item {order_item.id} in order {self.order_id}: "
@@ -282,36 +270,41 @@ class Order(models.Model):
                 refund_amount = original_payment - prior_refunded
                 if refund_amount < 0:
                     refund_amount = Decimal('0.00')
-
+                    logger.info(f"Adjusted refund amount to {refund_amount} for item {order_item.id} in order {self.order_id}")
+            
             # Process refund
             if refund_amount > 0:
-                if self.payment_method == 'CARD' and self.payment_status == 'PAID' and self.razorpay_payment_id and not self.coupon:
-                    # Refund via Razorpay only if no coupon (per requirement)
-                    try:
-                        self.process_razorpay_refund(refund_amount, self.razorpay_payment_id)
-                    except ValidationError as e:
-                        logger.warning(f"Razorpay refund failed for item {order_item.id}: {str(e)}. Redirecting to wallet.")
-                        wallet, created = Wallet.objects.get_or_create(user=self.user)
-                        wallet.add_funds(refund_amount)
-                        WalletTransaction.objects.create(
-                            wallet=wallet,
-                            amount=refund_amount,
-                            transaction_type='REFUND',
-                            description=f"Refund for cancelled item {order_item.variant} in order {self.order_id} (Razorpay failed)"
-                        )
-                        logger.info(f"Refunded {refund_amount} to wallet for item {order_item.id} due to Razorpay failure")
+                if self.payment_status != 'PAID':
+                    logger.warning(f"Skipping refund for item {order_item.id} in order {self.order_id}: payment_status={self.payment_status}")
                 else:
-                    # Refund to wallet for COD, WALLET, or when coupon is applied
+                    logger.info(f"Processing refund of {refund_amount} for item {order_item.id} in order {self.order_id}")
                     wallet, created = Wallet.objects.get_or_create(user=self.user)
-                    wallet.add_funds(refund_amount)
-                    WalletTransaction.objects.create(
-                        wallet=wallet,
-                        amount=refund_amount,
-                        transaction_type='REFUND',
-                        description=f"Refund for cancelled item {order_item.variant} in order {self.order_id}"
-                    )
-                    logger.info(f"Refunded {refund_amount} to wallet for item {order_item.id} in order {self.order_id}")
-
+                    logger.debug(f"Wallet for user {self.user.username}: balance={wallet.balance}, created={created}")
+                    try:
+                        if self.payment_method == 'CARD' and self.razorpay_payment_id:
+                            try:
+                                self.process_razorpay_refund(refund_amount, self.razorpay_payment_id)
+                                logger.info(f"Razorpay refund processed for item {order_item.id} in order {self.order_id}, amount={refund_amount}")
+                            except ValidationError as e:
+                                logger.warning(f"Razorpay refund failed for item {order_item.id}: {str(e)}. Falling back to wallet refund.")
+                                raise
+                        else:
+                            raise ValidationError("Non-Razorpay payment, proceeding with wallet refund")
+                    except Exception as e:
+                        # Fallback to wallet refund
+                        logger.info(f"Falling back to wallet refund for item {order_item.id}: {str(e)}")
+                        try:
+                            wallet.add_refunded_funds(
+                                amount=refund_amount,
+                                description=f"Refund for cancelled item {order_item.variant.product.product_name} in order {self.order_id}"
+                            )
+                            logger.info(f"Successfully refunded {refund_amount} to wallet for item {order_item.id} in order {self.order_id}")
+                        except Exception as wallet_error:
+                            logger.error(f"Failed to refund {refund_amount} to wallet for item {order_item.id}: {str(wallet_error)}")
+                            raise ValidationError(f"Refund processing failed: {str(wallet_error)}")
+            else:
+                logger.info(f"No refund processed for item {order_item.id} in order {self.order_id}: refund_amount={refund_amount}")
+            
             # Create cancellation record
             OrderCancellation.objects.create(
                 order=self,
@@ -320,14 +313,12 @@ class Order(models.Model):
                 variant_flavor=order_item.variant.flavor,
                 variant_size_weight=order_item.variant.size_weight,
                 quantity=order_item.quantity,
-                reason=reason,
-                refunded_amount=refund_amount
+                refunded_amount=refund_amount,
+                reason=reason
             )
-
-            # Delete the canceled item
-            order_item.delete()
-
-            # Recalculate order totals and check coupon validity
+            logger.info(f"Created cancellation record for item {order_item.id} in order {self.order_id}")
+            
+            # Recalculate order totals
             self.needs_recalculation = True
             if self.coupon:
                 subtotal = self.get_subtotal()
@@ -342,103 +333,54 @@ class Order(models.Model):
                         logger.warning(f"No UserCoupon found for coupon {self.coupon.code} in order {self.order_id}")
                         self.coupon = None
                         self.coupon_discount = Decimal('0.00')
-
-            # If no items remain, mark order as Cancelled
-            if not self.items.exists():
+            
+            # Update order status and totals
+            if not self.items.filter(cancellations__isnull=True).exists():
                 self.status = 'Cancelled'
                 self.total_amount = Decimal('0.00')
+                logger.info(f"Order {self.order_id} fully cancelled due to no remaining items")
             else:
-                # Recalculate total_amount
                 self.total_amount = self.get_subtotal() - (self.coupon_discount if self.coupon else Decimal('0.00'))
                 self.total_amount = max(self.total_amount, Decimal('0.00'))
-
+                logger.info(f"Updated order {self.order_id} total to {self.total_amount}")
+            
             self.save()
-            logger.info(f"Item {order_item.id} cancelled for order {self.order_id}, refunded {refund_amount}")
+            logger.info(f"Item {order_item.id} cancellation completed for order {self.order_id}, refunded {refund_amount}")
+
 
     def cancel_order(self, reason=None):
-        # Check if the order status allows cancellation
         if self.status not in ['Pending', 'Processing', 'Confirmed']:
             raise ValidationError(f"Order {self.order_id} cannot be cancelled in status {self.status}.")
-
-        # Handle payment status
-        if self.payment_status == 'PENDING':
-            logger.info(f"Order {self.order_id} is in PENDING payment status. No refund will be processed.")
-        elif self.payment_status == 'FAILED':
-            logger.info(f"Order {self.order_id} is in FAILED payment status. No refund will be processed.")
-        elif self.payment_status == 'PAID':
-            logger.info(f"Order {self.order_id} is in PAID payment status. Processing refund.")
-        else:
-            raise ValidationError(f"Order {self.order_id} has an invalid payment status: {self.payment_status}.")
-
+        
         with transaction.atomic():
-            # Restore stock for all items
             self.restore_stock()
-
-            # Calculate refundable amount
             refund_amount = Decimal('0.00')
+            
             if self.payment_status == 'PAID':
                 prior_refunded = sum(c.refunded_amount for c in self.cancellations.all())
                 refund_amount = self.total_amount - prior_refunded
                 if refund_amount <= 0:
                     logger.warning(f"No refundable amount for order {self.order_id}, possibly due to prior cancellations.")
                     refund_amount = Decimal('0.00')
-
-                # For CARD payments, verify refundable amount with Razorpay
-                if self.payment_method == 'CARD' and self.razorpay_payment_id:
-                    try:
-                        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                        payment = client.payment.fetch(self.razorpay_payment_id)
-                        payment_amount = Decimal(payment['amount']) / 100  # Convert paise to INR
-                        refunded_amount = Decimal(payment.get('refunded_amount', 0)) / 100
-                        max_refundable = payment_amount - refunded_amount
-                        logger.info(f"Razorpay payment {self.razorpay_payment_id}: total={payment_amount}, refunded={refunded_amount}, max_refundable={max_refundable}")
-                        if refund_amount > max_refundable:
-                            logger.warning(
-                                f"Adjusting refund for order {self.order_id}: "
-                                f"Proposed refund ({refund_amount}) exceeds Razorpay max refundable ({max_refundable})"
-                            )
-                            refund_amount = max_refundable if max_refundable > 0 else Decimal('0.00')
-                    except Exception as e:
-                        logger.error(f"Failed to fetch Razorpay payment {self.razorpay_payment_id}: {str(e)}. Redirecting to wallet.")
-                        refund_amount = self.total_amount - prior_refunded if refund_amount > 0 else Decimal('0.00')
-
-                # Process refund
-                if refund_amount > 0:
-                    if self.payment_method == 'CARD' and self.razorpay_payment_id:
-                        try:
-                            self.process_razorpay_refund(refund_amount, self.razorpay_payment_id)
-                            logger.info(f"Razorpay refund processed for order {self.order_id}, amount={refund_amount}")
-                        except ValidationError as e:
-                            logger.warning(f"Razorpay refund failed for order {self.order_id}: {str(e)}. Redirecting to wallet.")
-                            wallet, created = Wallet.objects.get_or_create(user=self.user)
-                            wallet.add_funds(refund_amount)
-                            WalletTransaction.objects.create(
-                                wallet=wallet,
-                                amount=refund_amount,
-                                transaction_type='REFUND',
-                                description=f"Refund for cancelled order {self.order_id} (Razorpay failed)"
-                            )
-                            logger.info(f"Refunded {refund_amount} to wallet for order {self.order_id} due to Razorpay failure")
-                    else:
-                        # Refund to wallet for COD or WALLET payments
-                        wallet, created = Wallet.objects.get_or_create(user=self.user)
-                        wallet.add_funds(refund_amount)
-                        WalletTransaction.objects.create(
-                            wallet=wallet,
-                            amount=refund_amount,
-                            transaction_type='REFUND',
-                            description=f"Refund for cancelled order {self.order_id}"
-                        )
-                        logger.info(f"Refunded {refund_amount} to wallet for order {self.order_id}")
-
-            # Create cancellation record
+                elif refund_amount > 0:
+                    wallet, created = Wallet.objects.get_or_create(user=self.user)
+                    wallet.add_funds(refund_amount)
+                    WalletTransaction.objects.create(
+                        wallet=wallet,
+                        amount=refund_amount,
+                        transaction_type='REFUND',
+                        description=f"Refund for cancelled order {self.order_id}"
+                    )
+                    logger.info(f"Refunded {refund_amount} to wallet for order {self.order_id}")
+            else:
+                logger.info(f"Order {self.order_id} has payment status {self.payment_status}. No refund processed.")
+            
             OrderCancellation.objects.create(
                 order=self,
                 reason=reason,
                 refunded_amount=refund_amount
             )
-
-            # Reset coupon if applied
+            
             if self.coupon:
                 try:
                     user_coupon = UserCoupon.objects.get(user=self.user, coupon=self.coupon, order=self)
@@ -448,8 +390,7 @@ class Order(models.Model):
                     logger.warning(f"No UserCoupon found for coupon {self.coupon.code} in order {self.order_id}")
                 self.coupon = None
                 self.coupon_discount = Decimal('0.00')
-
-            # Update order status
+            
             self.status = 'Cancelled'
             self.total_amount = Decimal('0.00')
             self.needs_recalculation = False
@@ -635,22 +576,40 @@ class ReturnRequest(models.Model):
 
     def process_refund(self):
         if not self.is_verified or self.refund_processed:
+            logger.warning(f"Return request {self.id} for order {self.order.order_id} cannot be processed: already processed or not verified")
             return
 
         with transaction.atomic():
             wallet, created = Wallet.objects.get_or_create(user=self.order.user)
-            refund_amount = Decimal('0.00')
+            refund_amount = self.refund_amount
 
             if self.items.exists():
                 # Partial return
                 for item in self.items.all():
-                    item_refund = self.order.get_item_refund(item)
-                    refund_amount += item_refund
                     item.variant.stock += item.quantity
                     item.variant.save()
+                    # Delete the item from the order
+                    item.delete()
+                # Recalculate order totals
+                self.order.needs_recalculation = True
+                if self.order.coupon:
+                    subtotal = self.order.get_subtotal()
+                    if subtotal < self.order.coupon.minimum_order_amount:
+                        try:
+                            user_coupon = UserCoupon.objects.get(user=self.order.user, coupon=self.order.coupon, order=self.order)
+                            user_coupon.reset()
+                            self.order.coupon = None
+                            self.order.coupon_discount = Decimal('0.00')
+                        except UserCoupon.DoesNotExist:
+                            self.order.coupon = None
+                            self.order.coupon_discount = Decimal('0.00')
+                self.order.total_amount = self.order.get_subtotal() - (self.order.coupon_discount if self.order.coupon else Decimal('0.00'))
+                self.order.total_amount = max(self.order.total_amount, Decimal('0.00'))
+                if not self.order.items.exists():
+                    self.order.status = 'Cancelled'
+                    self.order.total_amount = Decimal('0.00')
             else:
                 # Full return
-                refund_amount = self.order.total_amount
                 self.order.restore_stock()
                 if self.order.coupon:
                     try:
@@ -658,21 +617,38 @@ class ReturnRequest(models.Model):
                         user_coupon.reset()
                     except UserCoupon.DoesNotExist:
                         pass
-                self.order.coupon = None
-                self.order.recalculate_totals()
-                self.order.save()
+                    self.order.coupon = None
+                    self.order.coupon_discount = Decimal('0.00')
+                self.order.status = 'Returned'
+                self.order.total_amount = Decimal('0.00')
 
-            wallet.add_funds(refund_amount)
-            WalletTransaction.objects.create(
-                wallet=wallet,
-                amount=refund_amount,
-                transaction_type='REFUND',
-                description=f"Refund for return request on order {self.order.order_id} ({'partial' if self.items.exists() else 'full'})"
-            )
+            if refund_amount > 0 and self.order.payment_status == 'PAID':
+                if self.order.payment_method == 'CARD' and self.order.razorpay_payment_id:
+                    try:
+                        self.order.process_razorpay_refund(refund_amount, self.order.razorpay_payment_id)
+                        logger.info(f"Razorpay refund processed for return request {self.id}, order {self.order.order_id}, amount={refund_amount}")
+                    except ValidationError as e:
+                        logger.warning(f"Razorpay refund failed for return request {self.id}: {str(e)}. Redirecting to wallet.")
+                        wallet.add_funds(refund_amount)
+                        WalletTransaction.objects.create(
+                            wallet=wallet,
+                            amount=refund_amount,
+                            transaction_type='REFUND',
+                            description=f"Refund for return request on order {self.order.order_id} (Razorpay failed)"
+                        )
+                else:
+                    wallet.add_funds(refund_amount)
+                    WalletTransaction.objects.create(
+                        wallet=wallet,
+                        amount=refund_amount,
+                        transaction_type='REFUND',
+                        description=f"Refund for return request on order {self.order.order_id} ({'partial' if self.items.exists() else 'full'})"
+                    )
 
             self.refund_processed = True
+            self.order.save()
             self.save()
-            logger.info(f"Processed refund of {refund_amount} for order {self.order.order_id}")
+            logger.info(f"Processed refund of {refund_amount} for return request {self.id}, order {self.order.order_id}")
 
     def __str__(self):
         return f"Return for Order {self.order.order_id}"

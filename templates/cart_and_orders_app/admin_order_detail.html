@@ -234,68 +234,79 @@
     </div>
 
     <!-- Return Requests -->
-    <div class="card glass mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">Return Requests</h5>
-        </div>
-        <div class="card-body">
-            {% if order.return_requests.exists %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Items</th>
-                            <th>Reason</th>
-                            <th>Requested At</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for return_request in order.return_requests.all %}
-                        <tr>
-                            <td>
-                                {% if return_request.items.exists %}
-                                    {% for item in return_request.items.all %}
-                                        {{ item.variant.product.product_name }}
-                                        ({{ item.variant.flavor|default:"Standard" }}
-                                        {% if item.variant.size_weight %}
-                                            {{ item.variant.size_weight }})
-                                        {% else %}
-                                            )
-                                        {% endif %}
-                                        x {{ item.quantity }}<br>
-                                    {% endfor %}
-                                {% else %}
-                                    Entire Order
-                                {% endif %}
-                            </td>
-                            <td>{{ return_request.reason|default:"N/A" }}</td>
-                            <td>{{ return_request.requested_at|date:"M d, Y H:i" }}</td>
-                            <td>
-                                {% if return_request.refund_processed %}
-                                    <span class="badge bg-success">Refund Processed</span>
-                                {% elif return_request.is_verified %}
-                                    <span class="badge bg-success">Approved</span>
-                                {% else %}
-                                    <span class="badge bg-warning">Pending</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if not return_request.is_verified and not return_request.refund_processed %}
-                                    <a href="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" class="btn btn-sm btn-primary">Verify</a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <p>No return requests for this order.</p>
-            {% endif %}
-        </div>
+<div class="card glass mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Return Requests</h5>
     </div>
+    <div class="card-body">
+        {% if order.return_requests.exists %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Items</th>
+                        <th>Reason</th>
+                        <th>Requested At</th>
+                        <th>Refund Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for return_request in order.return_requests.all %}
+                    <tr>
+                        <td>
+                            {% if return_request.items.exists %}
+                                {% for item in return_request.items.all %}
+                                    {{ item.variant.product.product_name }}
+                                    ({{ item.variant.flavor|default:"Standard" }}
+                                    {% if item.variant.size_weight %}
+                                        {{ item.variant.size_weight }})
+                                    {% else %}
+                                        )
+                                    {% endif %}
+                                    x {{ item.quantity }}<br>
+                                {% endfor %}
+                            {% else %}
+                                Entire Order
+                            {% endif %}
+                        </td>
+                        <td>{{ return_request.reason|default:"N/A" }}</td>
+                        <td>{{ return_request.requested_at|date:"M d, Y H:i" }}</td>
+                        <td>₹{{ return_request.refund_amount|floatformat:2 }}</td>
+                        <td>
+                            {% if return_request.refund_processed %}
+                                <span class="badge bg-success">Refund Processed</span>
+                            {% elif return_request.is_verified %}
+                                <span class="badge bg-success">Approved</span>
+                            {% else %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not return_request.is_verified and not return_request.refund_processed %}
+                                <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="verify">
+                                    <button type="submit" class="btn btn-sm btn-primary">Verify</button>
+                                </form>
+                                <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST" class="mt-1">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="reject">
+                                    <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No return requests for this order.</p>
+        {% endif %}
+    </div>
+</div>
 </div>
 
 <script>

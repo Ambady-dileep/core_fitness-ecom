@@ -90,9 +90,15 @@
                                     </td>
                                     <td>₹{{ order.total_amount|floatformat:2 }}</td>
                                     <td class="text-end">
-                                        <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" class="btn btn-sm btn-outline-primary me-1" aria-label="View order details">
-                                            View
-                                        </a>
+                                        {% if order.payment_status in 'PAID,PENDING' %}
+                                            <a href="{% url 'cart_and_orders_app:user_order_detail' order.order_id %}" class="btn btn-sm btn-outline-primary me-1" aria-label="View order details">
+                                                View
+                                            </a>
+                                        {% else %}
+                                            <a href="{% url 'cart_and_orders_app:user_order_failure' order.order_id %}" class="btn btn-sm btn-outline-primary me-1" aria-label="View order failure">
+                                                View
+                                            </a>
+                                        {% endif %}
                                         {% if order.payment_status == 'PAID' %}
                                             <a href="{% url 'cart_and_orders_app:generate_pdf' order.order_id %}" class="btn btn-sm btn-outline-info" aria-label="Download invoice">
                                                 Invoice
@@ -247,152 +253,152 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Retry Payment Logic
-document.querySelectorAll('.retry-payment-btn').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const orderId = this.getAttribute('data-order-id');
-        const retryUrl = `/orders/${orderId}/retry-payment/`;
+    document.querySelectorAll('.retry-payment-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const orderId = this.getAttribute('data-order-id');
+            const retryUrl = `/orders/${orderId}/retry-payment/`;
 
-        // Disable the button to prevent multiple clicks
-        this.disabled = true;
-        this.innerText = 'Processing...';
+            // Disable the button to prevent multiple clicks
+            this.disabled = true;
+            this.innerText = 'Processing...';
 
-        Swal.fire({
-            title: 'Initiating Payment...',
-            allowOutsideClick: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
+            Swal.fire({
+                title: 'Initiating Payment...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
 
-        fetch(retryUrl, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            Swal.close();
-            if (!data.success) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: data.message || 'Failed to initiate payment. Please try again.'
-                }).then(() => {
-                    // Re-enable the button on failure
-                    this.disabled = false;
-                    this.innerText = 'Retry Payment';
-                });
-                return;
-            }
+            fetch(retryUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.close();
+                if (!data.success) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Failed to initiate payment. Please try again.'
+                    }).then(() => {
+                        // Re-enable the button on failure
+                        this.disabled = false;
+                        this.innerText = 'Retry Payment';
+                    });
+                    return;
+                }
 
-            const options = {
-                key: data.key,
-                amount: data.amount,
-                currency: data.currency,
-                name: 'Core Fitness',
-                description: data.description,
-                order_id: data.razorpay_order_id,
-                callback_url: data.callback_url,
-                prefill: data.prefill,
-                theme: { color: '#f59e0b' },
-                handler: function(response) {
-                    fetch(data.callback_url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-CSRFToken': getCookie('csrftoken'),
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: new URLSearchParams({
-                            'razorpay_payment_id': response.razorpay_payment_id,
-                            'razorpay_order_id': response.razorpay_order_id,
-                            'razorpay_signature': response.razorpay_signature
+                const options = {
+                    key: data.key,
+                    amount: data.amount,
+                    currency: data.currency,
+                    name: 'Core Fitness',
+                    description: data.description,
+                    order_id: data.razorpay_order_id,
+                    callback_url: data.callback_url,
+                    prefill: data.prefill,
+                    theme: { color: '#f59e0b' },
+                    handler: function(response) {
+                        fetch(data.callback_url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: new URLSearchParams({
+                                'razorpay_payment_id': response.razorpay_payment_id,
+                                'razorpay_order_id': response.razorpay_order_id,
+                                'razorpay_signature': response.razorpay_signature
+                            })
                         })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Payment Successful',
-                                text: 'Your payment was successful!',
-                                confirmButtonText: 'OK'
-                            }).then(() => {
-                                window.location.href = data.redirect;
-                            });
-                        } else {
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Payment Successful',
+                                    text: 'Your payment was successful!',
+                                    confirmButtonText: 'OK'
+                                }).then(() => {
+                                    window.location.href = data.redirect;
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Payment Failed',
+                                    text: data.message || 'Payment verification failed.'
+                                }).then(() => {
+                                    // Re-enable the button on failure
+                                    this.disabled = false;
+                                    this.innerText = 'Retry Payment';
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Callback error:', error);
                             Swal.fire({
                                 icon: 'error',
-                                title: 'Payment Failed',
-                                text: data.message || 'Payment verification failed.'
+                                title: 'Error',
+                                text: 'An error occurred while verifying the payment.'
                             }).then(() => {
-                                // Re-enable the button on failure
+                                // Re-enable the button on error
                                 this.disabled = false;
                                 this.innerText = 'Retry Payment';
                             });
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Callback error:', error);
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'An error occurred while verifying the payment.'
-                        }).then(() => {
-                            // Re-enable the button on error
-                            this.disabled = false;
-                            this.innerText = 'Retry Payment';
                         });
-                    });
-                },
-                modal: {
-                    ondismiss: function() {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Payment Cancelled',
-                            text: 'You cancelled the payment. You can retry again.',
-                            confirmButtonText: 'OK'
-                        }).then(() => {
-                            // Re-enable the button on cancellation
-                            this.disabled = false;
-                            this.innerText = 'Retry Payment';
-                        });
-                    }.bind(this)
-                }
-            };
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Payment Cancelled',
+                                text: 'You cancelled the payment. You can retry again.',
+                                confirmButtonText: 'OK'
+                            }).then(() => {
+                                // Re-enable the button on cancellation
+                                this.disabled = false;
+                                this.innerText = 'Retry Payment';
+                            });
+                        }.bind(this)
+                    }
+                };
 
-            const rzp = new Razorpay(options);
-            rzp.on('payment.failed', function(response) {
-                console.log('Payment failed:', response);
+                const rzp = new Razorpay(options);
+                rzp.on('payment.failed', function(response) {
+                    console.log('Payment failed:', response);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Payment Failed',
+                        text: 'Payment failed. Please try again.',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        window.location.href = `/order/${orderId}/failure/`;
+                    });
+                });
+                rzp.open();
+            })
+            .catch(error => {
+                Swal.close();
+                console.error('Retry payment error:', error);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Payment Failed',
-                    text: 'Payment failed. Please try again.',
-                    confirmButtonText: 'OK'
+                    title: 'Error',
+                    text: 'Failed to initiate payment. Please try again.'
                 }).then(() => {
-                    window.location.href = `/order/${orderId}/failure/`;
+                    // Re-enable the button on error
+                    this.disabled = false;
+                    this.innerText = 'Retry Payment';
                 });
-            });
-            rzp.open();
-        })
-        .catch(error => {
-            Swal.close();
-            console.error('Retry payment error:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'Failed to initiate payment. Please try again.'
-            }).then(() => {
-                // Re-enable the button on error
-                this.disabled = false;
-                this.innerText = 'Retry Payment';
             });
         });
     });
-});
 
     // CSRF Token Helper
     function getCookie(name) {
