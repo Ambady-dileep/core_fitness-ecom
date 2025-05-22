@@ -129,7 +129,7 @@ class ReturnRequestForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if order:
             self.order = order
-            self.fields['items'].queryset = self.order.items.all()
+            self.fields['items'].queryset = self.order.items.filter(cancellations__isnull=True)
             self.fields['items'].label = "Select items to return (leave unchecked for full order return)"
 
     def clean_reason(self):
@@ -144,8 +144,17 @@ class ReturnRequestForm(forms.ModelForm):
         if self.order:
             if self.order.status != 'Delivered':
                 raise forms.ValidationError("This order cannot be returned as it has not been delivered.")
+            if self.order.return_requests.exists():
+                raise forms.ValidationError("A return request for this order already exists.")
+            # Allow full order return if no items selected
             if not items:
-                cleaned_data['items'] = self.order.items.all()  
+                cleaned_data['items'] = self.order.items.filter(cancellations__isnull=True)
+            # Validate selected items
+            for item in cleaned_data['items']:
+                if item.order != self.order:
+                    raise forms.ValidationError(f"Item {item.variant.product.product_name} does not belong to this order.")
+                if item.cancellations.exists():
+                    raise forms.ValidationError(f"Item {item.variant.product.product_name} is already cancelled.")
         return cleaned_data
 
 class SalesReportForm(forms.Form):

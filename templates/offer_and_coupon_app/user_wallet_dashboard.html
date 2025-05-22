@@ -225,6 +225,12 @@
         border-color: var(--border);
     }
 
+    .alert-recent-refund {
+        background-color: rgba(0, 123, 255, 0.1);
+        border-color: rgba(0, 123, 255, 0.2);
+        color: #007bff;
+    }
+
     [data-theme="dark"] .wallet-card,
     [data-theme="dark"] .about-wallet,
     [data-theme="dark"] .modal-content,
@@ -280,6 +286,16 @@
                     <!-- Transactions -->
                     <div class="transaction-table">
                         <h5 class="card-title">Recent Transactions</h5>
+                        <!-- Recent Refund Notification -->
+                        {% if recent_refund %}
+                        <div class="alert alert-recent-refund d-flex align-items-center">
+                            <svg class="me-2" width="20" height="20" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
+                                <path d="M9 14l2 2 4-4"></path>
+                            </svg>
+                            Recent Refund: ₹{{ recent_refund.amount|floatformat:2 }} credited on {{ recent_refund.local_created_at|date:"d M Y, h:i A" }} for {{ recent_refund.description }}
+                        </div>
+                        {% endif %}
+
                         {% if page_obj %}
                             <div class="table-responsive">
                                 <table class="table">
@@ -294,7 +310,7 @@
                                     <tbody>
                                         {% for transaction in page_obj %}
                                         <tr>
-                                            <td>{{ transaction.created_at|date:"d M Y, h:i A" }}</td>
+                                            <td>{{ transaction.local_created_at|date:"d M Y, h:i A" }}</td>
                                             <td>{{ transaction.description }}</td>
                                             <td>₹{{ transaction.amount|floatformat:2 }}</td>
                                             <td>
@@ -307,7 +323,7 @@
                                                 </span>
                                                 {% elif transaction.transaction_type == 'DEBIT' %}
                                                 <span class="badge badge-debit">
-                                                    <svg class="me-1" width="12" height="12" viewBox="0 0 24 241393
+                                                    <svg class="me-1" width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2">
                                                         <path d="M5 12h14"></path>
                                                     </svg>
                                                     Debit
@@ -546,6 +562,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     );
+
+    // Animate recent refund notification if present
+    const recentRefundAlert = document.querySelector('.alert-recent-refund');
+    if (recentRefundAlert) {
+        gsap.fromTo(recentRefundAlert,
+            { opacity: 0, y: -20 },
+            { 
+                opacity: 1, 
+                y: 0, 
+                duration: 0.5, 
+                ease: 'power3.out',
+                scrollTrigger: {
+                    trigger: recentRefundAlert,
+                    start: 'top 80%',
+                    toggleActions: 'play none none none'
+                }
+            }
+        );
+    }
 
     // Modal animation
     const addFundsModal = document.getElementById('addFundsModal');

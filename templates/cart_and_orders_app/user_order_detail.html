@@ -17,13 +17,14 @@
     <!-- Order Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="section-title">Order #{{ order.order_id }}</h2>
-        <span class="badge status-{{ order.status|lower }}">{{ order.status }}</span>
+        <span class="badge bg-{% if order.status == 'Delivered' %}success{% elif order.status == 'Cancelled' %}danger{% else %}warning{% endif %}">{{ order.status }}</span>
     </div>
 
     <div class="row g-4">
-        <!-- Order Details -->
+        <!-- Main Content -->
         <div class="col-lg-8">
-            <div class="card">
+            <!-- Order Details and Items -->
+            <div class="card mb-4">
                 <div class="card-body p-4">
                     <!-- Order Details -->
                     <h3 class="card-title">Details</h3>
@@ -46,14 +47,14 @@
                     <form id="cancel-items-form" method="POST" action="{% url 'cart_and_orders_app:user_cancel_order_item' order.order_id %}">
                         {% csrf_token %}
                         <div class="table-responsive">
-                            <table class="table table-borderless">
+                            <table class="table table-borderless align-middle">
                                 <thead>
                                     <tr>
-                                        <th>Product</th>
-                                        <th>Price</th>
-                                        <th>Qty</th>
-                                        <th class="text-end">Total</th>
-                                        <th class="text-end">Status</th>
+                                        <th style="width: 40%;">Product</th>
+                                        <th style="width: 15%;">Price</th>
+                                        <th style="width: 10%;">Qty</th>
+                                        <th style="width: 15%;" class="text-end">Total</th>
+                                        <th style="width: 20%;" class="text-end">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -72,6 +73,10 @@
                                                 <input type="checkbox" class="form-check-input cancel-item-checkbox" name="items" value="{{ item.id }}" data-item-id="{{ item.id }}">
                                             {% elif item.cancellations.exists %}
                                                 <span class="text-muted">Cancelled</span>
+                                            {% elif item.return_requests.exists %}
+                                                <span class="badge bg-{% if item.return_requests.first.status == 'Pending' %}warning{% elif item.return_requests.first.status == 'Approved' %}success{% else %}danger{% endif %}">
+                                                    Return {{ item.return_requests.first.status }}
+                                                </span>
                                             {% else %}
                                                 <span class="text-muted">{{ order.status }}</span>
                                             {% endif %}
@@ -134,25 +139,78 @@
                         <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#cancelItemsModal" id="cancel-items-btn" disabled>Cancel Selected Items</button>
                     </div>
                     {% endif %}
+                </div>
+            </div>
 
-                    <!-- Action Buttons -->
-                    <div class="d-flex gap-2 mt-3">
-                        {% if order.status == 'Delivered' and not order.return_requests.exists %}
-                            <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#returnOrderModal">Return Order</button>
-                        {% endif %}
-                        {% if order.status in 'Pending,Processing,Confirmed' and order.items.exists %}
-                            <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
-                        {% endif %}
-                        {% if order.payment_status == 'FAILED' and order.payment_method == 'CARD' and order.status == 'Pending' and not order.razorpay_payment_id %}
-                            <button class="btn btn-outline-light retry-payment-btn" data-order-id="{{ order.order_id }}">Retry Payment</button>
-                        {% endif %}
-                        <a href="{% url 'cart_and_orders_app:generate_pdf' order.order_id %}" class="btn btn-primary">Download Invoice</a>
+            <!-- Return Requests Section -->
+            {% if order.return_requests.exists %}
+            <div class="card">
+                <div class="card-body p-4">
+                    <h3 class="card-title">Return Requests</h3>
+                    <div class="minimal-divider"></div>
+                    <div class="table-responsive">
+                        <table class="table table-borderless align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30%;">Items</th>
+                                    <th style="width: 25%;">Reason</th>
+                                    <th style="width: 15%;">Requested At</th>
+                                    <th style="width: 15%;">Refund Amount</th>
+                                    <th style="width: 15%;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for return_request in order.return_requests.all %}
+                                <tr>
+                                    <td>
+                                        {% if return_request.items.exists %}
+                                            {% for item in return_request.items.all %}
+                                                {{ item.variant.product.product_name }}
+                                                ({{ item.variant.flavor|default:"Standard" }}
+                                                {% if item.variant.size_weight %}
+                                                    {{ item.variant.size_weight }})
+                                                {% else %}
+                                                    )
+                                                {% endif %}
+                                                x {{ item.quantity }}<br>
+                                            {% endfor %}
+                                        {% else %}
+                                            Entire Order
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ return_request.reason|truncatewords:10 }}</td>
+                                    <td>{{ return_request.requested_at|date:"d M Y" }}</td>
+                                    <td>₹{{ return_request.refund_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if return_request.status == 'Pending' %}warning{% elif return_request.status == 'Approved' %}success{% else %}danger{% endif %}">
+                                            {{ return_request.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                {% if order.status == 'Delivered' and not order.return_requests.exists %}
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#returnOrderModal">Return Order</button>
+                {% endif %}
+                {% if order.status in 'Pending,Processing,Confirmed' and not has_cancelled_items %}
+                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">Cancel Order</button>
+                {% endif %}
+                {% if order.payment_status == 'FAILED' and order.payment_method == 'CARD' and order.status == 'Pending' and not order.razorpay_payment_id %}
+                    <button class="btn btn-outline-warning retry-payment-btn" data-order-id="{{ order.order_id }}">Retry Payment</button>
+                {% endif %}
+                <a href="{% url 'cart_and_orders_app:generate_pdf' order.order_id %}" class="btn btn-primary">Download Invoice</a>
+            </div>
         </div>
 
-        <!-- Order Sidebar -->
+        <!-- Sidebar -->
         <div class="col-lg-4">
             <!-- Shipping Information -->
             <div class="card mb-4">
@@ -285,7 +343,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form method="POST" action="{% url 'cart_and_orders_app:user_return_order' order.order_id %}">
+                    <form id="return-order-form" method="POST" action="{% url 'cart_and_orders_app:user_return_order' order.order_id %}">
                         {% csrf_token %}
                         <div class="mb-3">
                             <label class="form-label">Items to Return (leave unchecked for full order return)</label>
@@ -295,7 +353,7 @@
                             {% endif %}
                         </div>
                         <div class="mb-3">
-                            <label for="{{ return_form.reason.id_for_label }}" class="form-label">Reason</label>
+                            <label for="{{ return_form.reason.id_for_label }}" class="form-label">Reason for Return</label>
                             {{ return_form.reason|add_class:"form-control" }}
                             {% if return_form.reason.errors %}
                                 <div class="text-danger small">{{ return_form.reason.errors }}</div>
@@ -306,6 +364,9 @@
                             <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
                         </div>
                     </form>
+                    <div class="mt-3 text-muted small">
+                        Note: Your return request will be reviewed by an admin. Refunds will be credited to your wallet upon approval.
+                    </div>
                 </div>
             </div>
         </div>
@@ -454,7 +515,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.success) {
                     window.showAlert(data.message, 'success');
-                    setTimeout(() => window.location.href = '{% url 'cart_and_orders_app:user_order_list' %}', 1000);
+                    setTimeout(() => {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1000);
                 } else {
                     window.showAlert(data.message || 'Failed to cancel the order.', 'danger');
                 }
@@ -463,6 +530,59 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.showAlert('An error occurred while cancelling the order.', 'danger');
                 console.error('Cancel order error:', error);
             });
+
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('cancelOrderModal'));
+            if (modal) {
+                modal.hide();
+            }
+        });
+    }
+
+    // Handle Return Order Form
+    const returnOrderForm = document.getElementById('return-order-form');
+    if (returnOrderForm) {
+        returnOrderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(returnOrderForm);
+
+            fetch(returnOrderForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.showAlert(data.message, 'success');
+                    setTimeout(() => {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1000);
+                } else {
+                    let errorMessage = data.message || 'Failed to submit return request.';
+                    if (data.errors) {
+                        errorMessage = Object.values(data.errors).flat().join(' ');
+                    }
+                    window.showAlert(errorMessage, 'danger');
+                }
+            })
+            .catch(error => {
+                window.showAlert('An error occurred while submitting the return request.', 'danger');
+                console.error('Return order error:', error);
+            });
+
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('returnOrderModal'));
+            if (modal) {
+                modal.hide();
+            }
         });
     }
 

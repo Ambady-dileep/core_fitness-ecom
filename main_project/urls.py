@@ -18,11 +18,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from .views import handler404
-from django.contrib import admin
-
 
 urlpatterns = [
-    path('admin/', admin.site.urls),  
     path('', include('user_app.urls')),
     path('', include('product_app.urls')), 
     path('', include('cart_and_orders_app.urls')),

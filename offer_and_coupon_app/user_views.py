@@ -186,6 +186,7 @@ def available_coupons(request):
         logger.error(f"Error fetching available coupons for user {request.user.username}: {str(e)}")
         return JsonResponse({'success': False, 'message': 'Failed to load coupons.'}, status=500)
 
+from datetime import timedelta
 @login_required
 def wallet_dashboard(request):
     try:
@@ -194,15 +195,36 @@ def wallet_dashboard(request):
             wallet=wallet
         ).order_by('-created_at')
         
+        # Convert UTC to IST for transactions
+        ist_offset = timedelta(hours=5, minutes=30)
+        for transaction in transactions:
+            transaction.local_created_at = transaction.created_at + ist_offset
+        
+        # Get the most recent refund transaction within the last 24 hours
+        recent_refund = WalletTransaction.objects.filter(
+            wallet=wallet,
+            transaction_type='REFUND',
+            created_at__gte=timezone.now() - timezone.timedelta(hours=24)
+        ).order_by('-created_at').first()
+        
+        # Convert recent refund time to IST if it exists
+        if recent_refund:
+            recent_refund.local_created_at = recent_refund.created_at + ist_offset
+        
         # Add pagination
         paginator = Paginator(transactions, 10)
-        page_number = request.GET.get('page')
+        page_number = request.GET.get('page', 1)
         page_obj = paginator.get_page(page_number)
+        
+        # Convert times for paginated transactions too
+        for transaction in page_obj:
+            transaction.local_created_at = transaction.created_at + ist_offset
         
         return render(request, 'offer_and_coupon_app/user_wallet_dashboard.html', {
             'wallet': wallet,
             'transactions': page_obj,
             'page_obj': page_obj,
+            'recent_refund': recent_refund,
         })
     except Exception as e:
         logger.error(f"Error rendering wallet dashboard for user {request.user.username}: {str(e)}")
@@ -211,6 +233,7 @@ def wallet_dashboard(request):
             'wallet': None,
             'transactions': [],
             'page_obj': None,
+            'recent_refund': None,
         })
 
 @login_required

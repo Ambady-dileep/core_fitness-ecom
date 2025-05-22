@@ -7,7 +7,7 @@ urlpatterns = [
     # Admin side
     path('admin/orders/', views.admin_orders_list, name='admin_orders_list'),
     path('admin/orders/<str:order_id>/', views.admin_order_detail, name='admin_order_detail'),
-    path('admin/returns/<int:return_id>/verify/', views.admin_verify_return_request, name='admin_verify_return_request'),
+    path('admin/return-request/<int:return_request_id>/verify/', views.admin_verify_return_request, name='admin_verify_return_request'),
     path('admin/bulk-actions/', views.admin_bulk_actions, name='admin_bulk_actions'),
     path('admin/update-stock/<int:variant_id>/', views.admin_update_stock, name='admin_update_stock'),
     path('admin/mark-shipped/<str:order_id>/', views.admin_mark_shipped, name='admin_mark_shipped'),

@@ -234,79 +234,75 @@
     </div>
 
     <!-- Return Requests -->
-<div class="card glass mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">Return Requests</h5>
-    </div>
-    <div class="card-body">
-        {% if order.return_requests.exists %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Items</th>
-                        <th>Reason</th>
-                        <th>Requested At</th>
-                        <th>Refund Amount</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for return_request in order.return_requests.all %}
-                    <tr>
-                        <td>
-                            {% if return_request.items.exists %}
-                                {% for item in return_request.items.all %}
-                                    {{ item.variant.product.product_name }}
-                                    ({{ item.variant.flavor|default:"Standard" }}
-                                    {% if item.variant.size_weight %}
-                                        {{ item.variant.size_weight }})
-                                    {% else %}
-                                        )
-                                    {% endif %}
-                                    x {{ item.quantity }}<br>
-                                {% endfor %}
-                            {% else %}
-                                Entire Order
-                            {% endif %}
-                        </td>
-                        <td>{{ return_request.reason|default:"N/A" }}</td>
-                        <td>{{ return_request.requested_at|date:"M d, Y H:i" }}</td>
-                        <td>₹{{ return_request.refund_amount|floatformat:2 }}</td>
-                        <td>
-                            {% if return_request.refund_processed %}
-                                <span class="badge bg-success">Refund Processed</span>
-                            {% elif return_request.is_verified %}
-                                <span class="badge bg-success">Approved</span>
-                            {% else %}
-                                <span class="badge bg-warning">Pending</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if not return_request.is_verified and not return_request.refund_processed %}
-                                <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="verify">
-                                    <button type="submit" class="btn btn-sm btn-primary">Verify</button>
-                                </form>
-                                <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST" class="mt-1">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="reject">
-                                    <button type="submit" class="btn btn-sm btn-danger">Reject</button>
-                                </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="card glass mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Return Requests</h5>
         </div>
-        {% else %}
-        <p>No return requests for this order.</p>
-        {% endif %}
+        <div class="card-body">
+            {% if order.return_requests.exists %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Items</th>
+                            <th>Reason</th>
+                            <th>Requested At</th>
+                            <th>Refund Amount</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for return_request in order.return_requests.all %}
+                        <tr>
+                            <td>
+                                {% if return_request.items.exists %}
+                                    {% for item in return_request.items.all %}
+                                        {{ item.variant.product.product_name }}
+                                        ({{ item.variant.flavor|default:"Standard" }}
+                                        {% if item.variant.size_weight %}
+                                            {{ item.variant.size_weight }})
+                                        {% else %}
+                                            )
+                                        {% endif %}
+                                        x {{ item.quantity }}<br>
+                                    {% endfor %}
+                                {% else %}
+                                    Entire Order
+                                {% endif %}
+                            </td>
+                            <td>{{ return_request.reason|truncatewords:10 }}</td>
+                            <td>{{ return_request.requested_at|date:"M d, Y H:i" }}</td>
+                            <td>₹{{ return_request.refund_amount|floatformat:2 }}</td>
+                            <td>
+                                <span class="badge bg-{% if return_request.status == 'Pending' %}warning{% elif return_request.status == 'Approved' %}success{% else %}danger{% endif %}">
+                                    {{ return_request.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if return_request.status == 'Pending' %}
+                                    <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="verify">
+                                        <button type="submit" class="btn btn-sm btn-primary">Approve</button>
+                                    </form>
+                                    <form action="{% url 'cart_and_orders_app:admin_verify_return_request' return_request.id %}" method="POST" class="d-inline mt-1">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="reject">
+                                        <button type="submit" class="btn btn-sm btn-danger">Reject</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>No return requests for this order.</p>
+            {% endif %}
+        </div>
     </div>
-</div>
 </div>
 
 <script>
@@ -343,13 +339,94 @@ document.addEventListener('DOMContentLoaded', function() {
         reasonSelect.addEventListener('change', updateOtherReasonVisibility);
         updateOtherReasonVisibility();
 
-        // Confirm submission
+        // Confirm submission for cancel items
         cancelItemsForm.addEventListener('submit', function(e) {
+            e.preventDefault();
             if (!confirm('Are you sure you want to cancel the selected items?')) {
-                e.preventDefault();
+                return;
             }
+            fetch(cancelItemsForm.action, {
+                method: 'POST',
+                body: new FormData(cancelItemsForm),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.fire({
+                    icon: data.success ? 'success' : 'error',
+                    title: data.success ? 'Success' : 'Error',
+                    text: data.message,
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    if (data.success && data.redirect) {
+                        window.location.href = data.redirect;
+                    }
+                });
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'An error occurred while processing the request.',
+                    confirmButtonText: 'OK'
+                });
+            });
         });
     }
+
+    // Handle Return Request Forms (Approve/Reject)
+    const returnRequestForms = document.querySelectorAll('form[action*="admin_verify_return_request"]');
+    returnRequestForms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const action = form.querySelector('input[name="action"]').value;
+            const confirmMessage = action === 'verify' 
+                ? 'Are you sure you want to approve this return request? This will process the refund.'
+                : 'Are you sure you want to reject this return request?';
+            
+            Swal.fire({
+                title: 'Confirm Action',
+                text: confirmMessage,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        Swal.fire({
+                            icon: data.success ? 'success' : 'error',
+                            title: data.success ? 'Success' : 'Error',
+                            text: data.message,
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            if (data.success) {
+                                window.location.reload(); // Refresh to update the UI
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An error occurred while processing the request.',
+                            confirmButtonText: 'OK'
+                        });
+                    });
+                }
+            });
+        });
+    });
 });
 </script>
 {% endblock %}

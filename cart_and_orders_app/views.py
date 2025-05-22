@@ -1160,25 +1160,7 @@ def admin_cancel_order_item(request, order_id):
         messages.error(request, "An error occurred while cancelling the items.")
         return redirect('cart_and_orders_app:admin_order_detail', order_id=order.order_id)
 
-@login_required
-@user_passes_test(is_admin)
-@never_cache
-def admin_verify_return_request(request, return_request_id):
-    return_request = get_object_or_404(ReturnRequest, id=return_request_id)
-    if request.method == 'POST':
-        try:
-            if not return_request.is_verified:
-                return_request.is_verified = True
-                return_request.save()
-                return_request.process_refund()
-                messages.success(request, f"Return request for order {return_request.order.order_id} verified and refund processed.")
-            else:
-                messages.warning(request, "Return request is already verified.")
-            return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
-        except Exception as e:
-            messages.error(request, "An error occurred while verifying the return request.")
-            return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
-    return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
+
 
 @login_required
 @user_passes_test(is_admin)
@@ -1595,6 +1577,9 @@ def user_order_detail(request, order_id):
     # Check if there are cancellable items
     has_cancellable_items = order.items.filter(cancellations__isnull=True).exists()
     
+    # Check if any items have been cancelled
+    has_cancelled_items = cancelled_items_count > 0
+    
     # Initialize forms
     cancel_item_form = OrderItemCancellationForm(order=order)
     return_form = ReturnRequestForm(order=order)
@@ -1609,6 +1594,7 @@ def user_order_detail(request, order_id):
         'cancel_item_form': cancel_item_form,
         'return_form': return_form,
         'has_cancellable_items': has_cancellable_items,
+        'has_cancelled_items': has_cancelled_items,
     }
     
     return render(request, 'cart_and_orders_app/user_order_detail.html', context)
@@ -1628,10 +1614,10 @@ def user_cancel_order(request, order_id):
                     return JsonResponse({
                         'success': True,
                         'message': 'Order cancelled successfully.',
-                        'redirect': reverse('cart_and_orders_app:user_order_list')
+                        'redirect': reverse('cart_and_orders_app:user_order_detail', kwargs={'order_id': order.order_id})
                     })
                 messages.success(request, "Order cancelled successfully.")
-                return redirect('cart_and_orders_app:user_order_list')
+                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
             except Exception as e:
                 logger.error(f"Error cancelling order {order_id}: {str(e)}")
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1700,55 +1686,115 @@ def user_return_order(request, order_id):
         form = ReturnRequestForm(request.POST, order=order)
         if form.is_valid():
             try:
-                items = form.cleaned_data['items']
-                reason = form.cleaned_data['reason']
-                
-                # Calculate refund amount
-                refund_amount = order.get_item_refund(items)
-                if refund_amount <= 0:
-                    logger.warning(f"No refundable amount for return request in order {order_id}")
-                    refund_amount = Decimal('0.00')
-                
-                # Create return request
-                return_request = ReturnRequest.objects.create(
-                    order=order,
-                    reason=reason,
-                    refund_amount=refund_amount
-                )
-                if items:
+                with transaction.atomic():
+                    items = form.cleaned_data['items']
+                    reason = form.cleaned_data['reason']
+                    
+                    # Calculate refund amount
+                    refund_amount = order.get_item_refund(items)
+                    if refund_amount <= 0:
+                        logger.warning(f"No refundable amount for return request in order {order_id}")
+                        refund_amount = Decimal('0.00')
+                    
+                    # Create return request
+                    return_request = ReturnRequest.objects.create(
+                        order=order,
+                        reason=reason,
+                        refund_amount=refund_amount,
+                        status='Pending'
+                    )
                     return_request.items.set(items)
-                else:
-                    return_request.items.set(order.items.all())
-                
-                logger.info(f"Return request created for order {order_id}, refund_amount={refund_amount}")
-                
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
+                    
+                    logger.info(f"Return request created for order {order_id}, refund_amount={refund_amount}, items={len(items)}")
+                    
+                    response_data = {
                         'success': True,
-                        'message': 'Return request submitted successfully.',
+                        'message': 'Return request submitted successfully. Awaiting admin approval.',
                         'redirect': reverse('cart_and_orders_app:user_order_detail', kwargs={'order_id': order.order_id})
-                    })
-                messages.success(request, "Return request submitted successfully.")
-                return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+                    }
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse(response_data)
+                    messages.success(request, response_data['message'])
+                    return redirect(response_data['redirect'])
             except Exception as e:
                 logger.error(f"Error creating return request for order {order_id}: {str(e)}")
+                response_data = {'success': False, 'message': str(e)}
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'success': False,
-                        'message': str(e)
-                    }, status=400)
-                messages.error(request, str(e))
+                    return JsonResponse(response_data, status=400)
+                messages.error(request, response_data['message'])
         else:
             logger.warning(f"Invalid form data for return request in order {order_id}: {form.errors}")
+            response_data = {
+                'success': False,
+                'message': 'Invalid return request data.',
+                'errors': form.errors
+            }
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Invalid return request data.',
-                    'errors': form.errors
-                }, status=400)
-            messages.error(request, "Invalid return request data.")
+                return JsonResponse(response_data, status=400)
+            messages.error(request, response_data['message'])
     
     return redirect('cart_and_orders_app:user_order_detail', order_id=order.order_id)
+
+@login_required
+@user_passes_test(is_admin)
+@never_cache
+def admin_verify_return_request(request, return_request_id):
+    return_request = get_object_or_404(ReturnRequest, id=return_request_id)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        try:
+            with transaction.atomic():
+                if action == 'verify':
+                    if return_request.status == 'Pending' and not return_request.is_verified:
+                        return_request.is_verified = True
+                        return_request.status = 'Approved'
+                        return_request.save()
+                        return_request.process_refund()
+                        response_data = {
+                            'success': True,
+                            'message': f"Return request for order {return_request.order.order_id} approved and refund processed."
+                        }
+                    else:
+                        response_data = {
+                            'success': False,
+                            'message': "Return request is already processed or not in a verifiable state."
+                        }
+                elif action == 'reject':
+                    if return_request.status == 'Pending':
+                        return_request.reject()
+                        response_data = {
+                            'success': True,
+                            'message': f"Return request for order {return_request.order.order_id} rejected."
+                        }
+                    else:
+                        response_data = {
+                            'success': False,
+                            'message': "Return request is already processed or not in a rejectable state."
+                        }
+                else:
+                    response_data = {
+                        'success': False,
+                        'message': "Invalid action specified."
+                    }
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse(response_data)
+                else:
+                    if response_data['success']:
+                        messages.success(request, response_data['message'])
+                    else:
+                        messages.warning(request, response_data['message'])
+                    return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
+        
+        except Exception as e:
+            logger.error(f"Error processing return request {return_request_id}: {str(e)}")
+            response_data = {'success': False, 'message': f"An error occurred: {str(e)}"}
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse(response_data, status=400)
+            messages.error(request, response_data['message'])
+            return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
+    
+    return redirect('cart_and_orders_app:admin_order_detail', order_id=return_request.order.order_id)
 
 
 def generate_pdf(request, order_id):

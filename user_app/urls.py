@@ -4,7 +4,7 @@ from django.contrib.auth import views as auth_views
 from . import user_views
 from . import admin_views
 
-app_name = 'user_app'  
+app_name = 'user_app' 
 
 urlpatterns = [
     # Authentication URLs
