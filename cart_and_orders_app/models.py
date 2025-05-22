@@ -285,23 +285,28 @@ class Order(models.Model):
                             try:
                                 self.process_razorpay_refund(refund_amount, self.razorpay_payment_id)
                                 logger.info(f"Razorpay refund processed for item {order_item.id} in order {self.order_id}, amount={refund_amount}")
+                                # Credit wallet and log transaction for visibility
+                                wallet.add_refunded_funds(
+                                    amount=refund_amount,
+                                    description=f"Refund for cancelled item {order_item.variant.product.product_name} in order {self.order_id} (via Razorpay)"
+                                )
+                                logger.info(f"Wallet credited {refund_amount} for item {order_item.id} in order {self.order_id}")
                             except ValidationError as e:
                                 logger.warning(f"Razorpay refund failed for item {order_item.id}: {str(e)}. Falling back to wallet refund.")
-                                raise
+                                wallet.add_refunded_funds(
+                                    amount=refund_amount,
+                                    description=f"Refund for cancelled item {order_item.variant.product.product_name} in order {self.order_id}"
+                                )
+                                logger.info(f"Fallback wallet refund of {refund_amount} processed for item {order_item.id} in order {self.order_id}")
                         else:
-                            raise ValidationError("Non-Razorpay payment, proceeding with wallet refund")
-                    except Exception as e:
-                        # Fallback to wallet refund
-                        logger.info(f"Falling back to wallet refund for item {order_item.id}: {str(e)}")
-                        try:
                             wallet.add_refunded_funds(
                                 amount=refund_amount,
                                 description=f"Refund for cancelled item {order_item.variant.product.product_name} in order {self.order_id}"
                             )
-                            logger.info(f"Successfully refunded {refund_amount} to wallet for item {order_item.id} in order {self.order_id}")
-                        except Exception as wallet_error:
-                            logger.error(f"Failed to refund {refund_amount} to wallet for item {order_item.id}: {str(wallet_error)}")
-                            raise ValidationError(f"Refund processing failed: {str(wallet_error)}")
+                            logger.info(f"Wallet refund of {refund_amount} processed for item {order_item.id} in order {self.order_id}")
+                    except Exception as e:
+                        logger.error(f"Refund processing failed for item {order_item.id} in order {self.order_id}: {str(e)}")
+                        raise ValidationError(f"Refund processing failed: {str(e)}")
             else:
                 logger.info(f"No refund processed for item {order_item.id} in order {self.order_id}: refund_amount={refund_amount}")
             
