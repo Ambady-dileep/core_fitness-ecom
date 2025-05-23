@@ -1091,6 +1091,7 @@ def user_product_list(request):
     
     return render(request, 'product_app/user_product_list.html', context)
 
+
 def user_product_detail(request, slug):
     product = get_object_or_404(
         Product.objects.select_related('category', 'brand')
@@ -1100,6 +1101,9 @@ def user_product_detail(request, slug):
         category__is_active=True,
         brand__is_active=True
     )
+
+    # Ensure average rating is up-to-date
+    product.update_average_rating()
 
     variants = product.variants.filter(is_active=True).prefetch_related('variant_images')
 
@@ -1144,8 +1148,8 @@ def user_product_detail(request, slug):
 
     # Review data
     reviews = product.approved_reviews().order_by('-created_at')[:5]
-    review_count = product.review_count  # Use property
-    avg_rating = product.average_rating  # Use stored value
+    review_count = product.review_count
+    avg_rating = product.average_rating
 
     # Related products data
     related_product_data = [
@@ -1203,7 +1207,21 @@ def submit_review(request, slug):
             review.user = request.user
             review.is_verified_purchase = is_verified_purchase
             review.is_approved = True  # Auto-approve for verified purchases
-            review.save()  # This will trigger update_average_rating via the form's save method
+            review.save()  # Save the review first
+
+            # Explicitly ensure the review is approved
+            review.refresh_from_db()  # Refresh to confirm the save
+            if not review.is_approved:
+                review.is_approved = True
+                review.save()
+
+            # Update the average rating after saving the review
+            product.refresh_from_db()  # Ensure the product is up-to-date
+            product.update_average_rating()
+
+            # Verify the update
+            product.refresh_from_db()
+            logger.debug(f"After update: avg_rating={product.average_rating}, review_count={product.review_count}")
 
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({
@@ -1218,8 +1236,8 @@ def submit_review(request, slug):
                         'is_verified_purchase': review.is_verified_purchase,
                         'is_approved': review.is_approved
                     },
-                    'average_rating': float(product.average_rating),  # Use stored value
-                    'review_count': product.review_count,  # Use property
+                    'average_rating': float(product.average_rating),  # Should reflect the new rating
+                    'review_count': product.review_count,
                     'message': 'Thank you for your review!'
                 })
             return redirect('product_app:user_product_detail', slug=slug)
@@ -1234,5 +1252,4 @@ def submit_review(request, slug):
             errors = {field: error[0] for field, error in form.errors.items()}
             return JsonResponse({'success': False, 'error': errors}, status=400)
 
-    # Fallback for non-AJAX invalid form
     return redirect('product_app:user_product_detail', slug=slug)

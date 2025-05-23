@@ -697,19 +697,19 @@
                     {{ product.country_of_manufacture }}
                 </div>
                 <div class="product-meta-item">
-                    <div class="rating-stars">
-                        {% if review_count > 0 %}
-                            <div class="star-rating" data-rating="{{ avg_rating }}">
-                                {% for i in "12345"|make_list %}
-                                    <span class="star"></span>
-                                {% endfor %}
-                            </div>
-                            <span class="ms-1">{{ avg_rating|floatformat:1 }} ({{ review_count }})</span>
-                        {% else %}
-                            <span>No reviews yet</span>
-                        {% endif %}
-                    </div>
-                </div>
+    <div class="rating-stars">
+        {% if review_count > 0 and avg_rating > 0 %}
+            <div class="star-rating" data-rating="{{ avg_rating }}">
+                {% for i in "12345"|make_list %}
+                    <span class="star"></span>
+                {% endfor %}
+            </div>
+            <span class="ms-1">{{ avg_rating|floatformat:1 }} ({{ review_count }})</span>
+        {% else %}
+            <span>No reviews yet</span>
+        {% endif %}
+    </div>
+</div>
             </div>
 
             <div class="product-description">
